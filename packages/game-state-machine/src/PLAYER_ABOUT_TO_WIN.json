@@ -1,0 +1,137 @@
+{
+  "status": "active",
+  "value": "NEXT_PLAYER_TURN",
+  "historyValue": {},
+  "context": {
+    "players": [
+      {
+        "hand": [
+          {
+            "suit": "SPADE",
+            "value": "3"
+          },
+          {
+            "suit": "SPADE",
+            "value": "4"
+          },
+          {
+            "suit": "DIAMOND",
+            "value": "5"
+          },
+          {
+            "suit": "CLUB",
+            "value": "5"
+          },
+          {
+            "suit": "HEART",
+            "value": "5"
+          },
+          {
+            "suit": "SPADE",
+            "value": "5"
+          },
+          {
+            "suit": "DIAMOND",
+            "value": "6"
+          },
+          {
+            "suit": "HEART",
+            "value": "6"
+          },
+          {
+            "suit": "CLUB",
+            "value": "7"
+          },
+          {
+            "suit": "HEART",
+            "value": "7"
+          },
+          {
+            "suit": "CLUB",
+            "value": "8"
+          },
+          {
+            "suit": "SPADE",
+            "value": "8"
+          },
+          {
+            "suit": "DIAMOND",
+            "value": "9"
+          },
+          {
+            "suit": "CLUB",
+            "value": "9"
+          },
+          {
+            "suit": "HEART",
+            "value": "9"
+          },
+          {
+            "suit": "SPADE",
+            "value": "9"
+          },
+          {
+            "suit": "CLUB",
+            "value": "J"
+          },
+          {
+            "suit": "SPADE",
+            "value": "J"
+          },
+          {
+            "suit": "DIAMOND",
+            "value": "Q"
+          },
+          {
+            "suit": "SPADE",
+            "value": "Q"
+          },
+          {
+            "suit": "SPADE",
+            "value": "K"
+          },
+          {
+            "suit": "SPADE",
+            "value": "A"
+          },
+          {
+            "suit": "DIAMOND",
+            "value": "2"
+          },
+          {
+            "suit": "CLUB",
+            "value": "2"
+          },
+          {
+            "suit": "HEART",
+            "value": "2"
+          }
+        ],
+        "id": "pIh3Yp2ZHJtfYdDglGS3yJI9OTjJvgy6",
+        "name": "test1"
+      },
+      {
+        "hand": [
+          {
+            "suit": "SPADE",
+            "value": "2"
+          }
+        ],
+        "id": "gEwj3R4jkGsb0gbOcOuzwQ6Au1wFb6e0",
+        "name": "test2"
+      }
+    ],
+    "currentPlayerIndex": 1,
+    "roundMode": "single",
+    "cardPile": [
+      [
+        {
+          "suit": "CLUB",
+          "value": "3"
+        }
+      ]
+    ],
+    "consecutivePasses": 0
+  },
+  "children": {}
+}
