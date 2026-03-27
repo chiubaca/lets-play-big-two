@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { makeBigTwoGameMachine } from "./gameStateMachine.ts";
+import { bigTwoGameMachine } from "./game-state-machine.ts";
 import { createActor } from "xstate";
 import type { Card } from "@big-two/game-core";
 
@@ -8,8 +8,7 @@ import { PLAYER_ABOUT_TO_WIN } from "./mocks/PLAYER_ABOUT_TO_WIN.ts";
 describe("Big Two Game State Machine", () => {
   // Helper function to create a fresh game instance
   const createNewGame = () => {
-    const machine = makeBigTwoGameMachine();
-    return createActor(machine).start();
+    return createActor(bigTwoGameMachine).start();
   };
 
   describe("Initial State", () => {
@@ -167,8 +166,6 @@ describe("Big Two Game State Machine", () => {
 
   describe("Game end", () => {
     it("will end once a player has played all their cards", () => {
-      const bigTwoGameMachine = makeBigTwoGameMachine();
-
       const gameActor = createActor(bigTwoGameMachine, {
         snapshot: PLAYER_ABOUT_TO_WIN,
       }).start();

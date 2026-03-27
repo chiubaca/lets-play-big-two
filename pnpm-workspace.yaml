@@ -5,17 +5,22 @@ packages:
 allowBuilds:
   better-sqlite3: true
   esbuild: true
+  sharp: true
+  workerd: true
 
 catalog:
+  "@cloudflare/workers-types": ^4.20250405.0
   "@types/node": ^24
   better-auth: 1.5.5
   drizzle-kit: ^0.31.8
   drizzle-orm: 0.45.1
+  hono: ^4.7.0
   nanoid: ^5.1.6
   typescript: ^5
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vite-plus: latest
   vitest: npm:@voidzero-dev/vite-plus-test@latest
+  wrangler: 4.76.0
   xstate: ^5.25.0
   zod: ^4.2.1
 catalogMode: prefer

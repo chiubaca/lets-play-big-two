@@ -1,0 +1,33 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lets-play-big-two-backend",
+  "compatibility_date": "2025-09-02",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "src/index.ts",
+  "migrations": [
+    {
+      "new_sqlite_classes": ["BigTwoRoomObject"],
+      "tag": "v1",
+    },
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "BigTwoRoomObject",
+        "name": "BIG_TWO_ROOM_DURABLE_OBJECT",
+      },
+    ],
+  },
+  "d1_databases": [
+    {
+      "database_name": "lets-play-big-two-db",
+      "database_id": "697727be-cf8b-4732-a100-b90ab45024a7",
+      "binding": "BIG_TWO_DB",
+      "migrations_dir": "drizzle/migrations",
+      "remote": true,
+    },
+  ],
+  "observability": {
+    "enabled": true,
+  },
+}

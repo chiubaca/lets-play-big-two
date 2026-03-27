@@ -1,4 +1,4 @@
-import type { BigTwoGameMachineSnapshot } from "../gameStateMachine.ts";
+import type { BigTwoGameMachineSnapshot } from "../game-state-machine.types.ts";
 
 export const PLAYER_ABOUT_TO_WIN = {
   status: "active",
