@@ -1,0 +1,58 @@
+{
+  "name": "data-ops",
+  "version": "0.0.0",
+  "description": "A starter for creating a TypeScript package.",
+  "homepage": "https://github.com/author/library#readme",
+  "bugs": {
+    "url": "https://github.com/author/library/issues"
+  },
+  "license": "MIT",
+  "author": "Author Name <author.name@mail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/author/library.git"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    "./database": {
+      "types": "./src/db/database.ts",
+      "default": "./src/db/database.ts"
+    },
+    "./drizzle/schema": {
+      "types": "./src/drizzle/schema.ts",
+      "default": "./src/drizzle/schema.ts"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --outDir ./dist && tsc-alias",
+    "push": "drizzle-kit push --config drizzle.config.ts",
+    "pull": "drizzle-kit pull --config drizzle.config.ts",
+    "migrate": "drizzle-kit migrate --config drizzle.config.ts",
+    "generate": "drizzle-kit generate --config drizzle.config.ts",
+    "studio": "drizzle-kit studio --config drizzle.config.ts",
+    "better-auth-generate": "npx @better-auth/cli generate --config auth-gen/auth.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.2.0",
+    "drizzle-orm": "catalog:",
+    "kysely": "^0.28.2",
+    "kysely-d1": "^0.4.0",
+    "nanoid": "catalog:",
+    "uuid": "^11.1.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@typescript/native-preview": "7.0.0-dev.20260316.1",
+    "bumpp": "^11.0.1",
+    "drizzle-kit": "catalog:",
+    "typescript": "^5.9.3",
+    "vite-plus": "^0.1.11"
+  }
+}

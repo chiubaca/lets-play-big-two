@@ -3,15 +3,20 @@ packages:
   - packages/*
   - tools/*
 allowBuilds:
+  better-sqlite3: true
   esbuild: true
 
 catalog:
   "@types/node": ^24
+  better-auth: 1.5.5
+  drizzle-kit: ^0.31.8
+  drizzle-orm: 0.45.1
+  nanoid: ^5.1.6
   typescript: ^5
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vite-plus: latest
   vitest: npm:@voidzero-dev/vite-plus-test@latest
-
+  zod: ^4.2.1
 catalogMode: prefer
 overrides:
   vite: "catalog:"
