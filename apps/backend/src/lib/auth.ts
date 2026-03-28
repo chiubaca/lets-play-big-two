@@ -18,10 +18,10 @@ export const auth = betterAuth({
     },
   }),
   baseURL: env.BETTER_AUTH_URL,
-  trustedOrigins: ["http://localhost:5173"],
-  advanced: {
-    useSecureCookies: false,
-  },
+  trustedOrigins: ["https://web.local.big-two.com"],
+  // advanced: {
+  //   useSecureCookies: true,
+  // },
   socialProviders: {
     google: {
       clientId: env.GOOGLE_CLIENT_ID,

@@ -11,6 +11,9 @@ const config = defineConfig({
     tsconfigPaths: true,
   },
   plugins: [devtools(), tailwindcss(), tanstackStart(), viteReact()],
+  server: {
+    allowedHosts: ["web.local.big-two.com"],
+  },
 });
 
 export default config;

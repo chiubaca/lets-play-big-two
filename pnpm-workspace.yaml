@@ -12,6 +12,7 @@ catalog:
   "@cloudflare/workers-types": ^4.20250405.0
   "@types/node": ^24
   better-auth: 1.5.5
+  concurrently: ^9.2.1
   drizzle-kit: ^0.31.8
   drizzle-orm: 0.45.1
   hono: ^4.7.0

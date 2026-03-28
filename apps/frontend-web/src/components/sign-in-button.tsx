@@ -14,7 +14,10 @@ export function SignInButton() {
       "🔍 ~ SignInButton ~ apps/frontend-web/src/components/sign-in-button.tsx:14 ~ google:",
     );
     try {
-      await authClient.signIn.social({ provider: "google", callbackURL: "http://localhost:5173" });
+      await authClient.signIn.social({
+        provider: "google",
+        callbackURL: "https://web.local.big-two.com",
+      });
     } catch (error) {
       console.error("Sign in failed:", error);
     }

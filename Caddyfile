@@ -1,0 +1,11 @@
+{
+  local_certs
+}
+
+web.local.big-two.com {
+  reverse_proxy localhost:5173
+}
+
+api.local.big-two.com {
+  reverse_proxy localhost:8788
+}
