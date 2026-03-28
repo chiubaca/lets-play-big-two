@@ -7,7 +7,7 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>();
 App.use(
   "*",
   cors({
-    origin: ["https://web.local.big-two.com"],
+    origin: ["https://local.bigtwo.com"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
     credentials: true,

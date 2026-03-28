@@ -58,8 +58,8 @@ configure_hosts() {
     info "Configuring /etc/hosts for local domains..."
     
     local hosts_entries=(
-        "127.0.0.1 web.local.big-two.com"
-        "127.0.0.1 api.local.big-two.com"
+        "127.0.0.1 local.bigtwo.com"
+        "127.0.0.1 local.api.bigtwo.com"
     )
     
     local needs_update=false
@@ -117,11 +117,11 @@ create_caddyfile() {
   local_certs
 }
 
-web.local.big-two.com {
+local.bigtwo.com {
   reverse_proxy localhost:5173
 }
 
-api.local.big-two.com {
+local.api.bigtwo.com {
   reverse_proxy localhost:8788
 }
 EOF
@@ -150,7 +150,7 @@ check_ports() {
 verify_setup() {
     info "Verifying hosts file..."
     
-    if grep -q "web.local.big-two.com" /etc/hosts && grep -q "api.local.big-two.com" /etc/hosts; then
+    if grep -q "local.bigtwo.com" /etc/hosts && grep -q "local.api.bigtwo.com" /etc/hosts; then
         success "Hosts file configured correctly"
     else
         error "Hosts file not configured. Run setup again."
@@ -164,13 +164,13 @@ print_summary() {
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
     echo "Local development domains configured:"
-    echo -e "  ${BLUE}web.local.big-two.com${NC} → https://web.local.big-two.com (proxies to :5173)"
-    echo -e "  ${BLUE}api.local.big-two.com${NC} → https://api.local.big-two.com (proxies to :8788)"
+    echo -e "  ${BLUE}local.bigtwo.com${NC} → https://local.bigtwo.com (proxies to :5173)"
+    echo -e "  ${BLUE}local.api.bigtwo.com${NC} → https://local.api.bigtwo.com (proxies to :8788)"
     echo ""
     echo "What was configured:"
     echo "  ✓ Caddy (reverse proxy with HTTPS)"
     echo "  ✓ mkcert (local CA for SSL certificates)"
-    echo "  ✓ /etc/hosts (web.local.big-two.com, api.local.big-two.com)"
+    echo "  ✓ /etc/hosts (local.bigtwo.com, local.api.bigtwo.com)"
     echo ""
     echo "Next steps:"
     echo -e "  ${YELLOW}pnpm dev:local${NC}  Start all development servers"

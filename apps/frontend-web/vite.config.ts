@@ -12,7 +12,7 @@ const config = defineConfig({
   },
   plugins: [devtools(), tailwindcss(), tanstackStart(), viteReact()],
   server: {
-    allowedHosts: ["web.local.big-two.com"],
+    allowedHosts: ["local.bigtwo.com"],
   },
 });
 

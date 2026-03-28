@@ -18,7 +18,7 @@ export const auth = betterAuth({
     },
   }),
   baseURL: env.BETTER_AUTH_URL,
-  trustedOrigins: ["https://web.local.big-two.com"],
+  trustedOrigins: ["https://local.bigtwo.com"],
   // advanced: {
   //   useSecureCookies: true,
   // },

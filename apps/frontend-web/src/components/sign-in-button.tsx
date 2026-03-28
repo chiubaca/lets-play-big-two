@@ -16,7 +16,7 @@ export function SignInButton() {
     try {
       await authClient.signIn.social({
         provider: "google",
-        callbackURL: "https://web.local.big-two.com",
+        callbackURL: "https://local.bigtwo.com",
       });
     } catch (error) {
       console.error("Sign in failed:", error);

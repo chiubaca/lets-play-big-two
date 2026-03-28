@@ -12,8 +12,8 @@ A web-based Big Two card game.
 
 This project uses local domains for better DX. Access your development servers via:
 
-- `https://web.local.big-two.com` → Frontend (proxies to localhost:5173)
-- `https://api.local.big-two.com` → Backend (proxies to localhost:8788)
+- `https://local.bigtwo.com` → Frontend (proxies to localhost:5173)
+- `https://local.api.bigtwo.com` → Backend (proxies to localhost:8788)
 
 ### First-Time Setup
 
@@ -43,10 +43,10 @@ pnpm dev:stop
 
 After running `pnpm dev:local`:
 
-| Service  | Local Domain                  | Original Port         |
-| -------- | ----------------------------- | --------------------- |
-| Frontend | https://web.local.big-two.com | http://localhost:5173 |
-| Backend  | https://api.local.big-two.com | http://localhost:8788 |
+| Service  | Local Domain                 | Original Port         |
+| -------- | ---------------------------- | --------------------- |
+| Frontend | https://local.bigtwo.com     | http://localhost:5173 |
+| Backend  | https://local.api.bigtwo.com | http://localhost:8788 |
 
 ## Development
 

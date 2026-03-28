@@ -33,7 +33,7 @@ check_dependencies() {
         error "Caddyfile not found. Run 'pnpm dev:setup' first."
     fi
     
-    if ! grep -q "web.local.big-two.com" /etc/hosts 2>/dev/null; then
+    if ! grep -q "local.bigtwo.com" /etc/hosts 2>/dev/null; then
         error "Hosts file not configured. Run 'pnpm dev:setup' first."
     fi
     
@@ -48,8 +48,8 @@ print_banner() {
     echo -e "${BOLD}╚═══════════════════════════════════════════════════════╝${NC}"
     echo -e "${NC}"
     echo -e "${BOLD}  URLs:${NC}"
-    echo -e "    ${BLUE}Frontend:${NC}  ${BOLD}https://web.local.big-two.com${NC}"
-    echo -e "    ${ORANGE}Backend:${NC}   ${BOLD}https://api.local.big-two.com${NC}"
+    echo -e "    ${BLUE}Frontend:${NC}  ${BOLD}https://local.bigtwo.com${NC}"
+    echo -e "    ${ORANGE}Backend:${NC}   ${BOLD}https://local.api.bigtwo.com${NC}"
     echo ""
     echo -e "${YELLOW}  Press Ctrl+C to stop all services${NC}"
     echo ""
