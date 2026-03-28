@@ -9,9 +9,16 @@ import { env } from "cloudflare:workers";
 export const auth = betterAuth({
   database: drizzleAdapter(drizzle(env.BIG_TWO_DB), {
     provider: "sqlite",
-    schema,
+    schema: {
+      ...schema,
+      user: schema.userTable,
+      session: schema.sessionTable,
+      account: schema.accountTable,
+      verification: schema.verification,
+    },
   }),
   baseURL: env.BETTER_AUTH_URL,
+  trustedOrigins: ["http://localhost:5173"],
   advanced: {
     useSecureCookies: false,
   },
