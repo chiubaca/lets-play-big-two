@@ -3,6 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./hono/app": "./src/hono/app.ts"
+  },
   "scripts": {
     "dev": "wrangler dev --port 8788",
     "deploy": "wrangler deploy",
@@ -14,6 +18,7 @@
     "better-auth": "catalog:",
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
+    "nanoid": "catalog:",
     "wrangler": "catalog:",
     "xstate": "catalog:",
     "zod": "catalog:"

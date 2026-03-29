@@ -1,7 +1,9 @@
 import { SignInButton } from "#/components/sign-in-button";
 import { authClient } from "@/libs/auth-client";
-import { createFileRoute } from "@tanstack/react-router";
-import { User, LogOut, Gamepad2 } from "lucide-react";
+import { client } from "@/libs/hono-client";
+import { useMutation } from "@tanstack/react-query";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { User, LogOut, Gamepad2, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/")({ component: App });
 
@@ -52,11 +54,31 @@ function LoginScreen() {
 }
 
 function WelcomeScreen({ session }: { session: any }) {
+  const navigate = useNavigate();
+  const createRoomMutation = useMutation({
+    mutationFn: async () => {
+      const res = await client.api.rooms.$post();
+      if (!res.ok) {
+        throw new Error("Failed to create room");
+      }
+      return res.json();
+    },
+  });
+
   const handleSignOut = async () => {
     try {
       await authClient.signOut();
     } catch (error) {
       console.error("Sign out failed:", error);
+    }
+  };
+
+  const handleCreateGame = async () => {
+    try {
+      const response = await createRoomMutation.mutateAsync();
+      await navigate({ to: "/room/$roomId", params: { roomId: response.roomId } });
+    } catch (error) {
+      console.error("Failed to create room:", error);
     }
   };
 
@@ -88,13 +110,23 @@ function WelcomeScreen({ session }: { session: any }) {
 
         {/* Quick Actions */}
         <div className="grid gap-4 sm:grid-cols-2">
-          <button className="group relative overflow-hidden rounded-xl border bg-card p-6 text-left transition-colors hover:bg-accent">
+          <button
+            onClick={handleCreateGame}
+            disabled={createRoomMutation.isPending}
+            className="group relative overflow-hidden rounded-xl border bg-card p-6 text-left transition-colors hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-indigo-500/10">
-                <Gamepad2 className="h-6 w-6 text-indigo-600" />
+                {createRoomMutation.isPending ? (
+                  <Loader2 className="h-6 w-6 text-indigo-600 animate-spin" />
+                ) : (
+                  <Gamepad2 className="h-6 w-6 text-indigo-600" />
+                )}
               </div>
               <div>
-                <h3 className="font-semibold">Create Game</h3>
+                <h3 className="font-semibold">
+                  {createRoomMutation.isPending ? "Creating..." : "Create Game"}
+                </h3>
                 <p className="text-sm text-muted-foreground">Start a new Big Two match</p>
               </div>
             </div>
@@ -112,6 +144,13 @@ function WelcomeScreen({ session }: { session: any }) {
             </div>
           </button>
         </div>
+
+        {/* Error Message */}
+        {createRoomMutation.isError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+            {createRoomMutation.error?.message || "Failed to create room"}
+          </div>
+        )}
 
         {/* Sign Out */}
         <div className="flex justify-center pt-4">

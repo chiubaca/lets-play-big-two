@@ -10,9 +10,6 @@ export function SignInButton() {
   }
 
   const handleSignIn = async () => {
-    console.log(
-      "🔍 ~ SignInButton ~ apps/frontend-web/src/components/sign-in-button.tsx:14 ~ google:",
-    );
     try {
       await authClient.signIn.social({
         provider: "google",
@@ -27,7 +24,7 @@ export function SignInButton() {
     try {
       await authClient.signOut();
       // Redirect to home page after sign out
-      router.navigate({ to: "/" });
+      await router.navigate({ to: "/" });
     } catch (error) {
       console.error("Sign out failed:", error);
     }

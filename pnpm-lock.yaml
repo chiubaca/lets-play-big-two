@@ -72,6 +72,9 @@ importers:
       hono:
         specifier: 'catalog:'
         version: 4.12.9
+      nanoid:
+        specifier: 'catalog:'
+        version: 5.1.7
       wrangler:
         specifier: 'catalog:'
         version: 4.76.0(@cloudflare/workers-types@4.20260317.1)
@@ -127,6 +130,9 @@ importers:
       better-auth:
         specifier: 'catalog:'
         version: 1.5.5(@cloudflare/workers-types@4.20260317.1)(@tanstack/react-start@1.167.12(@voidzero-dev/vite-plus-core@0.1.14(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(better-sqlite3@12.8.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260317.1)(better-sqlite3@12.8.0)(kysely@0.28.14))(mongodb@7.1.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(solid-js@1.9.12)
+      hono:
+        specifier: 'catalog:'
+        version: 4.12.9
       lucide-react:
         specifier: ^0.545.0
         version: 0.545.0(react@19.2.4)
@@ -176,18 +182,6 @@ importers:
       vite-plus:
         specifier: 'catalog:'
         version: 0.1.14(@types/node@22.19.15)(@voidzero-dev/vite-plus-core@0.1.14(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3))(esbuild@0.27.4)(jiti@2.6.1)(jsdom@28.1.0(@noble/hashes@2.0.1))(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)
-
-  apps/website:
-    devDependencies:
-      typescript:
-        specifier: ~5.9.3
-        version: 5.9.3
-      vite:
-        specifier: npm:@voidzero-dev/vite-plus-core@latest
-        version: '@voidzero-dev/vite-plus-core@0.1.14(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)'
-      vite-plus:
-        specifier: 'catalog:'
-        version: 0.1.14(@types/node@25.5.0)(@voidzero-dev/vite-plus-core@0.1.14(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3))(esbuild@0.27.4)(jiti@2.6.1)(jsdom@28.1.0(@noble/hashes@2.0.1))(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)
 
   packages/data-ops:
     dependencies:
@@ -280,24 +274,6 @@ importers:
       vitest:
         specifier: npm:@voidzero-dev/vite-plus-test@latest
         version: '@voidzero-dev/vite-plus-test@0.1.14(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(jsdom@28.1.0(@noble/hashes@2.0.1))(tsx@4.21.0)(typescript@5.9.3)(vite@8.0.3(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))(yaml@2.8.3)'
-
-  packages/utils:
-    devDependencies:
-      '@types/node':
-        specifier: ^25.5.0
-        version: 25.5.0
-      '@typescript/native-preview':
-        specifier: 7.0.0-dev.20260316.1
-        version: 7.0.0-dev.20260316.1
-      bumpp:
-        specifier: ^11.0.1
-        version: 11.0.1
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vite-plus:
-        specifier: ^0.1.11
-        version: 0.1.14(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(jsdom@28.1.0(@noble/hashes@2.0.1))(tsx@4.21.0)(typescript@5.9.3)(vite@8.0.3(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))(yaml@2.8.3)
 
 packages:
 
