@@ -76,9 +76,6 @@ pnpm --filter frontend-web dev
 
 # Backend only
 pnpm --filter backend dev
-
-# Website (marketing site)
-pnpm --filter website dev
 ```
 
 ## Project Structure
@@ -87,13 +84,11 @@ pnpm --filter website dev
 .
 ├── apps/
 │   ├── frontend-web/    # TanStack Start frontend
-│   ├── backend/         # Cloudflare Workers backend
-│   └── website/         # Marketing website
+│   └── backend/         # Cloudflare Workers backend
 ├── packages/
 │   ├── game-core/       # Core game logic
 │   ├── game-state-machine/  # XState game flow
-│   ├── data-ops/        # Database operations
-│   └── utils/           # Shared utilities
+│   └── data-ops/        # Database operations
 ├── tools/               # Development tools
 ├── Caddyfile            # Reverse proxy config
 └── scripts/
