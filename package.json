@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "ready": "vp fmt && vp lint && vp run test -r && vp run build -r",
-    "dev": "vp run website#dev",
+    "dev": "vp run frontend-web#dev",
     "prepare": "vp config",
     "dev:setup": "./scripts/setup-local-dev.sh",
     "dev:local": "./scripts/start-dev.sh",
