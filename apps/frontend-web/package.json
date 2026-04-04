@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@big-two/game-state-machine": "workspace:*",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-devtools": "latest",
     "@tanstack/react-query": "latest",

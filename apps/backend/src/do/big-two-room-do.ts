@@ -82,7 +82,11 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     const webSocketPair = new WebSocketPair();
     const [client, server] = Object.values(webSocketPair);
     this.ctx.acceptWebSocket(server);
-    console.log("connected");
+
+    const gameState = await this.getGameState();
+    if (gameState) {
+      server.send(gameState);
+    }
 
     return new Response(null, {
       status: 101,

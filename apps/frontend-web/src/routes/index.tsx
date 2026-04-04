@@ -1,6 +1,6 @@
-import { SignInButton } from "#/components/sign-in-button";
-import { authClient } from "@/libs/auth-client";
-import { client } from "@/libs/hono-client";
+import { SignInButton } from "~/components/sign-in-button";
+import { authClient } from "~/libs/auth-client";
+import { honoClient } from "~/libs/hono-client";
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { User, LogOut, Gamepad2, Loader2 } from "lucide-react";
@@ -57,7 +57,7 @@ function WelcomeScreen({ session }: { session: any }) {
   const navigate = useNavigate();
   const createRoomMutation = useMutation({
     mutationFn: async () => {
-      const res = await client.api.rooms.$post();
+      const res = await honoClient.api.room.$post();
       if (!res.ok) {
         throw new Error("Failed to create room");
       }

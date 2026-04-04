@@ -100,6 +100,9 @@ importers:
 
   apps/frontend-web:
     dependencies:
+      '@big-two/game-state-machine':
+        specifier: workspace:*
+        version: link:../../packages/game-state-machine
       '@tailwindcss/vite':
         specifier: ^4.1.18
         version: 4.2.2(@voidzero-dev/vite-plus-core@0.1.14(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3))

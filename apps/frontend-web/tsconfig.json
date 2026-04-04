@@ -5,8 +5,7 @@
     "jsx": "react-jsx",
     "module": "ESNext",
     "paths": {
-      "#/*": ["./src/*"],
-      "@/*": ["./src/*"],
+      "~/*": ["./src/*"],
       "backend/*": ["../backend/src/*"]
     },
     "lib": ["ES2022", "DOM", "DOM.Iterable"],

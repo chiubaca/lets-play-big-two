@@ -1,5 +1,5 @@
-import { authClient } from "@/libs/auth-client";
 import { useRouter } from "@tanstack/react-router";
+import { authClient } from "~/libs/auth-client";
 
 export function SignInButton() {
   const { data: session, isPending } = authClient.useSession();
@@ -13,7 +13,7 @@ export function SignInButton() {
     try {
       await authClient.signIn.social({
         provider: "google",
-        callbackURL: "https://local.bigtwo.com",
+        callbackURL: process.env.VITE_BACKEND_URL,
       });
     } catch (error) {
       console.error("Sign in failed:", error);
