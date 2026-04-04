@@ -1,7 +1,7 @@
 import { useRouter } from "@tanstack/react-router";
 import { authClient } from "~/libs/auth-client";
 
-export function SignInButton() {
+export function AuthButton() {
   const { data: session, isPending } = authClient.useSession();
   const router = useRouter();
 

@@ -1,4 +1,4 @@
-import { SignInButton } from "~/components/sign-in-button";
+import { AuthButton } from "~/components/AuthButton";
 import { authClient } from "~/libs/auth-client";
 import { honoClient } from "~/libs/hono-client";
 import { useMutation } from "@tanstack/react-query";
@@ -41,7 +41,7 @@ function LoginScreen() {
           </div>
 
           <div className="rounded-xl border bg-card p-6 shadow-sm">
-            <SignInButton />
+            <AuthButton />
           </div>
 
           <p className="text-xs text-muted-foreground">
