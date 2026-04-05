@@ -161,6 +161,23 @@ function WelcomeScreen({ session }: { session: any }) {
               </div>
             </div>
           </button>
+
+          <button
+            onClick={async () => {
+              await navigate({ to: "/offline" });
+            }}
+            className="group relative overflow-hidden rounded-xl border bg-card p-6 text-left transition-colors hover:bg-accent"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-purple-500/10">
+                <User className="h-6 w-6 text-purple-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Single device mode</h3>
+                <p className="text-sm text-muted-foreground"> Offline multiplayer</p>
+              </div>
+            </div>
+          </button>
         </div>
 
         {/* Error Message */}
