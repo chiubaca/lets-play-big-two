@@ -16,11 +16,11 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     this.sql = ctx.storage.sql;
 
     this.sql.exec(`
-			CREATE TABLE IF NOT EXISTS game_room(
-				id INTEGER PRIMARY KEY,
-				game_state TEXT
-			);
-		`);
+      CREATE TABLE IF NOT EXISTS game_room(
+        id INTEGER PRIMARY KEY,
+        game_state TEXT
+      );
+    `);
   }
 
   async gameAction(event: GameEvent) {
@@ -41,7 +41,6 @@ export class BigTwoRoomObject extends DurableObject<Env> {
 
     const gameStateSnapshot =
       gameStateMachineActor.getPersistedSnapshot() as BigTwoGameMachineSnapshot;
-
     const serialisedGameState = JSON.stringify(gameStateSnapshot);
     this.sql.exec(`UPDATE game_room SET game_state = ? WHERE id = 1`, serialisedGameState);
 
@@ -94,6 +93,16 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     });
   }
 
+  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
+    try {
+      const event = JSON.parse(message as string) as GameEvent;
+      await this.gameAction(event);
+    } catch (error) {
+      console.error("Failed to process WebSocket message:", error);
+      ws.send(JSON.stringify({ error: "Failed to process game action" }));
+    }
+  }
+
   webSocketClose(
     _ws: WebSocket,
     _code: number,
@@ -101,5 +110,9 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     _wasClean: boolean,
   ): void | Promise<void> {
     console.log("client closed");
+  }
+
+  webSocketError(_ws: WebSocket, error: unknown) {
+    console.error("WebSocket error:", error);
   }
 }

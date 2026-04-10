@@ -4,6 +4,7 @@ import { honoClient } from "~/libs/hono-client";
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { User, LogOut, Gamepad2, Loader2 } from "lucide-react";
+import { useState } from "react";
 
 export const Route = createFileRoute("/")({ component: App });
 
@@ -33,7 +34,7 @@ function LoginScreen() {
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="w-full max-w-md space-y-6 text-center">
           <div className="space-y-2">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--lagoon)] to-[var(--palm)]">
               <Gamepad2 className="h-8 w-8 text-white" />
             </div>
             <h1 className="text-3xl font-bold tracking-tight">Welcome Back</h1>
@@ -55,6 +56,10 @@ function LoginScreen() {
 
 function WelcomeScreen({ session }: { session: any }) {
   const navigate = useNavigate();
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [roomCode, setRoomCode] = useState("");
+  const [joinError, setJoinError] = useState<string | null>(null);
+
   const createRoomMutation = useMutation({
     mutationFn: async () => {
       const res = await honoClient.api.room.$post();
@@ -82,11 +87,21 @@ function WelcomeScreen({ session }: { session: any }) {
     }
   };
 
+  const handleJoinGame = async () => {
+    if (!roomCode.trim()) {
+      setJoinError("Please enter a room code");
+      return;
+    }
+
+    // Navigate directly to the room - the room page will handle joining
+    await navigate({ to: "/room/$roomId", params: { roomId: roomCode.trim().toUpperCase() } });
+  };
+
   return (
     <main className="page-wrap px-4 pb-8 pt-14">
       <div className="mx-auto max-w-2xl space-y-8">
         {/* Welcome Card */}
-        <div className="rounded-2xl border bg-gradient-to-br from-indigo-500/10 to-purple-600/10 p-8">
+        <div className="rounded-2xl border bg-gradient-to-br from-[var(--hero-a)] to-[var(--hero-b)] p-8">
           <div className="flex items-center gap-6">
             {session.user?.image ? (
               <img
@@ -116,11 +131,11 @@ function WelcomeScreen({ session }: { session: any }) {
             className="group relative overflow-hidden rounded-xl border bg-card p-6 text-left transition-colors hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-indigo-500/10">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--lagoon)]/10">
                 {createRoomMutation.isPending ? (
-                  <Loader2 className="h-6 w-6 text-indigo-600 animate-spin" />
+                  <Loader2 className="h-6 w-6 text-[var(--lagoon)] animate-spin" />
                 ) : (
-                  <Gamepad2 className="h-6 w-6 text-indigo-600" />
+                  <Gamepad2 className="h-6 w-6 text-[var(--lagoon)]" />
                 )}
               </div>
               <div>
@@ -132,10 +147,13 @@ function WelcomeScreen({ session }: { session: any }) {
             </div>
           </button>
 
-          <button className="group relative overflow-hidden rounded-xl border bg-card p-6 text-left transition-colors hover:bg-accent">
+          <button
+            onClick={() => setShowJoinModal(true)}
+            className="group relative overflow-hidden rounded-xl border bg-card p-6 text-left transition-colors hover:bg-accent"
+          >
             <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-purple-500/10">
-                <User className="h-6 w-6 text-purple-600" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--palm)]/10">
+                <User className="h-6 w-6 text-[var(--palm)]" />
               </div>
               <div>
                 <h3 className="font-semibold">Join Game</h3>
@@ -147,7 +165,7 @@ function WelcomeScreen({ session }: { session: any }) {
 
         {/* Error Message */}
         {createRoomMutation.isError && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
             {createRoomMutation.error?.message || "Failed to create room"}
           </div>
         )}
@@ -163,6 +181,56 @@ function WelcomeScreen({ session }: { session: any }) {
           </button>
         </div>
       </div>
+
+      {/* Join Game Modal */}
+      {showJoinModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl border bg-card p-6 shadow-lg">
+            <h2 className="text-xl font-semibold mb-4">Join Game</h2>
+            <p className="text-muted-foreground text-sm mb-4">
+              Enter the room code shared by your friend to join the game.
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="roomCode" className="block text-sm font-medium mb-1">
+                  Room Code
+                </label>
+                <input
+                  id="roomCode"
+                  type="text"
+                  value={roomCode}
+                  onChange={(e) => {
+                    setRoomCode(e.target.value.toUpperCase());
+                    setJoinError(null);
+                  }}
+                  placeholder="e.g. ABC12345"
+                  className="w-full rounded-lg border bg-background px-3 py-2 text-lg font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-[var(--lagoon)]"
+                  maxLength={8}
+                />
+              </div>
+
+              {joinError && <p className="text-sm text-red-600 dark:text-red-400">{joinError}</p>}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowJoinModal(false)}
+                  className="flex-1 rounded-lg border px-4 py-2 font-medium transition-colors hover:bg-accent"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleJoinGame}
+                  disabled={!roomCode.trim()}
+                  className="flex-1 rounded-lg bg-[var(--lagoon)] px-4 py-2 font-medium text-white transition-colors hover:bg-[var(--lagoon-deep)] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Join
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

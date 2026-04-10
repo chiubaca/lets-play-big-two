@@ -233,7 +233,7 @@ export const bigTwoGameMachine = setup({
   guards: {
     hasMaxPlayers: ({ context }) => context.players.length !== 4,
     hasMinPlayers: ({ context }) => context.players.length > 1,
-    isValidFirstMove: ({ context, event }) => {
+    isValidFirstMove: ({ event }) => {
       if (event.type !== "PLAY_FIRST_MOVE") {
         console.warn("🚨 attempted PLAY_FIRST_MOVE on incorrect state");
         return false;
@@ -245,7 +245,7 @@ export const bigTwoGameMachine = setup({
       }
       return true;
     },
-    isValidNewRoundFirstMove: ({ context, event }) => {
+    isValidNewRoundFirstMove: ({ event }) => {
       if (event.type !== "PLAY_NEW_ROUND_FIRST_MOVE") {
         console.warn("🚨 attempted PLAY_NEW_ROUND_FIRST_MOVE on incorrect state");
         return false;
@@ -308,14 +308,14 @@ export const bigTwoGameMachine = setup({
 }).createMachine({
   id: "bigTwoGame",
   initial: "WAITING_FOR_PLAYERS",
-  context: {
+  context: () => ({
     players: [],
     currentPlayerIndex: 0,
     roundMode: null,
     cardPile: [],
     consecutivePasses: 0,
     winner: undefined,
-  },
+  }),
   states: {
     WAITING_FOR_PLAYERS: {
       on: {

@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@big-two/game-core": "workspace:*",
     "@big-two/game-state-machine": "workspace:*",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-devtools": "latest",
@@ -23,10 +24,12 @@
     "@tanstack/react-start": "latest",
     "@tanstack/router-plugin": "^1.132.0",
     "better-auth": "catalog:",
+    "clsx": "catalog:",
     "hono": "catalog:",
     "lucide-react": "^0.545.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "tailwind-merge": "catalog:",
     "tailwindcss": "^4.1.18"
   },
   "devDependencies": {

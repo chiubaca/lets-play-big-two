@@ -12,6 +12,9 @@ catalogs:
     better-auth:
       specifier: 1.5.5
       version: 1.5.5
+    clsx:
+      specifier: ^2.1.1
+      version: 2.1.1
     concurrently:
       specifier: ^9.2.1
       version: 9.2.1
@@ -27,6 +30,9 @@ catalogs:
     nanoid:
       specifier: ^5.1.6
       version: 5.1.7
+    tailwind-merge:
+      specifier: ^3.5.0
+      version: 3.5.0
     vite-plus:
       specifier: latest
       version: 0.1.14
@@ -100,6 +106,9 @@ importers:
 
   apps/frontend-web:
     dependencies:
+      '@big-two/game-core':
+        specifier: workspace:*
+        version: link:../../packages/game-core
       '@big-two/game-state-machine':
         specifier: workspace:*
         version: link:../../packages/game-state-machine
@@ -133,6 +142,9 @@ importers:
       better-auth:
         specifier: 'catalog:'
         version: 1.5.5(@cloudflare/workers-types@4.20260317.1)(@tanstack/react-start@1.167.12(@voidzero-dev/vite-plus-core@0.1.14(@types/node@22.19.15)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(better-sqlite3@12.8.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260317.1)(better-sqlite3@12.8.0)(kysely@0.28.14))(mongodb@7.1.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(solid-js@1.9.12)
+      clsx:
+        specifier: 'catalog:'
+        version: 2.1.1
       hono:
         specifier: 'catalog:'
         version: 4.12.9
@@ -145,6 +157,9 @@ importers:
       react-dom:
         specifier: ^19.2.0
         version: 19.2.4(react@19.2.4)
+      tailwind-merge:
+        specifier: 'catalog:'
+        version: 3.5.0
       tailwindcss:
         specifier: ^4.1.18
         version: 4.2.2
@@ -3498,6 +3513,9 @@ packages:
   symbol-tree@3.2.4:
     resolution: {integrity: sha512-9QNk5KwDF+Bvz+PyObkmSYjI5ksVUYtjW7AU22r2NKcfLJcXp96hkDWU3+XndOsUb+AQ9QhfzfCT2O+CNWT5Tw==}
 
+  tailwind-merge@3.5.0:
+    resolution: {integrity: sha512-I8K9wewnVDkL1NTGoqWmVEIlUcB9gFriAEkXkfCjX5ib8ezGxtR3xD7iZIxrfArjEsH7F1CHD4RFUtxefdqV/A==}
+
   tailwindcss@4.2.2:
     resolution: {integrity: sha512-KWBIxs1Xb6NoLdMVqhbhgwZf2PGBpPEiwOqgI4pFIYbNTfBXiKYyWoTsXgBQ9WFg/OlhnvHaY+AEpW7wSmFo2Q==}
 
@@ -6655,6 +6673,8 @@ snapshots:
       has-flag: 4.0.0
 
   symbol-tree@3.2.4: {}
+
+  tailwind-merge@3.5.0: {}
 
   tailwindcss@4.2.2: {}
 
