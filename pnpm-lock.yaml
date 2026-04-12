@@ -9,6 +9,9 @@ catalogs:
     '@cloudflare/workers-types':
       specifier: ^4.20250405.0
       version: 4.20260317.1
+    '@hono/standard-validator':
+      specifier: ^0.2.2
+      version: 0.2.2
     better-auth:
       specifier: 1.5.5
       version: 1.5.5
@@ -69,6 +72,9 @@ importers:
       '@big-two/game-state-machine':
         specifier: workspace:*
         version: link:../../packages/game-state-machine
+      '@hono/standard-validator':
+        specifier: 'catalog:'
+        version: 0.2.2(@standard-schema/spec@1.1.0)(hono@4.12.9)
       better-auth:
         specifier: 'catalog:'
         version: 1.5.5(@cloudflare/workers-types@4.20260317.1)(@tanstack/react-start@1.167.12(@voidzero-dev/vite-plus-core@0.1.14(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(better-sqlite3@12.8.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260317.1)(better-sqlite3@12.8.0)(kysely@0.28.14))(mongodb@7.1.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(solid-js@1.9.12)
@@ -273,6 +279,9 @@ importers:
       xstate:
         specifier: 'catalog:'
         version: 5.29.0
+      zod:
+        specifier: 'catalog:'
+        version: 4.3.6
     devDependencies:
       '@types/node':
         specifier: ^25.5.0
@@ -1197,6 +1206,12 @@ packages:
     peerDependenciesMeta:
       '@noble/hashes':
         optional: true
+
+  '@hono/standard-validator@0.2.2':
+    resolution: {integrity: sha512-mJ7W84Bt/rSvoIl63Ynew+UZOHAzzRAoAXb3JaWuxAkM/Lzg+ZHTCUiz77KOtn2e623WNN8LkD57Dk0szqUrIw==}
+    peerDependencies:
+      '@standard-schema/spec': ^1.0.0
+      hono: '>=3.9.0'
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -4424,6 +4439,11 @@ snapshots:
   '@exodus/bytes@1.15.0(@noble/hashes@2.0.1)':
     optionalDependencies:
       '@noble/hashes': 2.0.1
+
+  '@hono/standard-validator@0.2.2(@standard-schema/spec@1.1.0)(hono@4.12.9)':
+    dependencies:
+      '@standard-schema/spec': 1.1.0
+      hono: 4.12.9
 
   '@img/colour@1.1.0': {}
 

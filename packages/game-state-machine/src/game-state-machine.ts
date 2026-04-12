@@ -233,7 +233,12 @@ export const bigTwoGameMachine = setup({
   guards: {
     hasMaxPlayers: ({ context }) => context.players.length !== 4,
     hasMinPlayers: ({ context }) => context.players.length > 1,
-    isValidFirstMove: ({ event }) => {
+    canJoinGame: ({ context, event }) => {
+      if (event.type !== "JOIN_GAME") return false;
+      const isAlreadyInGame = context.players.some((p) => p.id === event.playerId);
+      return !isAlreadyInGame && context.players.length < 4;
+    },
+    isValidFirstMove: ({ context, event }) => {
       if (event.type !== "PLAY_FIRST_MOVE") {
         console.warn("🚨 attempted PLAY_FIRST_MOVE on incorrect state");
         return false;
@@ -321,7 +326,7 @@ export const bigTwoGameMachine = setup({
       on: {
         JOIN_GAME: {
           actions: ["addPlayer"],
-          guard: "hasMaxPlayers",
+          guard: "canJoinGame",
         },
         START_GAME: {
           actions: ["dealCards"],

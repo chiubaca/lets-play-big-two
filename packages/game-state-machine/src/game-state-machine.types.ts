@@ -1,21 +1,14 @@
 import type { Card } from "@big-two/game-core";
 import type { SnapshotFrom } from "xstate";
+import type * as z from "zod";
 import type { bigTwoGameMachine } from "./game-state-machine.ts";
+import type { gameEventSchema } from "./game-state-machine.schemas.ts";
 
 export type BigTwoGameMachine = typeof bigTwoGameMachine;
 
 export type BigTwoGameMachineSnapshot = SnapshotFrom<BigTwoGameMachine>;
 
-export type GameEvent =
-  | { type: "JOIN_GAME"; playerId: string; playerName: string }
-  | { type: "START_GAME" }
-  | { type: "ROUND_FIRST_MOVE" }
-  | { type: "PLAY_FIRST_MOVE"; cards: Card[] }
-  | { type: "PLAY_NEW_ROUND_FIRST_MOVE"; cards: Card[] }
-  | { type: "PLAY_CARDS"; cards: Card[] }
-  | { type: "PASS_TURN"; playerId: string }
-  | { type: "RESET_GAME" }
-  | { type: "GAME_END" };
+export type GameEvent = z.infer<typeof gameEventSchema>;
 
 export type Player = {
   name: string;

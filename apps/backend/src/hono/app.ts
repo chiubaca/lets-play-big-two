@@ -1,10 +1,12 @@
 import { Hono } from "hono";
+import { sValidator } from "@hono/standard-validator";
 import { cors } from "hono/cors";
 import { nanoid } from "nanoid";
 import { eq } from "drizzle-orm";
 
 import { getDb } from "@big-two/data-ops/database";
 import { roomTable } from "@big-two/data-ops/drizzle/schema";
+import { gameEventSchema } from "@big-two/game-state-machine";
 
 import { auth } from "../lib/auth";
 
@@ -87,6 +89,27 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
       roomCode: roomId,
       status: "waiting",
     });
-  });
+  })
+  .post(
+    "/api/room/action/:roomId",
+    sValidator("json", gameEventSchema, (result, c) => {
+      if (!result.success) {
+        console.error("❌ Validation error:", JSON.stringify(result.error, null, 2));
+        return c.json({ error: "Validation failed", issues: result.error }, 400);
+      }
+    }),
+    async (c) => {
+      const gameEvent = c.req.valid("json");
+      console.log("🔍 ~  gameEvent:", gameEvent);
+      const roomId = c.req.param("roomId");
+
+      const doId = c.env.BIG_TWO_ROOM_DURABLE_OBJECT.idFromName(roomId);
+      const stub = c.env.BIG_TWO_ROOM_DURABLE_OBJECT.get(doId);
+
+      await stub.gameAction(gameEvent);
+
+      return c.json({ success: true });
+    },
+  );
 
 export type AppType = typeof App;

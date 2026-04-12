@@ -73,3 +73,41 @@
     --hero-b: rgba(110, 200, 154, 0.12);
   }
 }
+
+/* Casino Theme for GameRoom */
+:root {
+  --casino-black: #0a0a0f;
+  --casino-charcoal: #1a1a2e;
+  --casino-emerald: #1a7a42;
+  --casino-emeraldLight: #2ecc71;
+  --casino-cream: #f8f8f8;
+  --casino-cardRed: #a8242f;
+}
+
+@keyframes fade-out {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.animate-fade-out {
+  animation: fade-out 3s forwards;
+}
+
+.emerald-gradient {
+  background: linear-gradient(135deg, var(--casino-emeraldLight) 0%, var(--casino-emerald) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.shadow-emerald {
+  box-shadow: 0 0 20px rgba(26, 122, 66, 0.4);
+}
+
+.shadow-emerald-glow {
+  box-shadow: 0 0 30px rgba(46, 204, 113, 0.5);
+}

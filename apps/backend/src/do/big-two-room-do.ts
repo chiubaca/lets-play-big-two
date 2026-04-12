@@ -69,6 +69,10 @@ export class BigTwoRoomObject extends DurableObject<Env> {
       playerName: player.name,
     });
     const gameState = machine.getPersistedSnapshot();
+    console.log(
+      "🔍 ~ createRoom ~ apps/backend/src/do/big-two-room-do.ts:72 ~ gameState:",
+      JSON.stringify(gameState, null, 2),
+    );
 
     this.sql.exec(
       `INSERT OR REPLACE INTO game_room (id, game_state) VALUES (?, ?)`,
