@@ -107,30 +107,51 @@ export const GameRoom = ({
   };
 
   const handlePlayCards = async () => {
+    // TODO there is different client interactions we can wire up for each of these handlers
     if (gameState.value === "ROUND_FIRST_MOVE") {
-      return await honoClient.api.room.action[":roomId"].$post({
+      await honoClient.api.room.action[":roomId"].$post({
         json: {
           type: "PLAY_FIRST_MOVE",
           cards: selectedCards,
         },
         param: { roomId },
       });
+      setSelectedCards([]);
+      return;
     }
 
-    if (gameState?.value === "NEXT_PLAYER_TURN") {
-      return await honoClient.api.room.action[":roomId"].$post({
+    if (gameState.value === "NEXT_PLAYER_TURN") {
+      await honoClient.api.room.action[":roomId"].$post({
         json: {
           type: "PLAY_CARDS",
           cards: selectedCards,
         },
         param: { roomId },
       });
+      setSelectedCards([]);
+      return;
     }
+
+    if (gameState.value === "PLAY_NEW_ROUND") {
+      await honoClient.api.room.action[":roomId"].$post({
+        json: {
+          type: "PLAY_NEW_ROUND_FIRST_MOVE",
+          cards: selectedCards,
+        },
+        param: { roomId },
+      });
+      setSelectedCards([]);
+      return;
+    }
+
+    alert("CLIENT ERROR: Unhandled state - " + gameState.value);
   };
 
   const handlePassTurn = async () => {
-    // await sendGameAction({ type: "PASS_TURN", playerId: user.userId });
-    return 1;
+    await honoClient.api.room.action[":roomId"].$post({
+      json: { type: "PASS_TURN", playerId: user.id },
+      param: { roomId },
+    });
   };
 
   const handleResetGame = async () => {
