@@ -1,4 +1,4 @@
-import { AuthButton } from "~/components/AuthButton";
+import { AuthButton } from "~/components/auth-button";
 import { authClient } from "~/libs/auth-client";
 import { honoClient } from "~/libs/hono-client";
 import { useMutation } from "@tanstack/react-query";

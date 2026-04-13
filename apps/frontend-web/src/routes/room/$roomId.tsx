@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { GameRoom } from "../../components/GameRoom";
+import { GameRoom } from "../../components/game-room";
 import { authClient } from "../../libs/auth-client";
 
 import type { BigTwoGameMachineSnapshot } from "@big-two/game-state-machine";

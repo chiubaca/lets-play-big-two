@@ -1,5 +1,5 @@
 import type { Card as CardType } from "@big-two/game-core";
-import { Card } from "./Card";
+import { Card } from "./card";
 import { cn } from "~/lib/utils";
 
 interface CardPileProps {

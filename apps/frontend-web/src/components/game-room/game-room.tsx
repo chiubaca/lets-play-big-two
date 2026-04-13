@@ -3,9 +3,9 @@ import { twMerge } from "tailwind-merge";
 import type { BigTwoGameMachineSnapshot, Card } from "@big-two/game-state-machine";
 import { detectHandType } from "@big-two/game-state-machine";
 
-import { Confetti } from "../Confetti";
-import { PlayingCard } from "./components/PlayingCard";
-import { makePlayerOrder } from "./helpers/makePlayerOrder";
+import { Confetti } from "../confetti";
+import { PlayingCard } from "./components/playing-card";
+import { makePlayerOrder } from "./helpers/make-player-order";
 import { useQuery } from "@tanstack/react-query";
 import { honoClient } from "~/libs/hono-client";
 import { Button } from "~/components/ui/button";
