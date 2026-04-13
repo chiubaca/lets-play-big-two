@@ -155,7 +155,12 @@ export const GameRoom = ({
   };
 
   const handleResetGame = async () => {
-    return 1;
+    await honoClient.api.room.action[":roomId"].$post({
+      json: { type: "RESET_GAME" },
+      param: { roomId },
+    });
+    setSelectedCards([]);
+    return;
   };
 
   return (
