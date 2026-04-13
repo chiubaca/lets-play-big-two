@@ -42,12 +42,9 @@ export const GameRoom = ({
   const selectedCardsToPlayText =
     selectedCards.length > 0 ? (handType ? `Play ${handType}` : "Not valid") : "Pick some cards";
 
-  // const { gameState, user, roomId } = useContext(GameRoomContext);
-
   if (!gameState || !user) {
     return <div className="flex h-screen items-center justify-center">Loading...</div>;
   }
-  console.log("🔍 ~  user:", user);
 
   const currentPlayerIdTurn = gameState.context.players[gameState.context.currentPlayerIndex]?.id;
   const isCurrentPlayerTurn = currentPlayerIdTurn === user.id;
@@ -109,7 +106,27 @@ export const GameRoom = ({
     });
   };
 
-  const handlePlayCards = async () => {};
+  const handlePlayCards = async () => {
+    if (gameState.value === "ROUND_FIRST_MOVE") {
+      return await honoClient.api.room.action[":roomId"].$post({
+        json: {
+          type: "PLAY_FIRST_MOVE",
+          cards: selectedCards,
+        },
+        param: { roomId },
+      });
+    }
+
+    if (gameState?.value === "NEXT_PLAYER_TURN") {
+      return await honoClient.api.room.action[":roomId"].$post({
+        json: {
+          type: "PLAY_CARDS",
+          cards: selectedCards,
+        },
+        param: { roomId },
+      });
+    }
+  };
 
   const handlePassTurn = async () => {
     // await sendGameAction({ type: "PASS_TURN", playerId: user.userId });
