@@ -116,7 +116,7 @@ export const PlayingCard = ({
         .card-value {
           font-size: minmax(13px, 2.5vmin);
           font-weight: 600;
-          font-family: 'Inter', system-ui, sans-serif;
+          font-family: var(--font-sans);
         }
 
         .card-suit {

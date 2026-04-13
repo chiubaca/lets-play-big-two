@@ -1,5 +1,6 @@
 import { useRouter } from "@tanstack/react-router";
 import { authClient } from "~/libs/auth-client";
+import { Button } from "~/components/ui/button";
 
 export function AuthButton() {
   const { data: session, isPending } = authClient.useSession();
@@ -23,7 +24,6 @@ export function AuthButton() {
   const handleSignOut = async () => {
     try {
       await authClient.signOut();
-      // Redirect to home page after sign out
       await router.navigate({ to: "/" });
     } catch (error) {
       console.error("Sign out failed:", error);
@@ -32,14 +32,14 @@ export function AuthButton() {
 
   if (!session) {
     return (
-      <button onClick={handleSignIn} className="btn btn-primary cursor-pointer">
+      <Button onClick={handleSignIn} className="cursor-pointer">
         Sign in with Google
-      </button>
+      </Button>
     );
   }
 
   return (
-    <div className="flex items-center space-x-3">
+    <div className="flex items-center gap-3">
       {session.user?.image && (
         <img
           src={session.user.image}
@@ -51,9 +51,9 @@ export function AuthButton() {
         <div className="font-medium">{session.user?.name}</div>
         <div className="text-sm text-muted-foreground">{session.user?.email}</div>
       </div>
-      <button onClick={handleSignOut} className="btn btn-sm btn-outline">
+      <Button variant="outline" size="sm" onClick={handleSignOut}>
         Sign out
-      </button>
+      </Button>
     </div>
   );
 }

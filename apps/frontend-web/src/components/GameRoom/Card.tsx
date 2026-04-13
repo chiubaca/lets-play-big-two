@@ -1,5 +1,5 @@
 import type { Card as CardType } from "@big-two/game-core";
-import { cn } from "~/libs/utils";
+import { cn } from "~/lib/utils";
 
 interface CardProps {
   card: CardType;
@@ -17,10 +17,10 @@ const SUIT_SYMBOLS: Record<string, string> = {
 };
 
 const SUIT_COLORS: Record<string, string> = {
-  DIAMOND: "text-red-500",
-  CLUB: "text-gray-900 dark:text-gray-100",
-  HEART: "text-red-500",
-  SPADE: "text-gray-900 dark:text-gray-100",
+  DIAMOND: "text-destructive",
+  CLUB: "text-foreground",
+  HEART: "text-destructive",
+  SPADE: "text-foreground",
 };
 
 export function Card({ card, selected, onClick, disabled, className }: CardProps) {
@@ -33,11 +33,10 @@ export function Card({ card, selected, onClick, disabled, className }: CardProps
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "relative flex flex-col items-center justify-between rounded-lg border-2 bg-white p-1 shadow-md transition-all",
+        "relative flex flex-col items-center justify-between rounded-lg border-2 bg-card p-1 shadow-md transition-all",
         "w-16 h-24 sm:w-20 sm:h-28",
-        "dark:bg-gray-800 dark:border-gray-600",
-        selected && "border-lagoon ring-2 ring-lagoon -translate-y-2",
-        !selected && "border-gray-200 hover:border-lagoon hover:-translate-y-1",
+        selected && "border-primary ring-2 ring-primary -translate-y-2",
+        !selected && "border-border hover:border-primary hover:-translate-y-1",
         disabled && "opacity-50 cursor-not-allowed",
         onClick && "cursor-pointer",
         className,
@@ -54,12 +53,12 @@ export function CardBack({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "flex items-center justify-center rounded-lg border-2 border-gray-300 bg-gradient-to-br from-[var(--sea-ink)] to-[var(--lagoon-deep)]",
+        "flex items-center justify-center rounded-lg border-2 border-border bg-gradient-to-br from-muted to-muted-foreground/20",
         "w-16 h-24 sm:w-20 sm:h-28",
         className,
       )}
     >
-      <span className="text-white/80 text-2xl">🃏</span>
+      <span className="text-muted-foreground text-2xl">🃏</span>
     </div>
   );
 }

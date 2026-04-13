@@ -1,6 +1,6 @@
 import type { Card as CardType } from "@big-two/game-core";
 import { Card } from "./Card";
-import { cn } from "~/libs/utils";
+import { cn } from "~/lib/utils";
 
 interface CardPileProps {
   cards: CardType[];
@@ -13,12 +13,11 @@ export function CardPile({ cards, label, className }: CardPileProps) {
     return (
       <div
         className={cn(
-          "flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50",
-          "min-h-32 p-4",
+          "flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-muted/50 min-h-32 p-4",
           className,
         )}
       >
-        <p className="text-muted-foreground text-sm">{label || "No cards played yet"}</p>
+        <p className="text-sm text-muted-foreground">{label || "No cards played yet"}</p>
       </div>
     );
   }

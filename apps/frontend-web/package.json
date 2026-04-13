@@ -14,6 +14,10 @@
   "dependencies": {
     "@big-two/game-core": "workspace:*",
     "@big-two/game-state-machine": "workspace:*",
+    "@fontsource-variable/inter": "catalog:",
+    "@fontsource-variable/merriweather": "catalog:",
+    "@hugeicons/core-free-icons": "catalog:",
+    "@hugeicons/react": "catalog:",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-devtools": "latest",
     "@tanstack/react-query": "latest",
@@ -24,13 +28,19 @@
     "@tanstack/react-start": "latest",
     "@tanstack/router-plugin": "^1.132.0",
     "better-auth": "catalog:",
+    "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "hono": "catalog:",
     "lucide-react": "^0.545.0",
+    "next-themes": "catalog:",
+    "radix-ui": "catalog:",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "shadcn": "^4.2.0",
+    "sonner": "catalog:",
     "tailwind-merge": "catalog:",
-    "tailwindcss": "^4.1.18"
+    "tailwindcss": "^4.1.18",
+    "tw-animate-css": "catalog:"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.16",

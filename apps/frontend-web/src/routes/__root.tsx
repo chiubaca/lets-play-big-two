@@ -6,6 +6,8 @@ import TanStackQueryProvider from "../integrations/tanstack-query/root-provider"
 
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 
+import { Toaster } from "~/components/ui/sonner";
+
 import appCss from "../styles.css?url";
 
 import type { QueryClient } from "@tanstack/react-query";
@@ -47,9 +49,10 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <HeadContent />
       </head>
-      <body className="font-sans antialiased wrap-anywhere selection:bg-[rgba(79,184,178,0.24)]">
+      <body className="font-sans antialiased wrap-anywhere selection:bg-primary/20">
         <TanStackQueryProvider>
           {children}
+          <Toaster />
           <TanStackDevtools
             config={{
               position: "bottom-right",

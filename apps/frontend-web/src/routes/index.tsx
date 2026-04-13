@@ -5,6 +5,16 @@ import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { User, LogOut, Gamepad2, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "~/components/ui/dialog";
 
 export const Route = createFileRoute("/")({ component: App });
 
@@ -13,9 +23,9 @@ function App() {
 
   if (isPending) {
     return (
-      <main className="page-wrap px-4 pb-8 pt-14">
+      <main className="mx-auto max-w-5xl px-4 pb-8 pt-14">
         <div className="flex min-h-[50vh] items-center justify-center">
-          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
         </div>
       </main>
     );
@@ -30,12 +40,12 @@ function App() {
 
 function LoginScreen() {
   return (
-    <main className="page-wrap px-4 pb-8 pt-14">
+    <main className="mx-auto max-w-5xl px-4 pb-8 pt-14">
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="w-full max-w-md space-y-6 text-center">
           <div className="space-y-2">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--lagoon)] to-[var(--palm)]">
-              <Gamepad2 className="h-8 w-8 text-white" />
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/80">
+              <Gamepad2 className="h-8 w-8 text-primary-foreground" />
             </div>
             <h1 className="text-3xl font-bold tracking-tight">Welcome Back</h1>
             <p className="text-muted-foreground">Sign in to play Big Two with your friends</p>
@@ -93,15 +103,14 @@ function WelcomeScreen({ session }: { session: any }) {
       return;
     }
 
-    // Navigate directly to the room - the room page will handle joining
     await navigate({ to: "/room/$roomId", params: { roomId: roomCode.trim().toUpperCase() } });
   };
 
   return (
-    <main className="page-wrap px-4 pb-8 pt-14">
+    <main className="mx-auto max-w-5xl px-4 pb-8 pt-14">
       <div className="mx-auto max-w-2xl space-y-8">
         {/* Welcome Card */}
-        <div className="rounded-2xl border bg-gradient-to-br from-[var(--hero-a)] to-[var(--hero-b)] p-8">
+        <div className="rounded-2xl border bg-gradient-to-br from-primary to-secondary p-8">
           <div className="flex items-center gap-6">
             {session.user?.image ? (
               <img
@@ -118,7 +127,7 @@ function WelcomeScreen({ session }: { session: any }) {
               <h1 className="text-3xl font-bold">
                 Welcome back, {session.user?.name?.split(" ")[0]}!
               </h1>
-              <p className="text-muted-foreground mt-1">{session.user?.email}</p>
+              <p className="mt-1 text-muted-foreground">{session.user?.email}</p>
             </div>
           </div>
         </div>
@@ -128,14 +137,14 @@ function WelcomeScreen({ session }: { session: any }) {
           <button
             onClick={handleCreateGame}
             disabled={createRoomMutation.isPending}
-            className="group relative overflow-hidden rounded-xl border bg-card p-6 text-left transition-colors hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+            className="group relative overflow-hidden rounded-xl border bg-card p-6 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
           >
             <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--lagoon)]/10">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
                 {createRoomMutation.isPending ? (
-                  <Loader2 className="h-6 w-6 text-[var(--lagoon)] animate-spin" />
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 ) : (
-                  <Gamepad2 className="h-6 w-6 text-[var(--lagoon)]" />
+                  <Gamepad2 className="h-6 w-6 text-primary" />
                 )}
               </div>
               <div>
@@ -152,8 +161,8 @@ function WelcomeScreen({ session }: { session: any }) {
             className="group relative overflow-hidden rounded-xl border bg-card p-6 text-left transition-colors hover:bg-accent"
           >
             <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--palm)]/10">
-                <User className="h-6 w-6 text-[var(--palm)]" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-secondary">
+                <User className="h-6 w-6 text-secondary-foreground" />
               </div>
               <div>
                 <h3 className="font-semibold">Join Game</h3>
@@ -182,72 +191,66 @@ function WelcomeScreen({ session }: { session: any }) {
 
         {/* Error Message */}
         {createRoomMutation.isError && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive">
             {createRoomMutation.error?.message || "Failed to create room"}
           </div>
         )}
 
         {/* Sign Out */}
         <div className="flex justify-center pt-4">
-          <button
+          <Button
+            variant="ghost"
             onClick={handleSignOut}
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground"
           >
             <LogOut className="h-4 w-4" />
             Sign out
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Join Game Modal */}
-      {showJoinModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl border bg-card p-6 shadow-lg">
-            <h2 className="text-xl font-semibold mb-4">Join Game</h2>
-            <p className="text-muted-foreground text-sm mb-4">
+      <Dialog open={showJoinModal} onOpenChange={setShowJoinModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Join Game</DialogTitle>
+            <DialogDescription>
               Enter the room code shared by your friend to join the game.
-            </p>
+            </DialogDescription>
+          </DialogHeader>
 
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="roomCode" className="block text-sm font-medium mb-1">
-                  Room Code
-                </label>
-                <input
-                  id="roomCode"
-                  type="text"
-                  value={roomCode}
-                  onChange={(e) => {
-                    setRoomCode(e.target.value.toUpperCase());
-                    setJoinError(null);
-                  }}
-                  placeholder="e.g. ABC12345"
-                  className="w-full rounded-lg border bg-background px-3 py-2 text-lg font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-[var(--lagoon)]"
-                  maxLength={8}
-                />
-              </div>
-
-              {joinError && <p className="text-sm text-red-600 dark:text-red-400">{joinError}</p>}
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowJoinModal(false)}
-                  className="flex-1 rounded-lg border px-4 py-2 font-medium transition-colors hover:bg-accent"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleJoinGame}
-                  disabled={!roomCode.trim()}
-                  className="flex-1 rounded-lg bg-[var(--lagoon)] px-4 py-2 font-medium text-white transition-colors hover:bg-[var(--lagoon-deep)] disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Join
-                </button>
-              </div>
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="roomCode" className="mb-1 block text-sm font-medium">
+                Room Code
+              </label>
+              <Input
+                id="roomCode"
+                type="text"
+                value={roomCode}
+                onChange={(e) => {
+                  setRoomCode(e.target.value.toUpperCase());
+                  setJoinError(null);
+                }}
+                placeholder="e.g. ABC12345"
+                className="font-mono text-lg tracking-wider"
+                maxLength={8}
+              />
             </div>
+
+            {joinError && <p className="text-sm text-destructive">{joinError}</p>}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowJoinModal(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleJoinGame} disabled={!roomCode.trim()}>
+                Join
+              </Button>
+            </DialogFooter>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

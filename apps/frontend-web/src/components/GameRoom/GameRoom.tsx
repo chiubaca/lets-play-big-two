@@ -6,10 +6,11 @@ import { detectHandType } from "@big-two/game-state-machine";
 import { Confetti } from "../Confetti";
 import { PlayingCard } from "./components/PlayingCard";
 import { makePlayerOrder } from "./helpers/makePlayerOrder";
-// import { GameRoomContext } from "./GameRoom.provider";
-// import type { GameEvent } from "@big-two/game-state-machine";
 import { useQuery } from "@tanstack/react-query";
 import { honoClient } from "~/libs/hono-client";
+import { Button } from "~/components/ui/button";
+import { Badge } from "~/components/ui/badge";
+import { Dialog, DialogContent, DialogTitle } from "~/components/ui/dialog";
 
 export const GameRoom = ({
   roomId,
@@ -30,8 +31,8 @@ export const GameRoom = ({
     queryKey: ["gameState", roomId],
     queryFn: () => {
       throw new Error("not used");
-    }, // WebSocket-only
-    enabled: false, // never fetch via HTTP
+    },
+    enabled: false,
   });
 
   const [selectedCards, setSelectedCards] = useState<Card[]>([]);
@@ -43,7 +44,7 @@ export const GameRoom = ({
     selectedCards.length > 0 ? (handType ? `Play ${handType}` : "Not valid") : "Pick some cards";
 
   if (!gameState || !user) {
-    return <div className="flex h-screen items-center justify-center">Loading...</div>;
+    return <div className="flex h-svh items-center justify-center">Loading...</div>;
   }
 
   const currentPlayerIdTurn = gameState.context.players[gameState.context.currentPlayerIndex]?.id;
@@ -107,7 +108,6 @@ export const GameRoom = ({
   };
 
   const handlePlayCards = async () => {
-    // TODO there is different client interactions we can wire up for each of these handlers
     if (gameState.value === "ROUND_FIRST_MOVE") {
       await honoClient.api.room.action[":roomId"].$post({
         json: {
@@ -155,62 +155,54 @@ export const GameRoom = ({
   };
 
   const handleResetGame = async () => {
-    // await sendGameAction({ type: "RESET_GAME" });
     return 1;
   };
 
   return (
     <>
       <main className="game-room flex h-svh flex-col justify-between">
-        <nav className="flex items-center justify-between border-b border-[var(--casino-emerald)]/30 bg-[var(--casino-black)]/90 px-4 py-3 backdrop-blur-sm">
-          <a
-            className="btn btn-ghost border border-transparent text-[var(--casino-cream)] transition-all hover:border-[var(--casino-emerald)]/30 hover:bg-[var(--casino-emerald)]/10 hover:text-[var(--casino-emeraldLight)]"
-            href="/"
+        <nav className="flex items-center justify-between border-b border-border/30 bg-background/90 px-4 py-3 backdrop-blur-sm">
+          <Button
+            variant="ghost"
+            className="border border-transparent text-foreground transition-all hover:border-border hover:bg-accent"
+            asChild
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="mr-1 h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M10 19l-7-7m0 0l7-7m-7 7h18"
-              />
-            </svg>
-            <span className="font-display">Home</span>
-          </a>
+            <a href="/">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="mr-1 h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M10 19l-7-7m0 0l7-7m-7 7h18"
+                />
+              </svg>
+              <span className="font-heading">Home</span>
+            </a>
+          </Button>
           <div className="flex items-center gap-3">
             {!isThisPlayerInRoom && (
-              <button
+              <Button
+                disabled={gameState.value !== "WAITING_FOR_PLAYERS"}
                 className={twMerge([
-                  "btn border-none font-medium text-[var(--casino-cream)] transition-all hover:bg-[var(--casino-emeraldLight)] hover:shadow-[0_0_20px_rgba(26,122,66,0.4)]",
+                  "font-medium transition-all",
                   gameState.value !== "WAITING_FOR_PLAYERS" && "cursor-not-allowed opacity-50",
                 ])}
-                style={{
-                  backgroundColor:
-                    gameState.value === "WAITING_FOR_PLAYERS" ? "var(--casino-emerald)" : undefined,
-                }}
-                type="button"
                 onClick={handleJoinGame}
-                disabled={gameState.value !== "WAITING_FOR_PLAYERS"}
               >
                 {gameState.value === "WAITING_FOR_PLAYERS" ? "Join Table" : "Game in Progress"}
-              </button>
+              </Button>
             )}
 
             {isThisPlayerTheCreator && (
-              <button
-                className="btn btn-sm border-none text-[var(--casino-cream)] hover:bg-[var(--casino-cardRed)]"
-                style={{ backgroundColor: "rgba(168, 36, 47, 0.8)" }}
-                type="button"
-                onClick={handleResetGame}
-              >
+              <Button variant="destructive" size="sm" onClick={handleResetGame}>
                 New Game
-              </button>
+              </Button>
             )}
           </div>
         </nav>
@@ -221,20 +213,19 @@ export const GameRoom = ({
               {gameState.value === "WAITING_FOR_PLAYERS" && (
                 <div>
                   {isThisPlayerTheCreator ? (
-                    <button
-                      className="btn border-none px-8 font-display text-lg text-[var(--casino-cream)] hover:bg-[var(--casino-emeraldLight)] hover:shadow-[0_0_30px_rgba(46,204,113,0.5)]"
-                      style={{ backgroundColor: "var(--casino-emerald)" }}
-                      type="button"
+                    <Button
+                      size="lg"
+                      className="font-heading px-8 text-lg"
                       onClick={handleStartGame}
                     >
                       Deal Cards
-                    </button>
+                    </Button>
                   ) : (
                     <div className="flex flex-col items-center p-5 text-center">
-                      <p className="mb-4 font-display text-xl text-[var(--casino-cream)]/70">
+                      <p className="mb-4 font-heading text-xl text-muted-foreground">
                         Waiting for host
                       </p>
-                      <span className="loading loading-dots loading-lg text-[var(--casino-emeraldLight)]" />
+                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                     </div>
                   )}
                 </div>
@@ -253,29 +244,32 @@ export const GameRoom = ({
               className={twMerge([
                 "top-player-position min-h-14 rounded-xl border p-2 backdrop-blur-sm",
                 isTopPlayerFocused
-                  ? "border-[var(--casino-emeraldLight)]/50 bg-[var(--casino-emeraldLight)]/20"
-                  : "border-[var(--casino-emerald)]/10 bg-[var(--casino-black)]/30",
+                  ? "border-primary/50 bg-primary/20"
+                  : "border-border/10 bg-card/30",
               ])}
             >
               <div className="relative ml-2 flex">
                 {isTopPlayerFocused && (
-                  <div className="badge badge-sm absolute -right-5 -top-5 border-none bg-[var(--casino-emeraldLight)] text-[var(--casino-black)]">
-                    <span className="loading loading-dots loading-sm" />
-                  </div>
+                  <Badge className="absolute -right-5 -top-5 border-0 bg-primary text-primary-foreground">
+                    <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  </Badge>
                 )}
                 {topPlayer?.hand.slice(0, 13).map((_card, idx) => {
                   return <div key={idx} className="card-back -ml-2 h-10 w-8 rounded-sm" />;
                 })}
                 {topPlayer && topPlayer.hand.length > 13 && (
                   <span className="absolute grid h-full w-full items-center justify-center">
-                    <span className="badge badge-sm border border-[var(--casino-emerald)]/30 bg-[var(--casino-black)]/50 py-2 text-xs text-[var(--casino-cream)] backdrop-blur-sm">
+                    <Badge
+                      variant="secondary"
+                      className="border border-border/30 bg-card/50 py-2 text-xs backdrop-blur-sm"
+                    >
                       {topPlayer.hand.length}
-                    </span>
+                    </Badge>
                   </span>
                 )}
               </div>
               {topPlayer?.name && (
-                <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-xs font-medium text-[var(--casino-cream)]/50">
+                <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-xs font-medium text-muted-foreground">
                   {gameState.context.players[topPlayerIdx].name}
                 </span>
               )}
@@ -286,29 +280,32 @@ export const GameRoom = ({
               className={twMerge([
                 "left-player-position flex min-h-36 min-w-12 flex-col rounded-xl border p-2 pb-8 backdrop-blur-sm",
                 isLeftPlayerFocused
-                  ? "border-[var(--casino-emeraldLight)]/50 bg-[var(--casino-emeraldLight)]/20"
-                  : "border-[var(--casino-emerald)]/10 bg-[var(--casino-black)]/30",
+                  ? "border-primary/50 bg-primary/20"
+                  : "border-border/10 bg-card/30",
               ])}
             >
               <div className="relative flex flex-col">
                 {isLeftPlayerFocused && (
-                  <div className="badge badge-sm absolute -right-5 -top-5 border-none bg-[var(--casino-emeraldLight)] text-[var(--casino-black)]">
-                    <span className="loading loading-dots loading-sm" />
-                  </div>
+                  <Badge className="absolute -right-5 -top-5 border-0 bg-primary text-primary-foreground">
+                    <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  </Badge>
                 )}
                 {leftPlayer?.hand.slice(0, 13).map((_card, idx) => {
                   return <div key={idx} className="card-back -mb-6 h-8 w-10 rounded-sm" />;
                 })}
                 {leftPlayer && leftPlayer.hand.length > 13 && (
                   <span className="absolute grid h-full w-full items-center justify-center">
-                    <span className="badge badge-sm border border-[var(--casino-emerald)]/30 bg-[var(--casino-black)]/50 py-2 text-xs text-[var(--casino-cream)] backdrop-blur-sm">
+                    <Badge
+                      variant="secondary"
+                      className="border border-border/30 bg-card/50 py-2 text-xs backdrop-blur-sm"
+                    >
                       {leftPlayer.hand.length}
-                    </span>
+                    </Badge>
                   </span>
                 )}
               </div>
               {leftPlayer?.name && (
-                <span className="absolute -bottom-4 z-10 pt-28 text-xs font-medium text-[var(--casino-cream)]/50">
+                <span className="absolute -bottom-4 z-10 pt-28 text-xs font-medium text-muted-foreground">
                   {gameState.context.players[leftPlayerIdx].name}
                 </span>
               )}
@@ -319,15 +316,15 @@ export const GameRoom = ({
               className={twMerge([
                 "right-player-position flex min-h-36 min-w-12 flex-col rounded-xl border p-2 pb-8 backdrop-blur-sm",
                 isRightPlayerFocused
-                  ? "border-[var(--casino-emeraldLight)]/50 bg-[var(--casino-emeraldLight)]/20"
-                  : "border-[var(--casino-emerald)]/10 bg-[var(--casino-black)]/30",
+                  ? "border-primary/50 bg-primary/20"
+                  : "border-border/10 bg-card/30",
               ])}
             >
               <div className="relative flex flex-col">
                 {rightPlayerIdx === gameState.context.currentPlayerIndex && (
-                  <div className="badge badge-sm absolute -left-5 -top-5 border-none bg-[var(--casino-emeraldLight)] text-[var(--casino-black)]">
-                    <span className="loading loading-dots loading-sm" />
-                  </div>
+                  <Badge className="absolute -left-5 -top-5 border-0 bg-primary text-primary-foreground">
+                    <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  </Badge>
                 )}
 
                 {rightPlayer?.hand.slice(0, 13).map((_card, idx) => {
@@ -335,14 +332,17 @@ export const GameRoom = ({
                 })}
                 {rightPlayer && rightPlayer.hand.length > 13 && (
                   <span className="absolute grid h-full w-full items-center justify-center">
-                    <span className="badge badge-sm border border-[var(--casino-emerald)]/30 bg-[var(--casino-black)]/50 py-2 text-xs text-[var(--casino-cream)] backdrop-blur-sm">
+                    <Badge
+                      variant="secondary"
+                      className="border border-border/30 bg-card/50 py-2 text-xs backdrop-blur-sm"
+                    >
                       {rightPlayer.hand.length}
-                    </span>
+                    </Badge>
                   </span>
                 )}
               </div>
               {rightPlayer?.name && (
-                <span className="absolute -bottom-4 z-10 pt-28 text-xs font-medium text-[var(--casino-cream)]/50">
+                <span className="absolute -bottom-4 z-10 pt-28 text-xs font-medium text-muted-foreground">
                   {rightPlayer.name}
                 </span>
               )}
@@ -351,9 +351,9 @@ export const GameRoom = ({
             {/* CURRENT PLAYER */}
             <div className="current-player mt-10 flex flex-col items-center">
               {isCurrentPlayerFocused && (
-                <span className="badge mb-2 border-none bg-[var(--casino-emeraldLight)] px-4 py-1 font-medium text-[var(--casino-black)]">
+                <Badge className="mb-2 border-0 bg-primary px-4 py-1 font-medium text-primary-foreground">
                   {gameState.value === "PLAY_NEW_ROUND" ? "You won that round" : "Your turn"}
-                </span>
+                </Badge>
               )}
               {gameState.context.players[thisPlayerIndex] ? (
                 <div className="w-full">
@@ -361,8 +361,8 @@ export const GameRoom = ({
                     className={twMerge([
                       "m-4 grid min-h-40 grid-rows-2 justify-items-center gap-1 overflow-x-auto rounded-xl border p-4",
                       isCurrentPlayerFocused
-                        ? "border-[var(--casino-emeraldLight)]/50 bg-[var(--casino-emeraldLight)]/20"
-                        : "border-[var(--casino-emerald)]/10 bg-[var(--casino-black)]/30",
+                        ? "border-primary/50 bg-primary/20"
+                        : "border-border/10 bg-card/30",
                     ])}
                   >
                     {gameState.context.players[thisPlayerIndex].hand.map((card, index) => {
@@ -386,55 +386,43 @@ export const GameRoom = ({
                   </div>
                 </div>
               ) : (
-                <div className="m-4 grid min-h-40 w-11/12 rounded-xl border border-[var(--casino-emerald)]/10 bg-[var(--casino-black)]/30" />
+                <div className="m-4 grid min-h-40 w-11/12 rounded-xl border border-border/10 bg-card/30" />
               )}
             </div>
           </div>
         </div>
 
-        <div className="flex flex-col items-center justify-center border-t border-[var(--casino-emerald)]/30 bg-[var(--casino-black)]/80 p-6 backdrop-blur-sm">
+        <div className="flex flex-col items-center justify-center border-t border-border/30 bg-background/80 p-6 backdrop-blur-sm">
           <div className="flex items-center justify-center gap-3">
-            <button
+            <Button
               className={twMerge([
-                "btn border-none px-8 font-display transition-all",
-                isCurrentPlayerTurn
-                  ? "text-[var(--casino-cream)] hover:bg-[var(--casino-emeraldLight)] hover:shadow-[0_0_20px_rgba(26,122,66,0.4)]"
-                  : "cursor-not-allowed text-[var(--casino-cream)]/40",
+                "px-8 font-heading transition-all",
+                !isCurrentPlayerTurn && "cursor-not-allowed opacity-40",
               ])}
-              style={{
-                backgroundColor: isCurrentPlayerTurn
-                  ? "var(--casino-emerald)"
-                  : "var(--casino-charcoal)",
-              }}
-              type="button"
               disabled={!isCurrentPlayerTurn || !isValidPlay}
               onClick={handlePlayCards}
             >
               {selectedCardsToPlayText}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className={twMerge([
+                "px-6 transition-all",
+                isCurrentPlayerTurn
+                  ? "border-border/30 text-foreground hover:border-border/50 hover:bg-accent"
+                  : "cursor-not-allowed border-transparent text-muted-foreground",
+              ])}
               disabled={
                 !isCurrentPlayerTurn ||
                 gameState.value === "ROUND_FIRST_MOVE" ||
                 gameState.value === "PLAY_NEW_ROUND" ||
                 gameState.value === "WAITING_FOR_PLAYERS"
               }
-              type="button"
-              className={twMerge([
-                "btn btn-sm px-6 transition-all",
-                isCurrentPlayerTurn
-                  ? "border border-[var(--casino-emerald)]/30 text-[var(--casino-cream)] hover:border-[var(--casino-emerald)]/50 hover:bg-[var(--casino-charcoal)]/80"
-                  : "cursor-not-allowed border-transparent text-[var(--casino-cream)]/30",
-              ])}
-              style={{
-                backgroundColor: isCurrentPlayerTurn
-                  ? "var(--casino-charcoal)"
-                  : "rgba(26, 26, 46, 0.5)",
-              }}
               onClick={handlePassTurn}
             >
               Pass
-            </button>
+            </Button>
           </div>
         </div>
       </main>
@@ -443,53 +431,42 @@ export const GameRoom = ({
       {guardMessage && (
         <div
           key={guardMessage.key}
-          className="toast toast-center toast-middle pointer-events-none z-50 animate-fade-out"
+          className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center"
         >
-          <div
-            className="border-none bg-[var(--casino-cardRed)]/90 text-[var(--casino-cream)] backdrop-blur-sm"
-            style={{ backgroundColor: "rgba(168, 36, 47, 0.9)" }}
-          >
-            <span className="font-medium">{guardMessage.message}</span>
+          <div className="rounded-lg bg-destructive/90 px-4 py-2 font-medium text-destructive-foreground backdrop-blur-sm">
+            {guardMessage.message}
           </div>
         </div>
       )}
 
       {gameState.value === "GAME_END" && (
-        <dialog open id="game_end_modal" className="modal backdrop-blur-sm">
-          <div className="modal-box max-w-md border border-[var(--casino-emerald)]/30 bg-[var(--casino-charcoal)] text-[var(--casino-cream)]">
+        <Dialog open>
+          <DialogContent className="max-w-md border-border/30 bg-card text-card-foreground">
             <div className="flex flex-col items-center justify-center gap-6 py-4">
               {hasPlayerWon && <Confetti />}
-              <h3 className="font-display text-5xl text-emerald-gradient">
+              <DialogTitle className="font-heading text-5xl bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
                 {hasPlayerWon ? "Victory" : "Defeat"}
-              </h3>
+              </DialogTitle>
               {!hasPlayerWon && (
-                <p className="text-lg text-[var(--casino-cream)]/60">Better luck next time</p>
+                <p className="text-lg text-muted-foreground">Better luck next time</p>
               )}
 
               {isThisPlayerTheCreator ? (
-                <button
-                  className="btn btn-wide border-none font-display text-lg text-[var(--casino-cream)] hover:bg-[var(--casino-emeraldLight)] hover:shadow-[0_0_30px_rgba(46,204,113,0.5)]"
-                  style={{ backgroundColor: "var(--casino-emerald)" }}
-                  type="button"
-                  onClick={handleResetGame}
-                >
+                <Button size="lg" className="font-heading text-lg" onClick={handleResetGame}>
                   New Game
-                </button>
+                </Button>
               ) : (
                 <div className="flex flex-col items-center gap-4">
-                  <p className="text-[var(--casino-cream)]/50">Waiting for new game</p>
-                  <span className="loading loading-dots loading-lg text-[var(--casino-emeraldLight)]" />
-                  <a
-                    className="btn btn-ghost border border-[var(--casino-emerald)]/30 text-[var(--casino-emeraldLight)] hover:bg-[var(--casino-emerald)]/10"
-                    href="/"
-                  >
-                    Return Home
-                  </a>
+                  <p className="text-muted-foreground">Waiting for new game</p>
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  <Button variant="outline" asChild>
+                    <a href="/">Return Home</a>
+                  </Button>
                 </div>
               )}
             </div>
-          </div>
-        </dialog>
+          </DialogContent>
+        </Dialog>
       )}
 
       <style>{`
@@ -503,7 +480,7 @@ export const GameRoom = ({
           min-height: 70vh;
           max-width: 850px;
           width: 100%;
-          border: 3px solid #1a7a42;
+          border: 3px solid oklch(0.527 0.154 150.069);
           
           display: grid;
           background: linear-gradient(135deg, #0d4d2b 0%, #0a3d22 50%, #0d4d2b 100%);
@@ -525,7 +502,7 @@ export const GameRoom = ({
           content: '';
           position: absolute;
           inset: 8px;
-          border: 1px solid rgba(26, 122, 66, 0.3);
+          border: 1px solid oklch(0.527 0.154 150.069 / 30%);
           pointer-events: none;
         }
 
@@ -537,7 +514,7 @@ export const GameRoom = ({
 
         .card-back {
           background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-          border: 1px solid #1a7a42;
+          border: 1px solid oklch(0.527 0.154 150.069);
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
           position: relative;
           overflow: hidden;
@@ -551,8 +528,8 @@ export const GameRoom = ({
             45deg,
             transparent,
             transparent 2px,
-            rgba(26, 122, 66, 0.15) 2px,
-            rgba(26, 122, 66, 0.15) 4px
+            oklch(0.527 0.154 150.069 / 15%) 2px,
+            oklch(0.527 0.154 150.069 / 15%) 4px
           );
           border-radius: 2px;
         }
