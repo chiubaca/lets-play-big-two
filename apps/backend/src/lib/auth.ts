@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { username } from "better-auth/plugins";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { drizzle } from "drizzle-orm/d1";
 
@@ -22,6 +23,10 @@ export const auth = betterAuth({
   // advanced: {
   //   useSecureCookies: true,
   // },
+  emailAndPassword: {
+    enabled: true,
+  },
+  plugins: [username()],
   socialProviders: {
     google: {
       clientId: env.GOOGLE_CLIENT_ID,
