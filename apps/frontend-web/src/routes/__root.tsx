@@ -29,7 +29,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "Big Two",
+        title: "Lets Play Big Two",
       },
       {
         name: "description",

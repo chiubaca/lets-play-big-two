@@ -74,7 +74,7 @@ export function WelcomeScreen({ session }: WelcomeScreenProps) {
   const displayName = session.user?.username ?? session.user?.name?.split(" ")[0];
 
   return (
-    <main className="min-h-screen bg-felt">
+    <main className="flex min-h-screen flex-col bg-felt">
       {/* Header */}
       <header className="flex items-center justify-between border-b border-gold/20 bg-background/80 px-6 py-4 backdrop-blur-md">
         <div className="flex items-center gap-2">
@@ -96,12 +96,12 @@ export function WelcomeScreen({ session }: WelcomeScreenProps) {
       </header>
 
       {/* Main Content */}
-      <div className="mx-auto max-w-5xl px-4 pb-8 pt-16">
-        <div className="mx-auto max-w-3xl space-y-12">
+      <div className="flex w-full flex-1 items-center justify-center px-4 py-8">
+        <div className="mx-auto w-full max-w-3xl space-y-12">
           {/* Hero */}
           <div className="space-y-4 text-center">
             <h1 className="font-display text-5xl text-gold text-shadow-gold sm:text-6xl">
-              Big Two
+              Lets Play Big Two
             </h1>
             <p className="mx-auto max-w-xl font-display text-lg italic text-muted-foreground">
               The classic four-player card game — refined, real-time, and ready when you are.
