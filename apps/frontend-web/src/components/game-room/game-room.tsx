@@ -270,11 +270,11 @@ export const GameRoom = ({
             {/* TOP PLAYER */}
             <div
               className={twMerge([
-                "top-player-position min-h-14 rounded-xl border p-2 backdrop-blur-sm",
+                "top-player-position flex h-20 w-44 items-center justify-center rounded-xl border p-2 backdrop-blur-sm",
                 isTopPlayerFocused ? "border-gold/50 bg-gold/20" : "border-gold/10 bg-card/30",
               ])}
             >
-              <div className="relative ml-2 flex">
+              <div className="relative flex items-center">
                 {isTopPlayerFocused && (
                   <Badge className="absolute -right-5 -top-5 border-0 bg-gold-gradient text-primary-foreground">
                     <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -300,86 +300,99 @@ export const GameRoom = ({
                 )}
               </div>
               {topPlayer?.name && (
-                <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-xs font-medium text-muted-foreground">
+                <span className="absolute -bottom-5 text-xs font-medium text-muted-foreground">
                   {gameState.context.players[topPlayerIdx].name}
                 </span>
               )}
             </div>
 
             {/* LEFT PLAYER */}
-            <div
-              className={twMerge([
-                "left-player-position flex min-h-36 min-w-12 flex-col rounded-xl border p-2 pb-8 backdrop-blur-sm",
-                isLeftPlayerFocused ? "border-gold/50 bg-gold/20" : "border-gold/10 bg-card/30",
-              ])}
-            >
-              <div className="relative flex flex-col">
-                {isLeftPlayerFocused && (
-                  <Badge className="absolute -right-5 -top-5 border-0 bg-gold-gradient text-primary-foreground">
-                    <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  </Badge>
-                )}
-                {leftPlayer?.hand.slice(0, 13).map((_card, idx) => {
-                  return (
-                    <div
-                      key={idx}
-                      className="card-back mini-card-fluid -mb-[clamp(0.375rem,1vw,1.5rem)] rounded-sm rotate-90 -mt-2"
-                    />
-                  );
-                })}
-                {leftPlayer && leftPlayer.hand.length > 13 && (
-                  <span className="absolute grid h-full w-full items-center justify-center">
-                    <Badge
-                      variant="secondary"
-                      className="border border-gold/30 bg-card/50 py-2 text-xs text-gold backdrop-blur-sm"
-                    >
-                      {leftPlayer.hand.length}
-                    </Badge>
-                  </span>
-                )}
+            <div className="left-player-wrapper relative flex flex-col items-center">
+              {isLeftPlayerFocused && (
+                <Badge className="absolute -right-3 -top-3 z-10 border-0 bg-gold-gradient text-primary-foreground">
+                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                </Badge>
+              )}
+              <div
+                className={twMerge([
+                  "left-player-position flex h-44 w-20 flex-col items-center justify-center overflow-hidden rounded-xl border p-2 backdrop-blur-sm",
+                  isLeftPlayerFocused ? "border-gold/50 bg-gold/20" : "border-gold/10 bg-card/30",
+                ])}
+              >
+                <div className="relative flex flex-col items-center">
+                  {leftPlayer?.hand.slice(0, 13).map((_card, idx) => {
+                    const isLast = idx === Math.min(leftPlayer.hand.length, 13) - 1;
+                    return (
+                      <div
+                        key={idx}
+                        className={twMerge([
+                          "card-back mini-card-fluid rounded-sm rotate-90",
+                          !isLast && "-mb-[clamp(0.7rem,2.5vw,2.2rem)]",
+                        ])}
+                      />
+                    );
+                  })}
+                  {leftPlayer && leftPlayer.hand.length > 13 && (
+                    <span className="absolute grid h-full w-full items-center justify-center">
+                      <Badge
+                        variant="secondary"
+                        className="border border-gold/30 bg-card/50 py-2 text-xs text-gold backdrop-blur-sm"
+                      >
+                        {leftPlayer.hand.length}
+                      </Badge>
+                    </span>
+                  )}
+                </div>
               </div>
               {leftPlayer?.name && (
-                <span className="absolute -bottom-4 z-10 pt-28 text-xs font-medium text-muted-foreground">
+                <span className="mt-2 text-xs font-medium text-muted-foreground">
                   {gameState.context.players[leftPlayerIdx].name}
                 </span>
               )}
             </div>
 
             {/* RIGHT PLAYER */}
-            <div
-              className={twMerge([
-                "right-player-position flex min-h-36 min-w-12 flex-col rounded-xl border p-2 pb-8 backdrop-blur-sm",
-                isRightPlayerFocused ? "border-gold/50 bg-gold/20" : "border-gold/10 bg-card/30",
-              ])}
-            >
-              <div className="relative flex flex-col">
-                {rightPlayerIdx === gameState.context.currentPlayerIndex && (
-                  <Badge className="absolute -left-5 -top-5 border-0 bg-gold-gradient text-primary-foreground">
-                    <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  </Badge>
-                )}
-
-                {rightPlayer?.hand.slice(0, 13).map((_card, idx) => {
-                  return (
-                    <div
-                      key={idx}
-                      className="card-back mini-card-fluid -mb-[clamp(0.375rem,1vw,1.5rem)] rounded-sm rotate-90 -mt-2"
-                    />
-                  );
-                })}
-                {rightPlayer && rightPlayer.hand.length > 13 && (
-                  <span className="absolute grid h-full w-full items-center justify-center">
-                    <Badge
-                      variant="secondary"
-                      className="border border-gold/30 bg-card/50 py-2 text-xs text-gold backdrop-blur-sm"
-                    >
-                      {rightPlayer.hand.length}
-                    </Badge>
-                  </span>
-                )}
+            <div className="right-player-wrapper relative flex flex-col items-center">
+              {rightPlayerIdx === gameState.context.currentPlayerIndex && (
+                <Badge className="absolute -right-3 -top-3 z-10 border-0 bg-gold-gradient text-primary-foreground">
+                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                </Badge>
+              )}
+              <div
+                className={twMerge([
+                  "right-player-position flex h-44 w-20 flex-col items-center justify-center overflow-hidden rounded-xl border p-2 backdrop-blur-sm",
+                  isRightPlayerFocused ? "border-gold/50 bg-gold/20" : "border-gold/10 bg-card/30",
+                ])}
+              >
+                <div className="relative flex flex-col items-center">
+                  <div className="flex flex-col items-center">
+                    {rightPlayer?.hand.slice(0, 13).map((_card, idx) => {
+                      const isLast = idx === Math.min(rightPlayer.hand.length, 13) - 1;
+                      return (
+                        <div
+                          key={idx}
+                          className={twMerge([
+                            "card-back mini-card-fluid rounded-sm rotate-90",
+                            !isLast && "-mb-[clamp(0.7rem,2.5vw,2.2rem)]",
+                          ])}
+                        />
+                      );
+                    })}
+                  </div>
+                  {rightPlayer && rightPlayer.hand.length > 13 && (
+                    <span className="absolute grid h-full w-full items-center justify-center">
+                      <Badge
+                        variant="secondary"
+                        className="border border-gold/30 bg-card/50 py-2 text-xs text-gold backdrop-blur-sm"
+                      >
+                        {rightPlayer.hand.length}
+                      </Badge>
+                    </span>
+                  )}
+                </div>
               </div>
               {rightPlayer?.name && (
-                <span className="absolute -bottom-4 z-10 pt-28 text-xs font-medium text-muted-foreground">
+                <span className="mt-2 text-xs font-medium text-muted-foreground">
                   {rightPlayer.name}
                 </span>
               )}
@@ -590,18 +603,26 @@ export const GameRoom = ({
           min-width: clamp(120px, 35vw, 200px);
         }
 
-        .left-player-position {
+        .left-player-wrapper {
           position: absolute;
           left: clamp(0.25rem, 1.5vw, 1rem);
           top: 40%;
           transform: translateY(-50%);
         }
 
-        .right-player-position {
+        .left-player-position {
+          max-height: clamp(200px, 35vh, 280px);
+        }
+
+        .right-player-wrapper {
           position: absolute;
           right: clamp(0.25rem, 1.5vw, 1rem);
           top: 40%;
           transform: translateY(-50%);
+        }
+
+        .right-player-position {
+          max-height: clamp(200px, 35vh, 280px);
         }
       `}</style>
     </>
