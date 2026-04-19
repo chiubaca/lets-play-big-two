@@ -281,7 +281,12 @@ export const GameRoom = ({
                   </Badge>
                 )}
                 {topPlayer?.hand.slice(0, 13).map((_card, idx) => {
-                  return <div key={idx} className="card-back -ml-2 h-10 w-8 rounded-sm" />;
+                  return (
+                    <div
+                      key={idx}
+                      className="card-back mini-card-fluid -ml-[clamp(0.25rem,0.5vw,0.5rem)] rounded-sm"
+                    />
+                  );
                 })}
                 {topPlayer && topPlayer.hand.length > 13 && (
                   <span className="absolute grid h-full w-full items-center justify-center">
@@ -315,7 +320,12 @@ export const GameRoom = ({
                   </Badge>
                 )}
                 {leftPlayer?.hand.slice(0, 13).map((_card, idx) => {
-                  return <div key={idx} className="card-back -mb-6 h-8 w-10 rounded-sm" />;
+                  return (
+                    <div
+                      key={idx}
+                      className="card-back mini-card-fluid -mb-[clamp(0.375rem,1vw,1.5rem)] rounded-sm rotate-90 -mt-2"
+                    />
+                  );
                 })}
                 {leftPlayer && leftPlayer.hand.length > 13 && (
                   <span className="absolute grid h-full w-full items-center justify-center">
@@ -350,7 +360,12 @@ export const GameRoom = ({
                 )}
 
                 {rightPlayer?.hand.slice(0, 13).map((_card, idx) => {
-                  return <div key={idx} className="card-back -mb-6 h-8 w-10 rounded-sm" />;
+                  return (
+                    <div
+                      key={idx}
+                      className="card-back mini-card-fluid -mb-[clamp(0.375rem,1vw,1.5rem)] rounded-sm rotate-90 -mt-2"
+                    />
+                  );
                 })}
                 {rightPlayer && rightPlayer.hand.length > 13 && (
                   <span className="absolute grid h-full w-full items-center justify-center">
@@ -371,9 +386,9 @@ export const GameRoom = ({
             </div>
 
             {/* CURRENT PLAYER */}
-            <div className="current-player mt-10 flex flex-col items-center">
+            <div className="current-player mt-[clamp(0.5rem,3vw,2.5rem)] flex flex-col items-center">
               {isCurrentPlayerFocused && (
-                <Badge className="mb-3 border-0 bg-gold-gradient px-4 py-1.5 font-display text-sm text-primary-foreground">
+                <Badge className="mb-[clamp(0.25rem,1vw,0.75rem)] border-0 bg-gold-gradient px-[clamp(0.5rem,2vw,1rem)] py-[clamp(0.25rem,0.5vw,0.5rem)] font-display text-[clamp(0.625rem,1.5vw,0.875rem)] text-primary-foreground">
                   {gameState.value === "PLAY_NEW_ROUND" ? "You won that round" : "Your turn"}
                 </Badge>
               )}
@@ -381,9 +396,9 @@ export const GameRoom = ({
                 <div className="w-full">
                   <div
                     className={twMerge([
-                      "m-4 grid min-h-40 grid-rows-2 justify-items-center gap-1 overflow-x-auto rounded-xl border p-4",
+                      "mx-[clamp(0.25rem,2vw,1rem)] my-[clamp(0.25rem,1.5vw,1rem)] grid min-h-[clamp(6rem,25vw,10rem)] grid-rows-2 justify-items-center gap-[clamp(0.125rem,0.5vw,0.5rem)] overflow-x-auto rounded-[clamp(0.5rem,2vw,1rem)] border p-[clamp(0.25rem,2vw,1rem)]",
                       isCurrentPlayerFocused
-                        ? "border-gold/50 bg-gold/10 shadow-gold-glow"
+                        ? "border-gold/50 bg-gold/10 "
                         : "border-gold/20 bg-card/40",
                     ])}
                   >
@@ -394,7 +409,7 @@ export const GameRoom = ({
                       return (
                         <CardComponent
                           key={card.suit + card.value}
-                          className="mb-2 shrink-0 cursor-pointer transition-all hover:-translate-y-2"
+                          className="shrink-0 cursor-pointer transition-all hover:-translate-y-1 md:hover:-translate-y-2"
                           style={{ gridRow: row + 1, gridColumn: "auto" }}
                           card={card}
                           onClick={() => toggleSelectedCard(card)}
@@ -408,35 +423,37 @@ export const GameRoom = ({
                   </div>
                 </div>
               ) : (
-                <div className="m-4 grid min-h-40 w-11/12 rounded-xl border border-gold/20 bg-card/40" />
+                <div className="mx-[clamp(0.25rem,2vw,1rem)] my-[clamp(0.25rem,1.5vw,1rem)] grid min-h-[clamp(6rem,25vw,10rem)] w-11/12 rounded-[clamp(0.5rem,2vw,1rem)] border border-gold/20 bg-card/40" />
               )}
             </div>
           </div>
         </div>
 
         {/* Controls */}
-        <div className="flex flex-col items-center justify-center border-t border-gold/20 bg-background/80 p-6 backdrop-blur-md">
+        <div className="flex flex-col items-center justify-center border-t border-gold/20 bg-background/80 p-[clamp(0.5rem,2vw,1.5rem)] backdrop-blur-md">
           {/* Player info */}
-          <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gold-gradient shadow-gold-glow">
-              <span className="font-display text-lg text-primary-foreground">
+          <div className="mb-[clamp(0.25rem,1.5vw,1rem)] flex items-center gap-[clamp(0.375rem,1vw,0.75rem)]">
+            <div className="flex h-[clamp(1.75rem,3vw,2.5rem)] w-[clamp(1.75rem,3vw,2.5rem)] items-center justify-center rounded-full bg-gold-gradient shadow-gold-glow">
+              <span className="font-display text-[clamp(0.75rem,1.5vw,1.125rem)] text-primary-foreground">
                 {user.name.charAt(0).toUpperCase()}
               </span>
             </div>
             <div className="text-center">
-              <span className="text-sm font-medium text-gold">You</span>
-              <span className="ml-2 text-xs text-muted-foreground">
+              <span className="text-[clamp(0.625rem,1.25vw,0.875rem)] font-medium text-gold">
+                You
+              </span>
+              <span className="ml-[clamp(0.125rem,0.5vw,0.5rem)] text-[clamp(0.5rem,1vw,0.75rem)] text-muted-foreground">
                 {gameState.context.players[thisPlayerIndex]?.hand.length || 0} cards
               </span>
             </div>
           </div>
 
-          <div className="flex items-center justify-center gap-3">
+          <div className="flex items-center justify-center gap-[clamp(0.375rem,1.5vw,0.75rem)]">
             <Button
               variant="outline"
               size="lg"
               className={twMerge([
-                "border-gold/30 px-8 font-display transition-all",
+                "border-gold/30 px-[clamp(0.75rem,3vw,2rem)] py-[clamp(0.375rem,1.5vw,0.75rem)] text-[clamp(0.625rem,1.5vw,1rem)] font-display transition-all",
                 isCurrentPlayerTurn
                   ? "text-foreground hover:border-gold/60 hover:bg-gold/10"
                   : "cursor-not-allowed border-transparent text-muted-foreground opacity-50",
@@ -454,7 +471,7 @@ export const GameRoom = ({
             <Button
               size="lg"
               className={twMerge([
-                "bg-gold-gradient px-10 font-display text-primary-foreground transition-all hover:shadow-gold-glow",
+                "bg-gold-gradient px-[clamp(0.75rem,4vw,2.5rem)] py-[clamp(0.375rem,1.5vw,0.75rem)] text-[clamp(0.625rem,1.5vw,1rem)] font-display text-primary-foreground transition-all hover:shadow-gold-glow",
                 (!isCurrentPlayerTurn || !isValidPlay) && "cursor-not-allowed opacity-50",
               ])}
               disabled={!isCurrentPlayerTurn || !isValidPlay}
@@ -527,35 +544,21 @@ export const GameRoom = ({
         }
 
         .table-area {
-          min-height: 70vh;
-          max-width: 900px;
+          min-height: clamp(65vh, 75vh, 85vh);
+          max-width: min(900px, 95vw);
           width: 100%;
-          border: 2px solid hsl(42 65% 58% / 0.3);
-          border-radius: 24px;
+          border-radius: clamp(12px, 3vw, 24px);
           display: grid;
           background: radial-gradient(ellipse at center, hsl(152 48% 18% / 0.8) 0%, hsl(155 55% 11% / 0.9) 70%, hsl(150 40% 6% / 0.95) 100%);
-          box-shadow: 
-            inset 0 0 100px rgba(0, 0, 0, 0.5),
-            0 0 40px rgba(0, 0, 0, 0.4),
-            0 0 80px rgba(0, 0, 0, 0.3);
           justify-items: center;
           align-items: end;
           margin: 0 auto;
-          grid-template-areas: 
+          grid-template-areas:
             "     .            player-top           .      "
             "player-left      table-center    player-right "
             "current-player  current-player  current-player";
           position: relative;
-          padding: 1rem;
-        }
-
-        .table-area::before {
-          content: '';
-          position: absolute;
-          inset: 12px;
-          border: 1px solid hsl(42 65% 58% / 0.15);
-          border-radius: 16px;
-          pointer-events: none;
+          padding: clamp(0.25rem, 2vw, 1rem);
         }
 
         .current-player {
@@ -566,56 +569,39 @@ export const GameRoom = ({
 
         .played-cards-center {
           position: absolute;
-          border-radius: 16px;
-          top: 35%;
+          border-radius: clamp(8px, 2vw, 16px);
+          top: clamp(30%, 35%, 40%);
           left: 50%;
           transform: translate(-50%, -50%);
-          min-width: 200px;
-          min-height: 150px;
+          min-width: clamp(120px, 30vw, 200px);
+          min-height: clamp(100px, 25vw, 150px);
           display: grid;
           align-items: center;
           justify-items: center;
-          padding: 16px;
-          background: rgba(0, 0, 0, 0.25);
-          backdrop-filter: blur(8px);
-          border: 1px solid hsl(42 65% 58% / 0.15);
+          padding: clamp(0.5rem, 2vw, 1rem);
         }
 
         .top-player-position {
           position: absolute;
-          top: 1rem;
+          top: clamp(0.25rem, 1.5vw, 1rem);
           left: 50%;
           transform: translateX(-50%);
           width: auto;
-          min-width: 200px;
+          min-width: clamp(120px, 35vw, 200px);
         }
 
         .left-player-position {
           position: absolute;
-          left: 1rem;
+          left: clamp(0.25rem, 1.5vw, 1rem);
           top: 40%;
           transform: translateY(-50%);
         }
 
         .right-player-position {
           position: absolute;
-          right: 1rem;
+          right: clamp(0.25rem, 1.5vw, 1rem);
           top: 40%;
           transform: translateY(-50%);
-        }
-
-        @media (max-width: 640px) {
-          .table-area {
-            min-height: 60vh;
-            padding: 0.5rem;
-          }
-          .table-area::before {
-            inset: 8px;
-            border-radius: 12px;
-          }
-          .top-player-position {
-            min-width: 160px;
-          }
         }
       `}</style>
     </>

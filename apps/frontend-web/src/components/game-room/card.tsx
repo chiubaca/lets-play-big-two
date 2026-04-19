@@ -35,10 +35,13 @@ export function Card({ card, selected, onClick, disabled, className, style }: Ca
       disabled={disabled}
       style={style}
       className={cn(
-        "relative flex flex-col items-center justify-between rounded-lg border-2 bg-playcard p-1 transition-all",
-        "w-16 h-24 sm:w-20 sm:h-28",
+        "playing-card-fluid relative flex flex-col items-center justify-between border-2 bg-playcard transition-all",
         "shadow-card",
-        selected && ["border-gold shadow-card-lift", "-translate-y-3", "ring-2 ring-gold/30"],
+        selected && [
+          "border-gold shadow-card-lift",
+          "-translate-y-2 md:-translate-y-3",
+          "ring-1 ring-gold/30 md:ring-2",
+        ],
         !selected && [
           "border-playcard-foreground/15",
           "hover:border-gold/50 hover:-translate-y-1 hover:shadow-card-lift",
@@ -48,11 +51,9 @@ export function Card({ card, selected, onClick, disabled, className, style }: Ca
         className,
       )}
     >
-      <span className={cn("text-base font-bold leading-none sm:text-lg", colorClass)}>
-        {card.value}
-      </span>
-      <span className={cn("text-2xl leading-none sm:text-3xl", colorClass)}>{symbol}</span>
-      <span className={cn("rotate-180 text-base font-bold leading-none sm:text-lg", colorClass)}>
+      <span className={cn("card-value font-bold leading-none", colorClass)}>{card.value}</span>
+      <span className={cn("card-suit leading-none", colorClass)}>{symbol}</span>
+      <span className={cn("card-value rotate-180 font-bold leading-none", colorClass)}>
         {card.value}
       </span>
     </button>
@@ -63,8 +64,7 @@ export function CardBack({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "flex items-center justify-center rounded-lg border-2",
-        "w-16 h-24 sm:w-20 sm:h-28",
+        "playing-card-fluid flex items-center justify-center border-2",
         "card-back-pattern",
         className,
       )}
