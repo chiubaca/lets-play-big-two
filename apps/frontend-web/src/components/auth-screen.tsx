@@ -3,7 +3,7 @@ import type { AnyFieldApi } from "@tanstack/react-form";
 import { authClient } from "~/libs/auth-client";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Gamepad2, Loader2, Mail, KeyRound, AtSign } from "lucide-react";
+import { Loader2, Mail, KeyRound, AtSign } from "lucide-react";
 import { useState } from "react";
 
 type AuthView = "signIn" | "signUp";
@@ -70,24 +70,34 @@ export function AuthScreen() {
   };
 
   return (
-    <main className="mx-auto max-w-5xl px-4 pb-8 pt-14">
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="w-full max-w-sm space-y-6 text-center">
-          <div className="space-y-2">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/80">
-              <Gamepad2 className="h-7 w-7 text-primary-foreground" />
+    <main className="min-h-screen bg-felt">
+      {/* Header */}
+      <header className="flex items-center justify-center border-b border-gold/20 bg-background/80 px-6 py-4 backdrop-blur-md">
+        <div className="flex items-center gap-2">
+          <span className="text-gold text-2xl">♠</span>
+          <span className="font-display text-xl text-gold tracking-wide">Big Two</span>
+        </div>
+      </header>
+
+      <div className="flex min-h-[80vh] items-center justify-center px-4 py-12">
+        <div className="w-full max-w-sm space-y-8 text-center">
+          {/* Logo & Title */}
+          <div className="space-y-3">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gold-gradient shadow-gold-glow">
+              <span className="font-display text-3xl text-primary-foreground">♠</span>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight">
+            <h1 className="font-display text-3xl text-gold text-shadow-gold">
               {view === "signIn" ? "Welcome Back" : "Create Account"}
             </h1>
             <p className="text-sm text-muted-foreground">
               {view === "signIn"
                 ? "Sign in to play Big Two with your friends"
-                : "Sign up to get started"}
+                : "Sign up to get started with the classic card game"}
             </p>
           </div>
 
-          <div className="rounded-xl border bg-card p-6 shadow-sm">
+          {/* Form Card */}
+          <div className="rounded-2xl border border-gold/20 bg-card/60 p-6 shadow-table backdrop-blur-sm">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -110,11 +120,14 @@ export function AuthScreen() {
                   }}
                   children={(field) => (
                     <div className="space-y-1.5">
-                      <label htmlFor={field.name} className="block text-left text-sm font-medium">
+                      <label
+                        htmlFor={field.name}
+                        className="block text-left text-sm font-medium text-gold/80"
+                      >
                         Username
                       </label>
                       <div className="relative">
-                        <AtSign className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <AtSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           id={field.name}
                           name={field.name}
@@ -123,7 +136,7 @@ export function AuthScreen() {
                           value={field.state.value}
                           onBlur={field.handleBlur}
                           onChange={(e) => field.handleChange(e.target.value)}
-                          className="pl-8"
+                          className="border-gold/30 bg-input pl-10 text-foreground placeholder:text-muted-foreground/50 focus:border-gold/60"
                         />
                       </div>
                       <FieldError field={field} />
@@ -143,11 +156,14 @@ export function AuthScreen() {
                 }}
                 children={(field) => (
                   <div className="space-y-1.5">
-                    <label htmlFor={field.name} className="block text-left text-sm font-medium">
+                    <label
+                      htmlFor={field.name}
+                      className="block text-left text-sm font-medium text-gold/80"
+                    >
                       Email
                     </label>
                     <div className="relative">
-                      <Mail className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                      <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
                         id={field.name}
                         name={field.name}
@@ -156,7 +172,7 @@ export function AuthScreen() {
                         value={field.state.value}
                         onBlur={field.handleBlur}
                         onChange={(e) => field.handleChange(e.target.value)}
-                        className="pl-8"
+                        className="border-gold/30 bg-input pl-10 text-foreground placeholder:text-muted-foreground/50 focus:border-gold/60"
                       />
                     </div>
                     <FieldError field={field} />
@@ -176,11 +192,14 @@ export function AuthScreen() {
                 }}
                 children={(field) => (
                   <div className="space-y-1.5">
-                    <label htmlFor={field.name} className="block text-left text-sm font-medium">
+                    <label
+                      htmlFor={field.name}
+                      className="block text-left text-sm font-medium text-gold/80"
+                    >
                       Password
                     </label>
                     <div className="relative">
-                      <KeyRound className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                      <KeyRound className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
                         id={field.name}
                         name={field.name}
@@ -191,7 +210,7 @@ export function AuthScreen() {
                         value={field.state.value}
                         onBlur={field.handleBlur}
                         onChange={(e) => field.handleChange(e.target.value)}
-                        className="pl-8"
+                        className="border-gold/30 bg-input pl-10 text-foreground placeholder:text-muted-foreground/50 focus:border-gold/60"
                       />
                     </div>
                     <FieldError field={field} />
@@ -199,12 +218,16 @@ export function AuthScreen() {
                 )}
               />
 
-              {authError && <p className="text-sm text-destructive">{authError}</p>}
+              {authError && <p className="text-center text-sm text-destructive">{authError}</p>}
 
               <form.Subscribe
                 selector={(state) => [state.canSubmit, state.isSubmitting]}
                 children={([canSubmit, isSubmitting]) => (
-                  <Button type="submit" className="w-full" disabled={!canSubmit || isSubmitting}>
+                  <Button
+                    type="submit"
+                    className="w-full bg-gold-gradient font-display text-primary-foreground transition-all hover:shadow-gold-glow"
+                    disabled={!canSubmit || isSubmitting}
+                  >
                     {isSubmitting ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : view === "signIn" ? (
@@ -217,16 +240,20 @@ export function AuthScreen() {
               />
             </form>
 
-            <div className="relative my-4">
+            <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
+                <span className="w-full border-t border-gold/20" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
                 <span className="bg-card px-2 text-muted-foreground">or</span>
               </div>
             </div>
 
-            <Button variant="outline" className="w-full" onClick={handleGoogleSignIn}>
+            <Button
+              variant="outline"
+              className="w-full border-gold/30 text-foreground hover:border-gold/50 hover:bg-gold/10"
+              onClick={handleGoogleSignIn}
+            >
               <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
                 <path
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
@@ -255,7 +282,7 @@ export function AuthScreen() {
                 Don&apos;t have an account?{" "}
                 <button
                   type="button"
-                  className="text-primary hover:underline"
+                  className="text-gold transition-colors hover:underline"
                   onClick={() => switchView("signUp")}
                 >
                   Sign up
@@ -266,7 +293,7 @@ export function AuthScreen() {
                 Already have an account?{" "}
                 <button
                   type="button"
-                  className="text-primary hover:underline"
+                  className="text-gold transition-colors hover:underline"
                   onClick={() => switchView("signIn")}
                 >
                   Sign in
@@ -275,11 +302,18 @@ export function AuthScreen() {
             )}
           </p>
 
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground/60">
             By continuing, you agree to our Terms of Service and Privacy Policy
           </p>
         </div>
       </div>
+
+      {/* Footer */}
+      <footer className="fixed bottom-0 left-0 right-0 border-t border-gold/10 bg-background/80 px-6 py-3 backdrop-blur-md">
+        <div className="mx-auto flex max-w-5xl items-center justify-center text-xs text-muted-foreground/60">
+          <span>♠ Big Two — The classic four-player card game</span>
+        </div>
+      </footer>
     </main>
   );
 }

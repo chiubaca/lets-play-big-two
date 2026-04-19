@@ -4,7 +4,7 @@ import type { BigTwoGameMachineSnapshot, Card } from "@big-two/game-state-machin
 import { detectHandType } from "@big-two/game-state-machine";
 
 import { Confetti } from "../confetti";
-import { PlayingCard } from "./components/playing-card";
+import { Card as CardComponent } from "./card";
 import { makePlayerOrder } from "./helpers/make-player-order";
 import { useQuery } from "@tanstack/react-query";
 import { honoClient } from "~/libs/hono-client";
@@ -44,7 +44,11 @@ export const GameRoom = ({
     selectedCards.length > 0 ? (handType ? `Play ${handType}` : "Not valid") : "Pick some cards";
 
   if (!gameState || !user) {
-    return <div className="flex h-svh items-center justify-center">Loading...</div>;
+    return (
+      <div className="flex h-svh items-center justify-center bg-felt">
+        <div className="animate-pulse font-display text-2xl text-gold">Loading...</div>
+      </div>
+    );
   }
 
   const currentPlayerIdTurn = gameState.context.players[gameState.context.currentPlayerIndex]?.id;
@@ -165,17 +169,18 @@ export const GameRoom = ({
 
   return (
     <>
-      <main className="game-room flex h-svh flex-col justify-between">
-        <nav className="flex items-center justify-between border-b border-border/30 bg-background/90 px-4 py-3 backdrop-blur-sm">
+      <main className="game-room flex h-svh flex-col justify-between bg-felt">
+        {/* Navigation Bar */}
+        <nav className="flex items-center justify-between border-b border-gold/20 bg-background/80 px-4 py-3 backdrop-blur-md">
           <Button
             variant="ghost"
-            className="border border-transparent text-foreground transition-all hover:border-border hover:bg-accent"
+            className="text-foreground/80 transition-all hover:bg-gold/10 hover:text-gold"
             asChild
           >
-            <a href="/">
+            <a href="/" className="flex items-center gap-2">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                className="mr-1 h-5 w-5"
+                className="h-5 w-5"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -187,15 +192,22 @@ export const GameRoom = ({
                   d="M10 19l-7-7m0 0l7-7m-7 7h18"
                 />
               </svg>
-              <span className="font-heading">Home</span>
+              <span className="font-display text-lg">Leave</span>
             </a>
           </Button>
+
+          {/* Room Info */}
+          <div className="hidden items-center gap-6 sm:flex">
+            <span className="font-display tracking-wide text-gold">♠ Big Two</span>
+            <span className="text-xs text-muted-foreground">Room: {roomId}</span>
+          </div>
+
           <div className="flex items-center gap-3">
             {!isThisPlayerInRoom && (
               <Button
                 disabled={gameState.value !== "WAITING_FOR_PLAYERS"}
                 className={twMerge([
-                  "font-medium transition-all",
+                  "font-display transition-all",
                   gameState.value !== "WAITING_FOR_PLAYERS" && "cursor-not-allowed opacity-50",
                 ])}
                 onClick={handleJoinGame}
@@ -205,40 +217,51 @@ export const GameRoom = ({
             )}
 
             {isThisPlayerTheCreator && (
-              <Button variant="destructive" size="sm" onClick={handleResetGame}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleResetGame}
+                className="border-destructive/50 text-destructive hover:bg-destructive/10"
+              >
                 New Game
               </Button>
             )}
           </div>
         </nav>
 
+        {/* Game Table Area */}
         <div className="flex flex-1 items-center justify-center p-4">
-          <div className="table">
+          <div className="table-area">
+            {/* Played Cards Center */}
             <div className="played-cards-center">
               {gameState.value === "WAITING_FOR_PLAYERS" && (
                 <div>
                   {isThisPlayerTheCreator ? (
                     <Button
                       size="lg"
-                      className="font-heading px-8 text-lg"
+                      className="bg-gold-gradient px-10 font-display text-lg text-primary-foreground transition-all hover:shadow-gold-glow"
                       onClick={handleStartGame}
                     >
                       Deal Cards
                     </Button>
                   ) : (
                     <div className="flex flex-col items-center p-5 text-center">
-                      <p className="mb-4 font-heading text-xl text-muted-foreground">
-                        Waiting for host
-                      </p>
-                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                      <p className="mb-4 font-display text-xl text-gold/80">Waiting for host</p>
+                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-gold border-t-transparent" />
                     </div>
                   )}
                 </div>
               )}
               {lastHandPlayed && (
-                <div className="flex flex-wrap justify-center gap-1">
+                <div className="flex flex-wrap justify-center gap-2">
                   {lastHandPlayed.map((card) => {
-                    return <PlayingCard key={`${card.suit}${card.value}`} card={card} />;
+                    return (
+                      <CardComponent
+                        key={`${card.suit}${card.value}`}
+                        card={card}
+                        className="animate-deal"
+                      />
+                    );
                   })}
                 </div>
               )}
@@ -248,14 +271,12 @@ export const GameRoom = ({
             <div
               className={twMerge([
                 "top-player-position min-h-14 rounded-xl border p-2 backdrop-blur-sm",
-                isTopPlayerFocused
-                  ? "border-primary/50 bg-primary/20"
-                  : "border-border/10 bg-card/30",
+                isTopPlayerFocused ? "border-gold/50 bg-gold/20" : "border-gold/10 bg-card/30",
               ])}
             >
               <div className="relative ml-2 flex">
                 {isTopPlayerFocused && (
-                  <Badge className="absolute -right-5 -top-5 border-0 bg-primary text-primary-foreground">
+                  <Badge className="absolute -right-5 -top-5 border-0 bg-gold-gradient text-primary-foreground">
                     <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
                   </Badge>
                 )}
@@ -266,7 +287,7 @@ export const GameRoom = ({
                   <span className="absolute grid h-full w-full items-center justify-center">
                     <Badge
                       variant="secondary"
-                      className="border border-border/30 bg-card/50 py-2 text-xs backdrop-blur-sm"
+                      className="border border-gold/30 bg-card/50 py-2 text-xs text-gold backdrop-blur-sm"
                     >
                       {topPlayer.hand.length}
                     </Badge>
@@ -284,14 +305,12 @@ export const GameRoom = ({
             <div
               className={twMerge([
                 "left-player-position flex min-h-36 min-w-12 flex-col rounded-xl border p-2 pb-8 backdrop-blur-sm",
-                isLeftPlayerFocused
-                  ? "border-primary/50 bg-primary/20"
-                  : "border-border/10 bg-card/30",
+                isLeftPlayerFocused ? "border-gold/50 bg-gold/20" : "border-gold/10 bg-card/30",
               ])}
             >
               <div className="relative flex flex-col">
                 {isLeftPlayerFocused && (
-                  <Badge className="absolute -right-5 -top-5 border-0 bg-primary text-primary-foreground">
+                  <Badge className="absolute -right-5 -top-5 border-0 bg-gold-gradient text-primary-foreground">
                     <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
                   </Badge>
                 )}
@@ -302,7 +321,7 @@ export const GameRoom = ({
                   <span className="absolute grid h-full w-full items-center justify-center">
                     <Badge
                       variant="secondary"
-                      className="border border-border/30 bg-card/50 py-2 text-xs backdrop-blur-sm"
+                      className="border border-gold/30 bg-card/50 py-2 text-xs text-gold backdrop-blur-sm"
                     >
                       {leftPlayer.hand.length}
                     </Badge>
@@ -320,14 +339,12 @@ export const GameRoom = ({
             <div
               className={twMerge([
                 "right-player-position flex min-h-36 min-w-12 flex-col rounded-xl border p-2 pb-8 backdrop-blur-sm",
-                isRightPlayerFocused
-                  ? "border-primary/50 bg-primary/20"
-                  : "border-border/10 bg-card/30",
+                isRightPlayerFocused ? "border-gold/50 bg-gold/20" : "border-gold/10 bg-card/30",
               ])}
             >
               <div className="relative flex flex-col">
                 {rightPlayerIdx === gameState.context.currentPlayerIndex && (
-                  <Badge className="absolute -left-5 -top-5 border-0 bg-primary text-primary-foreground">
+                  <Badge className="absolute -left-5 -top-5 border-0 bg-gold-gradient text-primary-foreground">
                     <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
                   </Badge>
                 )}
@@ -339,7 +356,7 @@ export const GameRoom = ({
                   <span className="absolute grid h-full w-full items-center justify-center">
                     <Badge
                       variant="secondary"
-                      className="border border-border/30 bg-card/50 py-2 text-xs backdrop-blur-sm"
+                      className="border border-gold/30 bg-card/50 py-2 text-xs text-gold backdrop-blur-sm"
                     >
                       {rightPlayer.hand.length}
                     </Badge>
@@ -356,7 +373,7 @@ export const GameRoom = ({
             {/* CURRENT PLAYER */}
             <div className="current-player mt-10 flex flex-col items-center">
               {isCurrentPlayerFocused && (
-                <Badge className="mb-2 border-0 bg-primary px-4 py-1 font-medium text-primary-foreground">
+                <Badge className="mb-3 border-0 bg-gold-gradient px-4 py-1.5 font-display text-sm text-primary-foreground">
                   {gameState.value === "PLAY_NEW_ROUND" ? "You won that round" : "Your turn"}
                 </Badge>
               )}
@@ -366,8 +383,8 @@ export const GameRoom = ({
                     className={twMerge([
                       "m-4 grid min-h-40 grid-rows-2 justify-items-center gap-1 overflow-x-auto rounded-xl border p-4",
                       isCurrentPlayerFocused
-                        ? "border-primary/50 bg-primary/20"
-                        : "border-border/10 bg-card/30",
+                        ? "border-gold/50 bg-gold/10 shadow-gold-glow"
+                        : "border-gold/20 bg-card/40",
                     ])}
                   >
                     {gameState.context.players[thisPlayerIndex].hand.map((card, index) => {
@@ -375,12 +392,12 @@ export const GameRoom = ({
                       const cardsPerRow = Math.ceil(totalCards / 2);
                       const row = index < cardsPerRow ? 0 : 1;
                       return (
-                        <PlayingCard
+                        <CardComponent
                           key={card.suit + card.value}
-                          className="mb-2 shrink-0 cursor-pointer transition-transform hover:-translate-y-2"
+                          className="mb-2 shrink-0 cursor-pointer transition-all hover:-translate-y-2"
                           style={{ gridRow: row + 1, gridColumn: "auto" }}
                           card={card}
-                          onSelect={() => toggleSelectedCard(card)}
+                          onClick={() => toggleSelectedCard(card)}
                           selected={selectedCards.some(
                             (selectedCard) =>
                               selectedCard.suit === card.suit && selectedCard.value === card.value,
@@ -391,32 +408,38 @@ export const GameRoom = ({
                   </div>
                 </div>
               ) : (
-                <div className="m-4 grid min-h-40 w-11/12 rounded-xl border border-border/10 bg-card/30" />
+                <div className="m-4 grid min-h-40 w-11/12 rounded-xl border border-gold/20 bg-card/40" />
               )}
             </div>
           </div>
         </div>
 
-        <div className="flex flex-col items-center justify-center border-t border-border/30 bg-background/80 p-6 backdrop-blur-sm">
+        {/* Controls */}
+        <div className="flex flex-col items-center justify-center border-t border-gold/20 bg-background/80 p-6 backdrop-blur-md">
+          {/* Player info */}
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gold-gradient shadow-gold-glow">
+              <span className="font-display text-lg text-primary-foreground">
+                {user.name.charAt(0).toUpperCase()}
+              </span>
+            </div>
+            <div className="text-center">
+              <span className="text-sm font-medium text-gold">You</span>
+              <span className="ml-2 text-xs text-muted-foreground">
+                {gameState.context.players[thisPlayerIndex]?.hand.length || 0} cards
+              </span>
+            </div>
+          </div>
+
           <div className="flex items-center justify-center gap-3">
             <Button
-              className={twMerge([
-                "px-8 font-heading transition-all",
-                !isCurrentPlayerTurn && "cursor-not-allowed opacity-40",
-              ])}
-              disabled={!isCurrentPlayerTurn || !isValidPlay}
-              onClick={handlePlayCards}
-            >
-              {selectedCardsToPlayText}
-            </Button>
-            <Button
               variant="outline"
-              size="sm"
+              size="lg"
               className={twMerge([
-                "px-6 transition-all",
+                "border-gold/30 px-8 font-display transition-all",
                 isCurrentPlayerTurn
-                  ? "border-border/30 text-foreground hover:border-border/50 hover:bg-accent"
-                  : "cursor-not-allowed border-transparent text-muted-foreground",
+                  ? "text-foreground hover:border-gold/60 hover:bg-gold/10"
+                  : "cursor-not-allowed border-transparent text-muted-foreground opacity-50",
               ])}
               disabled={
                 !isCurrentPlayerTurn ||
@@ -428,43 +451,66 @@ export const GameRoom = ({
             >
               Pass
             </Button>
+            <Button
+              size="lg"
+              className={twMerge([
+                "bg-gold-gradient px-10 font-display text-primary-foreground transition-all hover:shadow-gold-glow",
+                (!isCurrentPlayerTurn || !isValidPlay) && "cursor-not-allowed opacity-50",
+              ])}
+              disabled={!isCurrentPlayerTurn || !isValidPlay}
+              onClick={handlePlayCards}
+            >
+              {selectedCardsToPlayText}
+            </Button>
           </div>
         </div>
       </main>
 
-      {/* toast notification */}
+      {/* Toast notification */}
       {guardMessage && (
         <div
           key={guardMessage.key}
           className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center"
         >
-          <div className="rounded-lg bg-destructive/90 px-4 py-2 font-medium text-destructive-foreground backdrop-blur-sm">
+          <div className="rounded-lg bg-destructive/90 px-6 py-3 font-display text-lg text-destructive-foreground shadow-lg backdrop-blur-sm">
             {guardMessage.message}
           </div>
         </div>
       )}
 
+      {/* Game End Dialog */}
       {gameState.value === "GAME_END" && (
         <Dialog open>
-          <DialogContent className="max-w-md border-border/30 bg-card text-card-foreground">
-            <div className="flex flex-col items-center justify-center gap-6 py-4">
+          <DialogContent className="max-w-md border-gold/30 bg-card/95 backdrop-blur-xl">
+            <div className="flex flex-col items-center justify-center gap-6 py-6">
               {hasPlayerWon && <Confetti />}
-              <DialogTitle className="font-heading text-5xl bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
+              <DialogTitle
+                className={twMerge([
+                  "font-display text-5xl bg-gradient-to-r from-gold via-gold-bright to-gold bg-clip-text text-transparent",
+                  !hasPlayerWon && "text-muted-foreground",
+                ])}
+              >
                 {hasPlayerWon ? "Victory" : "Defeat"}
               </DialogTitle>
               {!hasPlayerWon && (
-                <p className="text-lg text-muted-foreground">Better luck next time</p>
+                <p className="font-display text-lg italic text-muted-foreground">
+                  Better luck next time
+                </p>
               )}
 
               {isThisPlayerTheCreator ? (
-                <Button size="lg" className="font-heading text-lg" onClick={handleResetGame}>
+                <Button
+                  size="lg"
+                  className="bg-gold-gradient px-10 font-display text-lg text-primary-foreground hover:shadow-gold-glow"
+                  onClick={handleResetGame}
+                >
                   New Game
                 </Button>
               ) : (
                 <div className="flex flex-col items-center gap-4">
                   <p className="text-muted-foreground">Waiting for new game</p>
-                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                  <Button variant="outline" asChild>
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-gold border-t-transparent" />
+                  <Button variant="outline" asChild className="border-gold/30">
                     <a href="/">Return Home</a>
                   </Button>
                 </div>
@@ -476,23 +522,22 @@ export const GameRoom = ({
 
       <style>{`
         .game-room {
-          background: linear-gradient(180deg, #0a0a0f 0%, #16213e 100%);
           height: 100vh;
           overflow: hidden;
         }
 
-        .table {
+        .table-area {
           min-height: 70vh;
-          max-width: 850px;
+          max-width: 900px;
           width: 100%;
-          border: 3px solid oklch(0.527 0.154 150.069);
-          
+          border: 2px solid hsl(42 65% 58% / 0.3);
+          border-radius: 24px;
           display: grid;
-          background: linear-gradient(135deg, #0d4d2b 0%, #0a3d22 50%, #0d4d2b 100%);
+          background: radial-gradient(ellipse at center, hsl(152 48% 18% / 0.8) 0%, hsl(155 55% 11% / 0.9) 70%, hsl(150 40% 6% / 0.95) 100%);
           box-shadow: 
             inset 0 0 100px rgba(0, 0, 0, 0.5),
-            0 0 30px rgba(13, 77, 43, 0.3),
-            0 0 60px rgba(0, 0, 0, 0.5);
+            0 0 40px rgba(0, 0, 0, 0.4),
+            0 0 80px rgba(0, 0, 0, 0.3);
           justify-items: center;
           align-items: end;
           margin: 0 auto;
@@ -501,13 +546,15 @@ export const GameRoom = ({
             "player-left      table-center    player-right "
             "current-player  current-player  current-player";
           position: relative;
+          padding: 1rem;
         }
 
-        .table::before {
+        .table-area::before {
           content: '';
           position: absolute;
-          inset: 8px;
-          border: 1px solid oklch(0.527 0.154 150.069 / 30%);
+          inset: 12px;
+          border: 1px solid hsl(42 65% 58% / 0.15);
+          border-radius: 16px;
           pointer-events: none;
         }
 
@@ -517,87 +564,57 @@ export const GameRoom = ({
           overflow: hidden;
         }
 
-        .card-back {
-          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-          border: 1px solid oklch(0.527 0.154 150.069);
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-          position: relative;
-          overflow: hidden;
-        }
-
-        .card-back::before {
-          content: '';
-          position: absolute;
-          inset: 3px;
-          background: repeating-linear-gradient(
-            45deg,
-            transparent,
-            transparent 2px,
-            oklch(0.527 0.154 150.069 / 15%) 2px,
-            oklch(0.527 0.154 150.069 / 15%) 4px
-          );
-          border-radius: 2px;
-        }
-
         .played-cards-center {
           position: absolute;
-          border-radius: 12px;
-          top: 25%;
+          border-radius: 16px;
+          top: 35%;
           left: 50%;
-          transform: translateX(-50%);
-          min-width: 180px;
-          min-height: 180px;
+          transform: translate(-50%, -50%);
+          min-width: 200px;
+          min-height: 150px;
           display: grid;
           align-items: center;
           justify-items: center;
-          padding: 2px;
-          background: rgba(0, 0, 0, 0.2);
-          backdrop-filter: blur(4px);
+          padding: 16px;
+          background: rgba(0, 0, 0, 0.25);
+          backdrop-filter: blur(8px);
+          border: 1px solid hsl(42 65% 58% / 0.15);
         }
 
         .top-player-position {
           position: absolute;
-          top: 1.5rem;
+          top: 1rem;
           left: 50%;
           transform: translateX(-50%);
-          width: 40%;
-          backdrop-filter: blur(8px);
-        }
-
-        .bottom-player-position {
-          position: absolute;
-          bottom: 1rem;
-          left: 50%;
-          transform: translateX(-50%);
+          width: auto;
+          min-width: 200px;
         }
 
         .left-player-position {
           position: absolute;
-          left: 1.5rem;
+          left: 1rem;
           top: 40%;
           transform: translateY(-50%);
-          backdrop-filter: blur(8px);
         }
 
         .right-player-position {
           position: absolute;
-          right: 1.5rem;
+          right: 1rem;
           top: 40%;
           transform: translateY(-50%);
-          backdrop-filter: blur(8px);
         }
 
         @media (max-width: 640px) {
-          .table {
-            border-radius: 24px;
-            min-height: 65vh;
+          .table-area {
+            min-height: 60vh;
+            padding: 0.5rem;
           }
-          .table::before {
-            border-radius: 18px;
+          .table-area::before {
+            inset: 8px;
+            border-radius: 12px;
           }
-          .top-player-position,
-          .bottom-player-position {
-            width: 60%;
+          .top-player-position {
+            min-width: 160px;
           }
         }
       `}</style>

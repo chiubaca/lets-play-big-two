@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { User, LogOut, Gamepad2, Loader2 } from "lucide-react";
+import { LogOut, Users, Bot, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -71,122 +71,159 @@ export function WelcomeScreen({ session }: WelcomeScreenProps) {
     await navigate({ to: "/room/$roomId", params: { roomId: roomCode.trim().toUpperCase() } });
   };
 
+  const displayName = session.user?.username ?? session.user?.name?.split(" ")[0];
+
   return (
-    <main className="mx-auto max-w-5xl px-4 pb-8 pt-14">
-      <div className="mx-auto max-w-2xl space-y-8">
-        {/* Welcome Card */}
-        <div className="rounded-2xl border bg-gradient-to-br from-primary to-secondary p-8">
-          <div className="flex items-center gap-6">
-            {session.user?.image ? (
-              <img
-                src={session.user.image}
-                alt={`${session.user.name}'s avatar`}
-                className="h-20 w-20 rounded-full border-4 border-background shadow-lg"
-              />
-            ) : (
-              <div className="flex h-20 w-20 items-center justify-center rounded-full border-4 border-background bg-muted shadow-lg">
-                <User className="h-10 w-10 text-muted-foreground" />
-              </div>
-            )}
-            <div className="flex-1">
-              <h1 className="text-3xl font-bold">
-                Welcome back, {session.user?.username ?? session.user?.name?.split(" ")[0]}!
-              </h1>
-              <p className="mt-1 text-muted-foreground">{session.user?.email}</p>
-            </div>
-          </div>
+    <main className="min-h-screen bg-felt">
+      {/* Header */}
+      <header className="flex items-center justify-between border-b border-gold/20 bg-background/80 px-6 py-4 backdrop-blur-md">
+        <div className="flex items-center gap-2">
+          <span className="text-gold text-2xl">♠</span>
+          <span className="font-display text-xl text-gold tracking-wide">Big Two</span>
         </div>
-
-        {/* Quick Actions */}
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex items-center gap-4">
+          <span className="hidden text-muted-foreground sm:inline text-sm">
+            Signed in as <span className="text-gold/90">{displayName}</span>
+          </span>
           <button
-            onClick={handleCreateGame}
-            disabled={createRoomMutation.isPending}
-            className="group relative overflow-hidden rounded-xl border bg-card p-6 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
-                {createRoomMutation.isPending ? (
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                ) : (
-                  <Gamepad2 className="h-6 w-6 text-primary" />
-                )}
-              </div>
-              <div>
-                <h3 className="font-semibold">
-                  {createRoomMutation.isPending ? "Creating..." : "Create Game"}
-                </h3>
-                <p className="text-sm text-muted-foreground">Start a new Big Two match</p>
-              </div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => setShowJoinModal(true)}
-            className="group relative overflow-hidden rounded-xl border bg-card p-6 text-left transition-colors hover:bg-accent"
-          >
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-secondary">
-                <User className="h-6 w-6 text-secondary-foreground" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Join Game</h3>
-                <p className="text-sm text-muted-foreground">Enter a room code</p>
-              </div>
-            </div>
-          </button>
-
-          <button
-            onClick={async () => {
-              await navigate({ to: "/offline" });
-            }}
-            className="group relative overflow-hidden rounded-xl border bg-card p-6 text-left transition-colors hover:bg-accent"
-          >
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-purple-500/10">
-                <User className="h-6 w-6 text-purple-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Single device mode</h3>
-                <p className="text-sm text-muted-foreground"> Offline multiplayer</p>
-              </div>
-            </div>
-          </button>
-        </div>
-
-        {/* Error Message */}
-        {createRoomMutation.isError && (
-          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive">
-            {createRoomMutation.error?.message || "Failed to create room"}
-          </div>
-        )}
-
-        {/* Sign Out */}
-        <div className="flex justify-center pt-4">
-          <Button
-            variant="ghost"
             onClick={handleSignOut}
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground"
+            className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-gold"
           >
             <LogOut className="h-4 w-4" />
-            Sign out
-          </Button>
+            <span className="hidden sm:inline">Sign out</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <div className="mx-auto max-w-5xl px-4 pb-8 pt-16">
+        <div className="mx-auto max-w-3xl space-y-12">
+          {/* Hero */}
+          <div className="space-y-4 text-center">
+            <h1 className="font-display text-5xl text-gold text-shadow-gold sm:text-6xl">
+              Big Two
+            </h1>
+            <p className="mx-auto max-w-xl font-display text-lg italic text-muted-foreground">
+              The classic four-player card game — refined, real-time, and ready when you are.
+            </p>
+          </div>
+
+          {/* Action Cards */}
+          <div className="grid gap-6 sm:grid-cols-3">
+            {/* Create Room */}
+            <div className="group relative overflow-hidden rounded-2xl border border-gold/20 bg-card/50 p-6 backdrop-blur-sm transition-all hover:border-gold/40 hover:bg-card/70">
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl text-gold">+</span>
+                  <h3 className="font-display text-2xl text-gold">Create</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Start a private room and share the code.
+                </p>
+                <Button
+                  onClick={handleCreateGame}
+                  disabled={createRoomMutation.isPending}
+                  className="w-full bg-gold-gradient font-display text-primary-foreground transition-all hover:shadow-gold-glow"
+                >
+                  {createRoomMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Create room"
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* Join Room */}
+            <div className="group relative overflow-hidden rounded-2xl border border-gold/20 bg-card/50 p-6 backdrop-blur-sm transition-all hover:border-gold/40 hover:bg-card/70">
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <Users className="h-6 w-6 text-gold" />
+                  <h3 className="font-display text-2xl text-gold">Join</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">Enter a 6-character room code.</p>
+                <div className="space-y-3">
+                  <Input
+                    type="text"
+                    value={roomCode}
+                    onChange={(e) => {
+                      setRoomCode(e.target.value.toUpperCase());
+                      setJoinError(null);
+                    }}
+                    placeholder="A B C D 2 3"
+                    className="border-gold/30 bg-input text-center font-mono text-lg tracking-[0.3em] text-gold placeholder:text-muted-foreground/50"
+                    maxLength={8}
+                  />
+                  <Button
+                    onClick={handleJoinGame}
+                    disabled={!roomCode.trim()}
+                    variant="outline"
+                    className="w-full border-gold/30 font-display text-foreground hover:border-gold/50 hover:bg-gold/10"
+                  >
+                    Join room
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Solo Mode */}
+            <div className="group relative overflow-hidden rounded-2xl border border-gold/20 bg-card/50 p-6 backdrop-blur-sm transition-all hover:border-gold/40 hover:bg-card/70">
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <Bot className="h-6 w-6 text-gold" />
+                  <h3 className="font-display text-2xl text-gold">Solo</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Practice instantly against three bots.
+                </p>
+                <Button
+                  onClick={() => navigate({ to: "/offline" })}
+                  variant="outline"
+                  className="w-full border-gold/30 font-display text-foreground hover:border-gold/50 hover:bg-gold/10"
+                >
+                  Play solo
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Error Message */}
+          {createRoomMutation.isError && (
+            <div className="rounded-xl border border-destructive/50 bg-destructive/10 p-4 text-center text-destructive">
+              {createRoomMutation.error?.message || "Failed to create room"}
+            </div>
+          )}
+
+          {/* Join Error */}
+          {joinError && (
+            <div className="rounded-xl border border-destructive/50 bg-destructive/10 p-4 text-center text-destructive">
+              {joinError}
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Footer */}
+      <footer className="fixed bottom-0 left-0 right-0 border-t border-gold/10 bg-background/80 px-6 py-3 backdrop-blur-md">
+        <div className="mx-auto flex max-w-5xl items-center justify-between text-xs text-muted-foreground">
+          <span>♠ Big Two — Play responsibly</span>
+          <span className="hidden sm:inline">The classic Chinese card game</span>
+        </div>
+      </footer>
+
       {/* Join Game Modal */}
       <Dialog open={showJoinModal} onOpenChange={setShowJoinModal}>
-        <DialogContent>
+        <DialogContent className="border-gold/30 bg-card/95 backdrop-blur-xl">
           <DialogHeader>
-            <DialogTitle>Join Game</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="font-display text-2xl text-gold">Join Game</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
               Enter the room code shared by your friend to join the game.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="space-y-4 pt-4">
             <div>
-              <label htmlFor="roomCode" className="mb-1 block text-sm font-medium">
+              <label htmlFor="roomCode" className="mb-2 block text-sm font-medium text-gold/80">
                 Room Code
               </label>
               <Input
@@ -198,18 +235,26 @@ export function WelcomeScreen({ session }: WelcomeScreenProps) {
                   setJoinError(null);
                 }}
                 placeholder="e.g. ABC12345"
-                className="font-mono text-lg tracking-wider"
+                className="border-gold/30 bg-input font-mono text-lg tracking-wider text-gold placeholder:text-muted-foreground/50"
                 maxLength={8}
               />
             </div>
 
             {joinError && <p className="text-sm text-destructive">{joinError}</p>}
 
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowJoinModal(false)}>
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowJoinModal(false)}
+                className="border-gold/30 text-foreground hover:bg-gold/10"
+              >
                 Cancel
               </Button>
-              <Button onClick={handleJoinGame} disabled={!roomCode.trim()}>
+              <Button
+                onClick={handleJoinGame}
+                disabled={!roomCode.trim()}
+                className="bg-gold-gradient text-primary-foreground hover:shadow-gold-glow"
+              >
                 Join
               </Button>
             </DialogFooter>
