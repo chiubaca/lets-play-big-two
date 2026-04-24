@@ -69,7 +69,7 @@ main() {
         --kill-others \
         --restart-tries 1 \
         "caddy run --config Caddyfile --watch" \
-        "pnpm --filter backend dev" \
+        "pnpm --filter lets-play-big-two-backend dev" \
         "pnpm --filter frontend-web dev"
 }
 

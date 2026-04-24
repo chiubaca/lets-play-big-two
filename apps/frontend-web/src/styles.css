@@ -2,7 +2,8 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
-@import "@fontsource/instrument-serif";
+@import "@fontsource/source-serif-4";
+@import "@fontsource/ibm-plex-mono";
 
 @custom-variant dark (&:is(.dark *));
 @plugin "@tailwindcss/typography";
@@ -12,9 +13,10 @@
    ============================================ */
 
 @theme inline {
-  /* Fonts */
+  /* Fonts — Mahjong Guide Editorial System */
   --font-sans: "Inter Variable", system-ui, sans-serif;
-  --font-heading: "Instrument Serif", Georgia, serif;
+  --font-heading: "Source Serif 4", Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 
   /* Base colors */
   --color-background: hsl(155 45% 8%);
@@ -143,7 +145,14 @@
   h4,
   .font-display {
     font-family: var(--font-heading);
-    letter-spacing: -0.01em;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
+
+  /* Mono font for data/numbers */
+  .font-mono {
+    font-family: var(--font-mono);
+    font-feature-settings: "zero", "ss02";
   }
 }
 

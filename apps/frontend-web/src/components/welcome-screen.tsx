@@ -100,7 +100,7 @@ export function WelcomeScreen({ session }: WelcomeScreenProps) {
         <div className="mx-auto w-full max-w-3xl space-y-12">
           {/* Hero */}
           <div className="space-y-4 text-center">
-            <h1 className="font-display text-5xl text-gold text-shadow-gold sm:text-6xl">
+            <h1 className="font-display text-5xl font-medium text-gold text-shadow-gold sm:text-6xl">
               Lets Play Big Two
             </h1>
             <p className="mx-auto max-w-xl font-display text-lg italic text-muted-foreground">
@@ -150,8 +150,8 @@ export function WelcomeScreen({ session }: WelcomeScreenProps) {
                       setRoomCode(e.target.value.toUpperCase());
                       setJoinError(null);
                     }}
-                    placeholder="A B C D 2 3"
-                    className="border-gold/30 bg-input text-center font-mono text-lg tracking-[0.3em] text-gold placeholder:text-muted-foreground/50"
+                    placeholder="ABCD23"
+                    className="border-gold/30 bg-input text-center font-mono text-lg tracking-widest text-gold placeholder:text-muted-foreground/50"
                     maxLength={8}
                   />
                   <Button

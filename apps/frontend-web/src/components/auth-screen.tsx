@@ -86,7 +86,7 @@ export function AuthScreen() {
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gold-gradient shadow-gold-glow">
               <span className="font-display text-3xl text-primary-foreground">♠</span>
             </div>
-            <h1 className="font-display text-3xl text-gold text-shadow-gold">
+            <h1 className="font-display text-3xl font-medium text-gold text-shadow-gold">
               {view === "signIn" ? "Welcome Back" : "Create Account"}
             </h1>
             <p className="text-sm text-muted-foreground">

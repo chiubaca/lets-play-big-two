@@ -198,8 +198,10 @@ export const GameRoom = ({
 
           {/* Room Info */}
           <div className="hidden items-center gap-6 sm:flex">
-            <span className="font-display tracking-wide text-gold">♠ Big Two</span>
-            <span className="text-xs text-muted-foreground">Room: {roomId}</span>
+            <span className="font-display text-base font-medium tracking-wide text-gold">
+              ♠ Big Two
+            </span>
+            <span className="font-mono text-xs text-muted-foreground">Room: {roomId}</span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -292,7 +294,7 @@ export const GameRoom = ({
                   <span className="absolute grid h-full w-full items-center justify-center">
                     <Badge
                       variant="secondary"
-                      className="border border-gold/30 bg-card/50 py-2 text-xs text-gold backdrop-blur-sm"
+                      className="border border-gold/30 bg-card/50 py-2 font-mono text-xs text-gold backdrop-blur-sm"
                     >
                       {topPlayer.hand.length}
                     </Badge>
@@ -336,7 +338,7 @@ export const GameRoom = ({
                     <span className="absolute grid h-full w-full items-center justify-center">
                       <Badge
                         variant="secondary"
-                        className="border border-gold/30 bg-card/50 py-2 text-xs text-gold backdrop-blur-sm"
+                        className="border border-gold/30 bg-card/50 py-2 font-mono text-xs text-gold backdrop-blur-sm"
                       >
                         {leftPlayer.hand.length}
                       </Badge>
@@ -383,7 +385,7 @@ export const GameRoom = ({
                     <span className="absolute grid h-full w-full items-center justify-center">
                       <Badge
                         variant="secondary"
-                        className="border border-gold/30 bg-card/50 py-2 text-xs text-gold backdrop-blur-sm"
+                        className="border border-gold/30 bg-card/50 py-2 font-mono text-xs text-gold backdrop-blur-sm"
                       >
                         {rightPlayer.hand.length}
                       </Badge>
@@ -455,7 +457,7 @@ export const GameRoom = ({
               <span className="text-[clamp(0.625rem,1.25vw,0.875rem)] font-medium text-gold">
                 You
               </span>
-              <span className="ml-[clamp(0.125rem,0.5vw,0.5rem)] text-[clamp(0.5rem,1vw,0.75rem)] text-muted-foreground">
+              <span className="ml-[clamp(0.125rem,0.5vw,0.5rem)] font-mono text-[clamp(0.5rem,1vw,0.75rem)] text-muted-foreground">
                 {gameState.context.players[thisPlayerIndex]?.hand.length || 0} cards
               </span>
             </div>
@@ -516,7 +518,7 @@ export const GameRoom = ({
               {hasPlayerWon && <Confetti />}
               <DialogTitle
                 className={twMerge([
-                  "font-display text-5xl bg-gradient-to-r from-gold via-gold-bright to-gold bg-clip-text text-transparent",
+                  "font-display text-5xl font-medium bg-gradient-to-r from-gold via-gold-bright to-gold bg-clip-text text-transparent",
                   !hasPlayerWon && "text-muted-foreground",
                 ])}
               >
