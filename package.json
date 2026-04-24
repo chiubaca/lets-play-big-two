@@ -6,6 +6,9 @@
   "scripts": {
     "ready": "vp fmt && vp lint && vp run test -r && vp run build -r",
     "dev": "vp run frontend-web#dev",
+    "build:frontend": "pnpm --filter frontend-web build",
+    "deploy:frontend": "pnpm --filter frontend-web run deploy",
+    "build:deploy:frontend": "pnpm --filter frontend-web run build && pnpm --filter frontend-web run deploy",
     "prepare": "vp config",
     "dev:setup": "./scripts/setup-local-dev.sh",
     "dev:local": "./scripts/start-dev.sh",
@@ -18,5 +21,11 @@
   "engines": {
     "node": ">=22.12.0"
   },
-  "packageManager": "pnpm@10.33.0"
+  "packageManager": "pnpm@10.33.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "lightningcss"
+    ]
+  }
 }

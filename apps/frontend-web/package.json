@@ -9,6 +9,7 @@
     "dev": "vp dev",
     "build": "vp build",
     "preview": "vp preview",
+    "deploy": "wrangler deploy --no-x-autoconfig",
     "test": "vitest run"
   },
   "dependencies": {
@@ -56,12 +57,7 @@
     "jsdom": "^28.1.0",
     "typescript": "^5.7.2",
     "vite": "catalog:",
-    "vite-plus": "catalog:"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "lightningcss"
-    ]
+    "vite-plus": "catalog:",
+    "wrangler": "catalog:"
   }
 }
