@@ -10,7 +10,8 @@
     "build": "vp build",
     "preview": "vp preview",
     "deploy": "wrangler deploy --no-x-autoconfig",
-    "test": "vitest run"
+    "test": "vitest run",
+    "cf-typegen": "wrangler types"
   },
   "dependencies": {
     "@big-two/game-core": "workspace:*",

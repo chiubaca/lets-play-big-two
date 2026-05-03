@@ -10,4 +10,13 @@
   "assets": {
     "directory": "./dist/client",
   },
+  "vars": {
+    "VITE_BACKEND_URL": "https://big-two-api.chiubaca.com",
+  },
+  "routes": [
+    {
+      "pattern": "big-two.chiubaca.com",
+      "custom_domain": true,
+    },
+  ],
 }

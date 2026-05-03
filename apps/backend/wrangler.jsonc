@@ -31,7 +31,7 @@
     "enabled": true,
   },
   "vars": {
-    "API_URL": "big-two-api.chiubaca.com",
+    "BETTER_AUTH_URL": "https://big-two-api.chiubaca.com",
   },
   "routes": [
     {
