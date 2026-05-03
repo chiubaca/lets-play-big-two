@@ -24,7 +24,7 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
     return auth.handler(c.req.raw);
   })
   .get("/", async (c) => {
-    return c.text("Hello, World!");
+    return c.text("sup");
   })
   .get("/api/room/:roomId", async (c) => {
     const roomId = c.req.param().roomId;
