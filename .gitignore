@@ -25,3 +25,4 @@ dist-ssr
 
 
 apps/backend/.wrangler
+apps/backend/.dev.vars

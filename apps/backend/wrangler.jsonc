@@ -30,4 +30,13 @@
   "observability": {
     "enabled": true,
   },
+  "vars": {
+    "API_URL": "big-two-api.chiubaca.com",
+  },
+  "routes": [
+    {
+      "pattern": "big-two-api.chiubaca.com",
+      "custom_domain": true,
+    },
+  ],
 }
