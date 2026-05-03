@@ -19,7 +19,7 @@ export const auth = betterAuth({
     },
   }),
   baseURL: env.BETTER_AUTH_URL,
-  trustedOrigins: ["https://local.bigtwo.com"],
+  trustedOrigins: ["https://local.bigtwo.com", "https://big-two.chiubaca.com"],
   // advanced: {
   //   useSecureCookies: true,
   // },
