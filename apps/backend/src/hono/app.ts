@@ -14,7 +14,7 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
   .use(
     "*",
     cors({
-      origin: ["https://local.bigtwo.com"],
+      origin: ["https://local.bigtwo.com", "https://big-two.chiubaca.com"],
       allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
       allowHeaders: ["Content-Type", "Authorization"],
       credentials: true,
