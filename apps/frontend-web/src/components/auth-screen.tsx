@@ -59,7 +59,7 @@ export function AuthScreen() {
   const handleGoogleSignIn = async () => {
     await authClient.signIn.social({
       provider: "google",
-      callbackURL: process.env.VITE_BACKEND_URL,
+      callbackURL: window.location.origin,
     });
   };
 
