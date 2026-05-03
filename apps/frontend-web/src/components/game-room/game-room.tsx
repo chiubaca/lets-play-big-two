@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { twMerge } from "tailwind-merge";
 import type { BigTwoGameMachineSnapshot, Card } from "@big-two/game-state-machine";
-import { detectHandType } from "@big-two/game-state-machine";
 
 import { Confetti } from "../confetti";
 import { PlayingCard } from "./components/playing-card";
@@ -11,6 +10,7 @@ import { honoClient } from "~/libs/hono-client";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { Dialog, DialogContent, DialogTitle } from "~/components/ui/dialog";
+import { detectHandType } from "@big-two/game-core";
 
 export const GameRoom = ({
   roomId,
