@@ -1,26 +1,14 @@
 {
-  "name": "@big-two/game-core",
+  "name": "@big-two/game-ai",
   "version": "0.0.0",
-  "description": "A starter for creating a TypeScript package.",
-  "homepage": "https://github.com/author/library#readme",
-  "bugs": {
-    "url": "https://github.com/author/library/issues"
-  },
+  "description": "Deterministic move generation and bot strategy for Big Two.",
   "license": "MIT",
-  "author": "Author Name <author.name@mail.com>",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/author/library.git"
-  },
   "files": [
     "dist"
   ],
   "type": "module",
   "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
-    },
+    ".": "./dist/index.mjs",
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -33,10 +21,12 @@
     "check": "vp check",
     "prepublishOnly": "vp run build"
   },
+  "dependencies": {
+    "@big-two/game-core": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^25.5.0",
     "@typescript/native-preview": "7.0.0-dev.20260316.1",
-    "bumpp": "^11.0.1",
     "typescript": "^5.9.3",
     "vite-plus": "^0.1.11"
   }

@@ -7,6 +7,7 @@ import {
   type BigTwoGameMachineSnapshot,
   type Player,
 } from "@big-two/game-state-machine";
+import { getGameActionAuthorizationError } from "./authorize-game-action";
 
 export class BigTwoRoomObject extends DurableObject<Env> {
   sql: SqlStorage;
@@ -23,7 +24,10 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     `);
   }
 
-  async gameAction(event: GameEvent) {
+  async gameAction(
+    event: GameEvent,
+    requesterId: string,
+  ): Promise<{ success: true } | { success: false; error: string }> {
     const query = this.sql.exec(`SELECT game_state FROM game_room WHERE id = 1`);
 
     const record = query.one();
@@ -32,6 +36,15 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     }
 
     const gameState = JSON.parse(record.game_state as string) as BigTwoGameMachineSnapshot;
+
+    const authorizationError = getGameActionAuthorizationError({
+      event,
+      players: gameState.context.players,
+      requesterId,
+    });
+    if (authorizationError) {
+      return { success: false, error: authorizationError };
+    }
 
     const gameStateMachineActor = createActor(bigTwoGameMachine, {
       snapshot: gameState,
@@ -48,6 +61,8 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     for (const socket of sockets) {
       socket.send(serialisedGameState);
     }
+
+    return { success: true };
   }
 
   async getGameState() {
@@ -97,14 +112,12 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     });
   }
 
-  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
-    try {
-      const event = JSON.parse(message as string) as GameEvent;
-      await this.gameAction(event);
-    } catch (error) {
-      console.error("Failed to process WebSocket message:", error);
-      ws.send(JSON.stringify({ error: "Failed to process game action" }));
-    }
+  webSocketMessage(ws: WebSocket) {
+    ws.send(
+      JSON.stringify({
+        error: "The room WebSocket is read-only; send actions through the HTTP endpoint",
+      }),
+    );
   }
 
   webSocketClose(

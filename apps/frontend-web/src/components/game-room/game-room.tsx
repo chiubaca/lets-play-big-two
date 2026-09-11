@@ -1,49 +1,55 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { twMerge } from "tailwind-merge";
-import type { BigTwoGameMachineSnapshot, Card } from "@big-two/game-state-machine";
+import type { BigTwoGameMachineSnapshot, Card, GameEvent } from "@big-two/game-state-machine";
 
 import { Confetti } from "../confetti";
-import { Card as CardComponent } from "./card";
+import { Card as CardComponent, getCardAccessibleName } from "./card";
 import { makePlayerOrder } from "./helpers/make-player-order";
-import { useQuery } from "@tanstack/react-query";
-import { honoClient } from "~/libs/hono-client";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
-import { Dialog, DialogContent, DialogTitle } from "~/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
 import { detectHandType } from "@big-two/game-core";
+import { createPlayEvent, isGameTurnState } from "./game-room-session";
+
+export type GameRoomUser = {
+  id: string;
+  name: string;
+};
+
+type GameRoomProps = {
+  gameState?: BigTwoGameMachineSnapshot;
+  requestHint?: () => Card[] | null;
+  send: (event: GameEvent) => Promise<void> | void;
+  tableLabel: string;
+  thinkingPlayerId?: string;
+  user: GameRoomUser;
+};
 
 export const GameRoom = ({
-  roomId,
+  gameState,
+  requestHint,
+  send,
+  tableLabel,
+  thinkingPlayerId,
   user,
-}: {
-  roomId: string;
-  user: {
-    id: string;
-    createdAt: Date;
-    updatedAt: Date;
-    email: string;
-    emailVerified: boolean;
-    name: string;
-    image?: string | null | undefined;
-  };
-}) => {
-  const { data: gameState } = useQuery<BigTwoGameMachineSnapshot>({
-    queryKey: ["gameState", roomId],
-    queryFn: () => {
-      throw new Error("not used");
-    },
-    enabled: false,
-  });
-
+}: GameRoomProps) => {
   const [selectedCards, setSelectedCards] = useState<Card[]>([]);
-  const [guardMessage] = useState<{ key: string; message: string } | undefined>(undefined);
+  const [hintMessage, setHintMessage] = useState<string>();
 
   const handType = detectHandType(selectedCards);
   const isValidPlay = Boolean(handType);
   const selectedCardsToPlayText =
     selectedCards.length > 0 ? (handType ? `Play ${handType}` : "Not valid") : "Pick some cards";
 
-  if (!gameState || !user) {
+  const currentPlayerIndex = gameState?.context.currentPlayerIndex;
+  const currentStateValue = gameState?.value;
+
+  useEffect(() => {
+    setSelectedCards([]);
+    setHintMessage(undefined);
+  }, [currentPlayerIndex, currentStateValue]);
+
+  if (!gameState) {
     return (
       <div className="flex h-svh items-center justify-center bg-felt">
         <div className="animate-pulse font-display text-2xl text-gold">Loading...</div>
@@ -52,7 +58,7 @@ export const GameRoom = ({
   }
 
   const currentPlayerIdTurn = gameState.context.players[gameState.context.currentPlayerIndex]?.id;
-  const isCurrentPlayerTurn = currentPlayerIdTurn === user.id;
+  const isCurrentPlayerTurn = currentPlayerIdTurn === user.id && isGameTurnState(gameState.value);
 
   const thisPlayerIndex = gameState.context.players.findIndex((player) => player.id === user.id);
   const isThisPlayerInRoom = gameState.context.players.some((p) => p.id === user.id);
@@ -62,25 +68,38 @@ export const GameRoom = ({
 
   const [bottomPlayerIdx, leftPlayerIdx, topPlayerIdx, rightPlayerIdx] =
     makePlayerOrder(thisPlayerIndex);
+  const isTurnInProgress = isGameTurnState(gameState.value);
 
   const leftPlayer = gameState.context.players[leftPlayerIdx] || null;
-  const isLeftPlayerFocused = leftPlayerIdx === gameState.context.currentPlayerIndex;
+  const isLeftPlayerFocused =
+    isTurnInProgress && leftPlayerIdx === gameState.context.currentPlayerIndex;
 
   const topPlayer = gameState.context.players[topPlayerIdx] || null;
-  const isTopPlayerFocused = topPlayerIdx === gameState.context.currentPlayerIndex;
+  const isTopPlayerFocused =
+    isTurnInProgress && topPlayerIdx === gameState.context.currentPlayerIndex;
 
   const rightPlayer = gameState.context.players[rightPlayerIdx] || null;
-  const isRightPlayerFocused = rightPlayerIdx === gameState.context.currentPlayerIndex;
+  const isRightPlayerFocused =
+    isTurnInProgress && rightPlayerIdx === gameState.context.currentPlayerIndex;
 
   const lastHandPlayed = gameState.context.cardPile.at(-1);
 
   const isCurrentPlayerFocused =
-    gameState.context.currentPlayerIndex === bottomPlayerIdx &&
-    (gameState.value === "NEXT_PLAYER_TURN" ||
-      gameState.value === "ROUND_FIRST_MOVE" ||
-      gameState.value === "PLAY_NEW_ROUND");
+    gameState.context.currentPlayerIndex === bottomPlayerIdx && isGameTurnState(gameState.value);
 
   const hasPlayerWon = gameState.value === "GAME_END" && gameState.context.winner?.id === user.id;
+  const currentPlayer = gameState.context.players[gameState.context.currentPlayerIndex];
+  const cardCounts = gameState.context.players
+    .map((player) => `${player.name}: ${player.hand.length}`)
+    .join(", ");
+  const gameStatus =
+    gameState.value === "GAME_END"
+      ? `${gameState.context.winner?.name ?? "A player"} won the game. Remaining cards — ${cardCounts}.`
+      : gameState.value === "WAITING_FOR_PLAYERS"
+        ? `Waiting for players. ${gameState.context.players.length} of 4 seats filled.`
+        : currentPlayer
+          ? `${currentPlayer.id === user.id ? "Your" : `${currentPlayer.name}'s`} turn.${thinkingPlayerId === currentPlayer.id ? " Thinking." : ""} Remaining cards — ${cardCounts}.`
+          : "Preparing the next turn.";
 
   const toggleSelectedCard = (card: Card) => {
     const isCardSelected = selectedCards.some(
@@ -98,73 +117,46 @@ export const GameRoom = ({
   };
 
   const handleJoinGame = async () => {
-    await honoClient.api.room.action[":roomId"].$post({
-      json: { type: "JOIN_GAME", playerId: user.id, playerName: user.name },
-      param: { roomId },
-    });
+    await send({ type: "JOIN_GAME", playerId: user.id, playerName: user.name });
   };
 
   const handleStartGame = async () => {
-    await honoClient.api.room.action[":roomId"].$post({
-      json: { type: "START_GAME" },
-      param: { roomId },
-    });
+    await send({ type: "START_GAME" });
   };
 
   const handlePlayCards = async () => {
-    if (gameState.value === "ROUND_FIRST_MOVE") {
-      await honoClient.api.room.action[":roomId"].$post({
-        json: {
-          type: "PLAY_FIRST_MOVE",
-          cards: selectedCards,
-        },
-        param: { roomId },
-      });
-      setSelectedCards([]);
-      return;
-    }
+    const event = createPlayEvent(gameState, user.id, selectedCards);
+    if (!event) return;
 
-    if (gameState.value === "NEXT_PLAYER_TURN") {
-      await honoClient.api.room.action[":roomId"].$post({
-        json: {
-          type: "PLAY_CARDS",
-          cards: selectedCards,
-        },
-        param: { roomId },
-      });
-      setSelectedCards([]);
-      return;
-    }
-
-    if (gameState.value === "PLAY_NEW_ROUND") {
-      await honoClient.api.room.action[":roomId"].$post({
-        json: {
-          type: "PLAY_NEW_ROUND_FIRST_MOVE",
-          cards: selectedCards,
-        },
-        param: { roomId },
-      });
-      setSelectedCards([]);
-      return;
-    }
-
-    alert("CLIENT ERROR: Unhandled state - " + gameState.value);
+    await send(event);
+    setSelectedCards([]);
+    setHintMessage(undefined);
   };
 
   const handlePassTurn = async () => {
-    await honoClient.api.room.action[":roomId"].$post({
-      json: { type: "PASS_TURN", playerId: user.id },
-      param: { roomId },
-    });
+    await send({ type: "PASS_TURN", playerId: user.id });
+    setSelectedCards([]);
+    setHintMessage(undefined);
   };
 
   const handleResetGame = async () => {
-    await honoClient.api.room.action[":roomId"].$post({
-      json: { type: "RESET_GAME" },
-      param: { roomId },
-    });
+    await send({ type: "RESET_GAME" });
     setSelectedCards([]);
-    return;
+    setHintMessage(undefined);
+  };
+
+  const handleRequestHint = () => {
+    const suggestedCards = requestHint?.();
+    if (!suggestedCards?.length) {
+      setSelectedCards([]);
+      setHintMessage("No legal play is available. Pass this turn.");
+      return;
+    }
+
+    setSelectedCards(suggestedCards);
+    setHintMessage(
+      `Suggested move selected: ${suggestedCards.map(getCardAccessibleName).join(", ")}.`,
+    );
   };
 
   return (
@@ -201,7 +193,7 @@ export const GameRoom = ({
             <span className="font-display text-base font-medium tracking-wide text-gold">
               ♠ Big Two
             </span>
-            <span className="font-mono text-xs text-muted-foreground">Room: {roomId}</span>
+            <span className="font-mono text-xs text-muted-foreground">{tableLabel}</span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -222,6 +214,7 @@ export const GameRoom = ({
               <Button
                 variant="outline"
                 size="sm"
+                aria-label="Start a new game"
                 onClick={handleResetGame}
                 className="border-destructive/50 text-destructive hover:bg-destructive/10"
               >
@@ -232,15 +225,24 @@ export const GameRoom = ({
         </nav>
 
         {/* Game Table Area */}
-        <div className="flex flex-1 items-center justify-center p-4">
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden p-2 sm:p-4">
           <div className="table-area">
             {/* Played Cards Center */}
-            <div className="played-cards-center">
+            <div
+              className="played-cards-center"
+              role="region"
+              aria-label={
+                lastHandPlayed
+                  ? `Cards to beat: ${lastHandPlayed.map(getCardAccessibleName).join(", ")}`
+                  : "No cards have been played"
+              }
+            >
               {gameState.value === "WAITING_FOR_PLAYERS" && (
                 <div>
                   {isThisPlayerTheCreator ? (
                     <Button
                       size="lg"
+                      aria-label="Deal cards and start the game"
                       className="bg-gold-gradient px-10 font-display text-lg text-primary-foreground transition-all hover:shadow-gold-glow"
                       onClick={handleStartGame}
                     >
@@ -249,7 +251,10 @@ export const GameRoom = ({
                   ) : (
                     <div className="flex flex-col items-center p-5 text-center">
                       <p className="mb-4 font-display text-xl text-gold/80">Waiting for host</p>
-                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-gold border-t-transparent" />
+                      <div
+                        aria-hidden="true"
+                        className="h-6 w-6 animate-spin rounded-full border-2 border-gold border-t-transparent"
+                      />
                     </div>
                   )}
                 </div>
@@ -271,6 +276,12 @@ export const GameRoom = ({
 
             {/* TOP PLAYER */}
             <div
+              role="group"
+              aria-label={
+                topPlayer
+                  ? `${topPlayer.name}, ${topPlayer.hand.length} cards remaining${isTopPlayerFocused ? ", current turn" : ""}`
+                  : "Empty seat"
+              }
               className={twMerge([
                 "top-player-position flex h-20 w-44 items-center justify-center rounded-xl border p-2 backdrop-blur-sm",
                 isTopPlayerFocused ? "border-gold/50 bg-gold/20" : "border-gold/10 bg-card/30",
@@ -286,6 +297,7 @@ export const GameRoom = ({
                   return (
                     <div
                       key={idx}
+                      aria-hidden="true"
                       className="card-back mini-card-fluid -ml-[clamp(0.25rem,0.5vw,0.5rem)] rounded-sm"
                     />
                   );
@@ -303,13 +315,21 @@ export const GameRoom = ({
               </div>
               {topPlayer?.name && (
                 <span className="absolute -bottom-5 text-xs font-medium text-muted-foreground">
-                  {gameState.context.players[topPlayerIdx].name}
+                  {topPlayer.name} · {topPlayer.hand.length}
                 </span>
               )}
             </div>
 
             {/* LEFT PLAYER */}
-            <div className="left-player-wrapper relative flex flex-col items-center">
+            <div
+              className="left-player-wrapper relative flex flex-col items-center"
+              role="group"
+              aria-label={
+                leftPlayer
+                  ? `${leftPlayer.name}, ${leftPlayer.hand.length} cards remaining${isLeftPlayerFocused ? ", current turn" : ""}`
+                  : "Empty seat"
+              }
+            >
               {isLeftPlayerFocused && (
                 <Badge className="absolute -right-3 -top-3 z-10 border-0 bg-gold-gradient text-primary-foreground">
                   <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -327,6 +347,7 @@ export const GameRoom = ({
                     return (
                       <div
                         key={idx}
+                        aria-hidden="true"
                         className={twMerge([
                           "card-back mini-card-fluid rounded-sm rotate-90",
                           !isLast && "-mb-[clamp(0.7rem,2.5vw,2.2rem)]",
@@ -348,13 +369,21 @@ export const GameRoom = ({
               </div>
               {leftPlayer?.name && (
                 <span className="mt-2 text-xs font-medium text-muted-foreground">
-                  {gameState.context.players[leftPlayerIdx].name}
+                  {leftPlayer.name} · {leftPlayer.hand.length}
                 </span>
               )}
             </div>
 
             {/* RIGHT PLAYER */}
-            <div className="right-player-wrapper relative flex flex-col items-center">
+            <div
+              className="right-player-wrapper relative flex flex-col items-center"
+              role="group"
+              aria-label={
+                rightPlayer
+                  ? `${rightPlayer.name}, ${rightPlayer.hand.length} cards remaining${isRightPlayerFocused ? ", current turn" : ""}`
+                  : "Empty seat"
+              }
+            >
               {rightPlayerIdx === gameState.context.currentPlayerIndex && (
                 <Badge className="absolute -right-3 -top-3 z-10 border-0 bg-gold-gradient text-primary-foreground">
                   <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -373,6 +402,7 @@ export const GameRoom = ({
                       return (
                         <div
                           key={idx}
+                          aria-hidden="true"
                           className={twMerge([
                             "card-back mini-card-fluid rounded-sm rotate-90",
                             !isLast && "-mb-[clamp(0.7rem,2.5vw,2.2rem)]",
@@ -395,7 +425,7 @@ export const GameRoom = ({
               </div>
               {rightPlayer?.name && (
                 <span className="mt-2 text-xs font-medium text-muted-foreground">
-                  {rightPlayer.name}
+                  {rightPlayer.name} · {rightPlayer.hand.length}
                 </span>
               )}
             </div>
@@ -410,6 +440,8 @@ export const GameRoom = ({
               {gameState.context.players[thisPlayerIndex] ? (
                 <div className="w-full">
                   <div
+                    role="group"
+                    aria-label={`${user.name}'s hand, ${gameState.context.players[thisPlayerIndex].hand.length} cards`}
                     className={twMerge([
                       "mx-[clamp(0.25rem,2vw,1rem)] my-[clamp(0.25rem,1.5vw,1rem)] grid min-h-[clamp(6rem,25vw,10rem)] grid-rows-2 justify-items-center gap-[clamp(0.125rem,0.5vw,0.5rem)] overflow-x-auto rounded-[clamp(0.5rem,2vw,1rem)] border p-[clamp(0.25rem,2vw,1rem)]",
                       isCurrentPlayerFocused
@@ -427,6 +459,7 @@ export const GameRoom = ({
                           className="shrink-0 cursor-pointer transition-all hover:-translate-y-1 md:hover:-translate-y-2"
                           style={{ gridRow: row + 1, gridColumn: "auto" }}
                           card={card}
+                          disabled={!isCurrentPlayerTurn}
                           onClick={() => toggleSelectedCard(card)}
                           selected={selectedCards.some(
                             (selectedCard) =>
@@ -446,6 +479,15 @@ export const GameRoom = ({
 
         {/* Controls */}
         <div className="flex flex-col items-center justify-center border-t border-gold/20 bg-background/80 p-[clamp(0.5rem,2vw,1.5rem)] backdrop-blur-md">
+          <p
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className="mb-1 text-center font-mono text-[clamp(0.55rem,1vw,0.7rem)] text-muted-foreground"
+          >
+            {gameStatus}
+          </p>
+
           {/* Player info */}
           <div className="mb-[clamp(0.25rem,1.5vw,1rem)] flex items-center gap-[clamp(0.375rem,1vw,0.75rem)]">
             <div className="flex h-[clamp(1.75rem,3vw,2.5rem)] w-[clamp(1.75rem,3vw,2.5rem)] items-center justify-center rounded-full bg-gold-gradient shadow-gold-glow">
@@ -467,6 +509,7 @@ export const GameRoom = ({
             <Button
               variant="outline"
               size="lg"
+              aria-label="Pass turn"
               className={twMerge([
                 "border-gold/30 px-[clamp(0.75rem,3vw,2rem)] py-[clamp(0.375rem,1.5vw,0.75rem)] text-[clamp(0.625rem,1.5vw,1rem)] font-display transition-all",
                 isCurrentPlayerTurn
@@ -483,8 +526,21 @@ export const GameRoom = ({
             >
               Pass
             </Button>
+            {requestHint && (
+              <Button
+                variant="outline"
+                size="lg"
+                aria-label="Suggest a move"
+                className="border-gold/30 px-[clamp(0.75rem,3vw,2rem)] py-[clamp(0.375rem,1.5vw,0.75rem)] font-display text-[clamp(0.625rem,1.5vw,1rem)] text-gold transition-all hover:border-gold/60 hover:bg-gold/10 disabled:border-transparent"
+                disabled={!isCurrentPlayerTurn}
+                onClick={handleRequestHint}
+              >
+                Hint
+              </Button>
+            )}
             <Button
               size="lg"
+              aria-label="Play selected cards"
               className={twMerge([
                 "bg-gold-gradient px-[clamp(0.75rem,4vw,2.5rem)] py-[clamp(0.375rem,1.5vw,0.75rem)] text-[clamp(0.625rem,1.5vw,1rem)] font-display text-primary-foreground transition-all hover:shadow-gold-glow",
                 (!isCurrentPlayerTurn || !isValidPlay) && "cursor-not-allowed opacity-50",
@@ -495,17 +551,27 @@ export const GameRoom = ({
               {selectedCardsToPlayText}
             </Button>
           </div>
+          {hintMessage && (
+            <p
+              role="status"
+              aria-live="polite"
+              className="mt-2 text-center text-xs font-medium text-gold"
+            >
+              {hintMessage}
+            </p>
+          )}
         </div>
       </main>
 
       {/* Toast notification */}
-      {guardMessage && (
+      {gameState.context.guardMessage && (
         <div
-          key={guardMessage.key}
+          role="alert"
+          aria-live="assertive"
           className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center"
         >
           <div className="rounded-lg bg-destructive/90 px-6 py-3 font-display text-lg text-destructive-foreground shadow-lg backdrop-blur-sm">
-            {guardMessage.message}
+            {gameState.context.guardMessage}
           </div>
         </div>
       )}
@@ -513,7 +579,10 @@ export const GameRoom = ({
       {/* Game End Dialog */}
       {gameState.value === "GAME_END" && (
         <Dialog open>
-          <DialogContent className="max-w-md border-gold/30 bg-card/95 backdrop-blur-xl">
+          <DialogContent
+            showCloseButton={false}
+            className="max-w-md border-gold/30 bg-card/95 backdrop-blur-xl"
+          >
             <div className="flex flex-col items-center justify-center gap-6 py-6">
               {hasPlayerWon && <Confetti />}
               <DialogTitle
@@ -524,15 +593,16 @@ export const GameRoom = ({
               >
                 {hasPlayerWon ? "Victory" : "Defeat"}
               </DialogTitle>
-              {!hasPlayerWon && (
-                <p className="font-display text-lg italic text-muted-foreground">
-                  Better luck next time
-                </p>
-              )}
+              <DialogDescription className="text-center font-display text-lg italic text-muted-foreground">
+                {hasPlayerWon
+                  ? "You played all your cards first."
+                  : `${gameState.context.winner?.name ?? "An opponent"} won. Better luck next time.`}
+              </DialogDescription>
 
               {isThisPlayerTheCreator ? (
                 <Button
                   size="lg"
+                  aria-label="Start a new game"
                   className="bg-gold-gradient px-10 font-display text-lg text-primary-foreground hover:shadow-gold-glow"
                   onClick={handleResetGame}
                 >
@@ -541,7 +611,10 @@ export const GameRoom = ({
               ) : (
                 <div className="flex flex-col items-center gap-4">
                   <p className="text-muted-foreground">Waiting for new game</p>
-                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-gold border-t-transparent" />
+                  <div
+                    aria-hidden="true"
+                    className="h-6 w-6 animate-spin rounded-full border-2 border-gold border-t-transparent"
+                  />
                   <Button variant="outline" asChild className="border-gold/30">
                     <a href="/">Return Home</a>
                   </Button>
@@ -559,7 +632,9 @@ export const GameRoom = ({
         }
 
         .table-area {
-          min-height: clamp(65vh, 75vh, 85vh);
+          height: 100%;
+          min-height: 0;
+          max-height: 850px;
           max-width: min(900px, 95vw);
           width: 100%;
           border-radius: clamp(12px, 3vw, 24px);

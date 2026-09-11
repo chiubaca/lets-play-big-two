@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import {
+  areCardsEqual,
   sortCards,
   createDeck,
   getCardRank,
@@ -10,6 +11,17 @@ import {
   type Card,
   getSequenceValue,
 } from "./card-utils.ts";
+
+describe("areCardsEqual", () => {
+  it("compares both card value and suit", () => {
+    expect(areCardsEqual({ value: "3", suit: "DIAMOND" }, { value: "3", suit: "DIAMOND" })).toBe(
+      true,
+    );
+    expect(areCardsEqual({ value: "3", suit: "DIAMOND" }, { value: "3", suit: "CLUB" })).toBe(
+      false,
+    );
+  });
+});
 
 describe("createDeck", () => {
   const deck = createDeck();
@@ -68,6 +80,20 @@ describe("compareCards", () => {
 });
 
 describe("sortCards", () => {
+  it("does not mutate the supplied cards", () => {
+    const cards: Card[] = [
+      { suit: "SPADE", value: "2" },
+      { suit: "DIAMOND", value: "3" },
+    ];
+
+    sortCards(cards);
+
+    expect(cards).toEqual([
+      { suit: "SPADE", value: "2" },
+      { suit: "DIAMOND", value: "3" },
+    ]);
+  });
+
   it("should sort cards with all the same suit", () => {
     const result = sortCards([
       { suit: "DIAMOND", value: "2" },

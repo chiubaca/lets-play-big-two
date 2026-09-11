@@ -1,5 +1,10 @@
-import { describe, it, expect } from "vitest";
-import { updatePlayersHands, detectHandType, isPlayedHandBigger } from "./game-rules.ts";
+import { describe, expect, it } from "vite-plus/test";
+import {
+  detectHandType,
+  doesHandContainCards,
+  isPlayedHandBigger,
+  updatePlayersHands,
+} from "./game-rules.ts";
 import type { Card } from "./card-utils.ts";
 
 const c = (value: Card["value"], suit: Card["suit"]): Card => ({ value, suit });
@@ -39,6 +44,45 @@ describe("updatePlayersHands", () => {
       cardsToRemove: [c("K", "SPADE")],
     });
     expect(result).toEqual([c("3", "DIAMOND"), c("5", "HEART")]);
+  });
+
+  it("removes only the requested number of matching cards", () => {
+    const duplicate = c("5", "HEART");
+    const result = updatePlayersHands({
+      currentHand: [duplicate, duplicate, c("K", "SPADE")],
+      cardsToRemove: [duplicate],
+    });
+
+    expect(result).toEqual([duplicate, c("K", "SPADE")]);
+  });
+});
+
+describe("doesHandContainCards", () => {
+  it("accepts cards that are a subset of the hand", () => {
+    expect(
+      doesHandContainCards({
+        hand: [c("3", "DIAMOND"), c("5", "HEART"), c("K", "SPADE")],
+        cards: [c("K", "SPADE"), c("3", "DIAMOND")],
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects a card that is not in the hand", () => {
+    expect(
+      doesHandContainCards({
+        hand: [c("3", "DIAMOND")],
+        cards: [c("3", "CLUB")],
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects duplicate selections when the hand has only one matching card", () => {
+    expect(
+      doesHandContainCards({
+        hand: [c("3", "DIAMOND"), c("4", "CLUB")],
+        cards: [c("3", "DIAMOND"), c("3", "DIAMOND")],
+      }),
+    ).toBe(false);
   });
 });
 
@@ -83,11 +127,7 @@ describe("detectHandType", () => {
     expect(detectHandType([c("3", "DIAMOND"), c("4", "CLUB"), c("5", "HEART")])).toBeNull();
   });
 
-  // NOTE: isStraight uses a sum-modulo-5 heuristic that can produce false positives
-  // on non-consecutive cards whose sequence values happen to sum to a multiple of 5.
-  // The cards below (3,5,7,9,J) have sequence values 1+3+5+7+9=25, which is divisible
-  // by 5, so detectHandType correctly (per the implementation) returns "combo".
-  it("returns combo for 5 cards whose sequence values sum to a multiple of 5 (even gaps)", () => {
+  it("rejects non-consecutive cards whose sequence values sum to a multiple of 5", () => {
     expect(
       detectHandType([
         c("3", "DIAMOND"),
@@ -96,7 +136,7 @@ describe("detectHandType", () => {
         c("9", "SPADE"),
         c("J", "DIAMOND"),
       ]),
-    ).toBe("combo");
+    ).toBeNull();
   });
 });
 

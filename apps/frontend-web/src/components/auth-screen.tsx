@@ -1,9 +1,10 @@
 import { useForm } from "@tanstack/react-form";
 import type { AnyFieldApi } from "@tanstack/react-form";
+import { Link } from "@tanstack/react-router";
 import { authClient } from "~/libs/auth-client";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Loader2, Mail, KeyRound, AtSign } from "lucide-react";
+import { Loader2, Mail, KeyRound, AtSign, Bot } from "lucide-react";
 import { useState } from "react";
 
 type AuthView = "signIn" | "signUp";
@@ -275,6 +276,17 @@ export function AuthScreen() {
               Continue with Google
             </Button>
           </div>
+
+          <Button
+            variant="outline"
+            className="w-full border-gold/30 font-display text-foreground hover:border-gold/50 hover:bg-gold/10"
+            asChild
+          >
+            <Link to="/offline">
+              <Bot className="mr-2 h-4 w-4 text-gold" />
+              Play solo without an account
+            </Link>
+          </Button>
 
           <p className="text-sm text-muted-foreground">
             {view === "signIn" ? (

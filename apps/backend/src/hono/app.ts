@@ -51,6 +51,14 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
       return c.text("Expected Upgrade: websocket", 426);
     }
 
+    const session = await auth.api.getSession({
+      headers: c.req.raw.headers,
+    });
+
+    if (!session) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
     const roomId = c.req.param().roomid;
     if (!roomId) return c.notFound();
 
@@ -99,14 +107,35 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
       }
     }),
     async (c) => {
+      const session = await auth.api.getSession({
+        headers: c.req.raw.headers,
+      });
+
+      if (!session) {
+        return c.json({ error: "Unauthorized" }, 401);
+      }
+
       const gameEvent = c.req.valid("json");
-      console.log("🔍 ~  gameEvent:", gameEvent);
+
+      if ("playerId" in gameEvent && gameEvent.playerId !== session.user.id) {
+        return c.json({ error: "Cannot act as another player" }, 403);
+      }
+
+      const authenticatedGameEvent =
+        gameEvent.type === "JOIN_GAME"
+          ? { ...gameEvent, playerId: session.user.id, playerName: session.user.name }
+          : gameEvent;
+
       const roomId = c.req.param("roomId");
 
       const doId = c.env.BIG_TWO_ROOM_DURABLE_OBJECT.idFromName(roomId);
       const stub = c.env.BIG_TWO_ROOM_DURABLE_OBJECT.get(doId);
 
-      await stub.gameAction(gameEvent);
+      const result = await stub.gameAction(authenticatedGameEvent, session.user.id);
+
+      if (!result.success) {
+        return c.json({ error: result.error }, 403);
+      }
 
       return c.json({ success: true });
     },

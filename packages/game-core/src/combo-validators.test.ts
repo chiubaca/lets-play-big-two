@@ -1,4 +1,4 @@
-import { describe, it, expect, test } from "vitest";
+import { describe, expect, it, test } from "vite-plus/test";
 
 import {
   isFlush,
@@ -35,6 +35,42 @@ describe("isStraight", () => {
     tests.forEach((cardCombo) => {
       expect(isStraight(cardCombo)).toEqual(true);
     });
+  });
+
+  it("rejects non-consecutive values", () => {
+    expect(
+      isStraight([
+        { value: "3", suit: "DIAMOND" },
+        { value: "5", suit: "CLUB" },
+        { value: "7", suit: "HEART" },
+        { value: "9", suit: "SPADE" },
+        { value: "J", suit: "DIAMOND" },
+      ]),
+    ).toBe(false);
+  });
+
+  it("rejects repeated values", () => {
+    expect(
+      isStraight([
+        { value: "3", suit: "DIAMOND" },
+        { value: "4", suit: "CLUB" },
+        { value: "5", suit: "HEART" },
+        { value: "6", suit: "SPADE" },
+        { value: "6", suit: "DIAMOND" },
+      ]),
+    ).toBe(false);
+  });
+
+  it("does not treat A, 2, 3, 4, 5 as a bicycle straight", () => {
+    expect(
+      isStraight([
+        { value: "A", suit: "DIAMOND" },
+        { value: "2", suit: "CLUB" },
+        { value: "3", suit: "HEART" },
+        { value: "4", suit: "SPADE" },
+        { value: "5", suit: "DIAMOND" },
+      ]),
+    ).toBe(false);
   });
 });
 
@@ -185,7 +221,7 @@ describe("test same combo compare helpers", () => {
   });
 });
 
-describe.skip("isComboBigger", () => {
+describe("isComboBigger", () => {
   test("same combo types", () => {
     const tests: [ValidatedCardCombination, ValidatedCardCombination, boolean][] = [
       [
@@ -239,56 +275,20 @@ describe.skip("isComboBigger", () => {
     });
   });
 
-  test("different combo types", () => {
-    const tests: [ValidatedCardCombination, ValidatedCardCombination, boolean][] = [
-      [
-        {
-          type: "FLUSH",
-          cards: comboStubs.FLUSH_CLUB_K,
-        },
-        {
-          type: "FULL_HOUSE",
-          cards: comboStubs.FULL_HOUSE_K_Q,
-        },
-        false,
-      ],
-      [
-        {
-          type: "STRAIGHT",
-          cards: comboStubs.STRAIGHT_3_7,
-        },
-        {
-          type: "STRAIGHT_FLUSH",
-          cards: comboStubs.STRAIGHT_FLUSH_CLUB_5_9,
-        },
-        false,
-      ],
-      [
-        {
-          type: "STRAIGHT_FLUSH",
-          cards: comboStubs.STRAIGHT_FLUSH_HEART_6_10,
-        },
-        {
-          type: "FULL_HOUSE",
-          cards: comboStubs.FULL_HOUSE_K_Q,
-        },
-        true,
-      ],
-      [
-        {
-          type: "STRAIGHT",
-          cards: comboStubs.STRAIGHT_10_A,
-        },
-        {
-          type: "FLUSH",
-          cards: comboStubs.FLUSH_CLUB_K,
-        },
-        true,
-      ],
+  test("uses the standard five-card combination hierarchy", () => {
+    const combosInAscendingOrder: ValidatedCardCombination[] = [
+      { type: "STRAIGHT", cards: comboStubs.STRAIGHT_10_A },
+      { type: "FLUSH", cards: comboStubs.FLUSH_CLUB_K },
+      { type: "FULL_HOUSE", cards: comboStubs.FULL_HOUSE_K_Q },
+      { type: "FOUR_OF_A_KIND", cards: comboStubs.FOUR_OF_A_KIND_J },
+      { type: "STRAIGHT_FLUSH", cards: comboStubs.STRAIGHT_FLUSH_CLUB_5_9 },
     ];
-    tests.forEach(([baseCombo, comparisonCombo, expectedResult]) => {
-      const result = isComboBigger(baseCombo, comparisonCombo);
-      expect(result).toEqual(expectedResult);
-    });
+
+    for (let index = 1; index < combosInAscendingOrder.length; index++) {
+      const lowerCombo = combosInAscendingOrder[index - 1];
+      const higherCombo = combosInAscendingOrder[index];
+      expect(isComboBigger(higherCombo, lowerCombo)).toBe(true);
+      expect(isComboBigger(lowerCombo, higherCombo)).toBe(false);
+    }
   });
 });
