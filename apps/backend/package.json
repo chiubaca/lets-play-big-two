@@ -10,7 +10,8 @@
   "scripts": {
     "dev": "wrangler dev --port 8788",
     "deploy": "wrangler deploy",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "test": "vp test"
   },
   "dependencies": {
     "@big-two/data-ops": "workspace:*",

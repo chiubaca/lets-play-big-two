@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { GameRoom } from "../../components/game-room";
+import { OnlineGameRoom } from "../../components/game-room";
 import { authClient } from "../../libs/auth-client";
 
 import type { BigTwoGameMachineSnapshot } from "@big-two/game-state-machine";
@@ -25,7 +25,7 @@ function RoomPage() {
     );
   }
 
-  return <GameRoom roomId={roomId} user={user} />;
+  return <OnlineGameRoom roomId={roomId} user={{ id: user.id, name: user.name }} />;
 }
 
 export const useSubscribeToGameState = ({ roomId }: { roomId: string }) => {
@@ -37,8 +37,8 @@ export const useSubscribeToGameState = ({ roomId }: { roomId: string }) => {
 
     const websocket = new WebSocket(WEBSOCKET_ENDPOINT);
 
-    websocket.onopen = (e) => {
-      (console.log("connected!"), e);
+    websocket.onopen = () => {
+      console.log("connected!");
     };
 
     websocket.onmessage = (event) => {
@@ -55,7 +55,7 @@ export const useSubscribeToGameState = ({ roomId }: { roomId: string }) => {
     return () => {
       websocket.close();
     };
-  }, [roomId]);
+  }, [queryClient, roomId]);
 
   // return { gameState };
 };

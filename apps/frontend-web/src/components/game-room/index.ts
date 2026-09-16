@@ -1,2 +1,2 @@
 export { GameRoom } from "./game-room";
-// export { GameRoomProvider, GameRoomContext } from "./game-room.provider";
+export { OnlineGameRoom } from "./online-game-room";

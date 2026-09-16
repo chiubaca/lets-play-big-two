@@ -1,4 +1,5 @@
 import {
+  getCardKey,
   isSingleBigger,
   isPairBigger,
   isPairValid,
@@ -14,9 +15,39 @@ export function updatePlayersHands({
   currentHand: Card[];
   cardsToRemove: Card[];
 }): Card[] {
-  return currentHand.filter(
-    (card) => !cardsToRemove.some((c) => c.suit === card.suit && c.value === card.value),
-  );
+  const removals = countCards(cardsToRemove);
+
+  return currentHand.filter((card) => {
+    const key = getCardKey(card);
+    const remainingRemovals = removals.get(key) ?? 0;
+    if (remainingRemovals === 0) return true;
+
+    removals.set(key, remainingRemovals - 1);
+    return false;
+  });
+}
+
+export function doesHandContainCards({ hand, cards }: { hand: Card[]; cards: Card[] }): boolean {
+  if (cards.length > hand.length) return false;
+
+  const availableCards = countCards(hand);
+  return cards.every((card) => {
+    const key = getCardKey(card);
+    const availableCount = availableCards.get(key) ?? 0;
+    if (availableCount === 0) return false;
+
+    availableCards.set(key, availableCount - 1);
+    return true;
+  });
+}
+
+function countCards(cards: Card[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const card of cards) {
+    const key = getCardKey(card);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
 }
 
 export function detectHandType(cards: Card[]): RoundMode | null {

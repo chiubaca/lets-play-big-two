@@ -1,5 +1,5 @@
 // sum.test.js
-import { expect, test } from "vitest";
+import { expect, test } from "vite-plus/test";
 import { rotatePlayerIndex } from "./game-state-machine.ts";
 
 test.each([

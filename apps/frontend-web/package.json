@@ -10,10 +10,11 @@
     "build": "vp build",
     "preview": "vp preview",
     "deploy": "wrangler deploy --no-x-autoconfig",
-    "test": "vitest run",
+    "test": "vp test --run",
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
+    "@big-two/game-ai": "workspace:*",
     "@big-two/game-core": "workspace:*",
     "@big-two/game-state-machine": "workspace:*",
     "@fontsource-variable/inter": "catalog:",
@@ -45,7 +46,8 @@
     "sonner": "catalog:",
     "tailwind-merge": "catalog:",
     "tailwindcss": "^4.1.18",
-    "tw-animate-css": "catalog:"
+    "tw-animate-css": "catalog:",
+    "xstate": "catalog:"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.16",

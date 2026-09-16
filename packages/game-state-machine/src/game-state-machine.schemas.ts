@@ -9,18 +9,25 @@ export const cardSchema = z.object({
 export const gameEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("JOIN_GAME"),
-    playerId: z.string(),
-    playerName: z.string(),
+    playerId: z.string().min(1),
+    playerName: z.string().min(1),
   }),
   z.object({ type: z.literal("START_GAME") }),
-  z.object({ type: z.literal("ROUND_FIRST_MOVE") }),
-  z.object({ type: z.literal("PLAY_FIRST_MOVE"), cards: z.array(cardSchema) }),
+  z.object({
+    type: z.literal("PLAY_FIRST_MOVE"),
+    playerId: z.string().min(1),
+    cards: z.array(cardSchema).min(1).max(5),
+  }),
   z.object({
     type: z.literal("PLAY_NEW_ROUND_FIRST_MOVE"),
-    cards: z.array(cardSchema),
+    playerId: z.string().min(1),
+    cards: z.array(cardSchema).min(1).max(5),
   }),
-  z.object({ type: z.literal("PLAY_CARDS"), cards: z.array(cardSchema) }),
-  z.object({ type: z.literal("PASS_TURN"), playerId: z.string() }),
+  z.object({
+    type: z.literal("PLAY_CARDS"),
+    playerId: z.string().min(1),
+    cards: z.array(cardSchema).min(1).max(5),
+  }),
+  z.object({ type: z.literal("PASS_TURN"), playerId: z.string().min(1) }),
   z.object({ type: z.literal("RESET_GAME") }),
-  z.object({ type: z.literal("GAME_END") }),
 ]);

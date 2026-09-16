@@ -24,6 +24,14 @@ export type Pairs = [Card, Card];
 
 export type RoundMode = "single" | "pairs" | "combo";
 
+export function getCardKey(card: Card): string {
+  return `${card.value}:${card.suit}`;
+}
+
+export function areCardsEqual(first: Card, second: Card): boolean {
+  return getCardKey(first) === getCardKey(second);
+}
+
 /**
  * Creates a standard deck of 52 playing cards for the Big Two game.
  *
@@ -77,7 +85,7 @@ export function getComparisonCardValue(baseCard: Card, comparisonCard: Card): nu
  * @returns A new array of `Card` objects sorted in ascending order.
  */
 export function sortCards(cards: Card[]): Card[] {
-  return cards.sort((a, b) => getCardRank(a) - getCardRank(b));
+  return cards.toSorted((a, b) => getCardRank(a) - getCardRank(b));
 }
 
 /**

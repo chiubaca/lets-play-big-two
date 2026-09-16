@@ -24,6 +24,18 @@ const SUIT_COLORS: Record<string, string> = {
   SPADE: "text-suit-black",
 };
 
+const CARD_VALUE_NAMES: Record<string, string> = {
+  J: "jack",
+  Q: "queen",
+  K: "king",
+  A: "ace",
+};
+
+export function getCardAccessibleName(card: CardType) {
+  const value = CARD_VALUE_NAMES[card.value] ?? card.value;
+  return `${value} of ${card.suit.toLowerCase()}s`;
+}
+
 export function Card({ card, selected, onClick, disabled, className, style }: CardProps) {
   const symbol = SUIT_SYMBOLS[card.suit];
   const colorClass = SUIT_COLORS[card.suit];
@@ -31,6 +43,8 @@ export function Card({ card, selected, onClick, disabled, className, style }: Ca
   return (
     <button
       type="button"
+      aria-label={getCardAccessibleName(card)}
+      aria-pressed={onClick ? Boolean(selected) : undefined}
       onClick={onClick}
       disabled={disabled}
       style={style}

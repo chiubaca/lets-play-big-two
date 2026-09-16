@@ -14,12 +14,13 @@ export function isFlush(cardCombo: CardCombo): boolean {
 }
 
 export function isStraight(cardCombo: CardCombo): boolean {
-  // NOTE this implementation does not account for bicycle straights e.g:
-  // A,2,3,4,5
-  const cardValueSum = cardCombo.reduce((valueSum, currentCard) => {
-    return getSequenceValue(currentCard) + valueSum;
-  }, 0);
-  return cardValueSum % 5 === 0;
+  const sequenceValues = cardCombo.map(getSequenceValue).toSorted((a, b) => a - b);
+  const distinctValues = new Set(sequenceValues);
+
+  return (
+    distinctValues.size === cardCombo.length &&
+    sequenceValues.every((value, index) => index === 0 || value === sequenceValues[index - 1] + 1)
+  );
 }
 
 export function isFullHouse(cardCombo: CardCombo): boolean {
@@ -207,8 +208,8 @@ export function isComboBigger(
   }
   // When combo types are different can evaluate which combo is bigger based on the combo type hierarchy
   const comboTypeOrder: ComboType[] = [
-    "FLUSH",
     "STRAIGHT",
+    "FLUSH",
     "FULL_HOUSE",
     "FOUR_OF_A_KIND",
     "STRAIGHT_FLUSH",

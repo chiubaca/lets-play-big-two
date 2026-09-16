@@ -87,6 +87,7 @@ pnpm --filter backend dev
 │   └── backend/         # Cloudflare Workers backend
 ├── packages/
 │   ├── game-core/       # Core game logic
+│   ├── game-ai/         # Legal move generation and bot strategy
 │   ├── game-state-machine/  # XState game flow
 │   └── data-ops/        # Database operations
 ├── tools/               # Development tools

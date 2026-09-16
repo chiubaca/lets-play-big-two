@@ -1,182 +1,130 @@
-import { describe, it, expect } from "vitest";
-import { bigTwoGameMachine } from "./game-state-machine.ts";
+import { describe, expect, it } from "vite-plus/test";
 import { createActor } from "xstate";
 import type { Card } from "@big-two/game-core";
+import { bigTwoGameMachine } from "./game-state-machine.ts";
+import { gameEventSchema } from "./game-state-machine.schemas.ts";
 
-import { PLAYER_ABOUT_TO_WIN } from "./mocks/PLAYER_ABOUT_TO_WIN.ts";
+const threeOfDiamonds: Card = { suit: "DIAMOND", value: "3" };
 
-describe("Big Two Game State Machine", () => {
-  // Helper function to create a fresh game instance
-  const createNewGame = () => {
-    return createActor(bigTwoGameMachine).start();
-  };
+function createNewGame() {
+  return createActor(bigTwoGameMachine).start();
+}
 
-  describe("Initial State", () => {
-    it("should start in WAITING_FOR_PLAYERS state", () => {
-      const gameActor = createNewGame();
-      expect(gameActor.getSnapshot().value).toBe("WAITING_FOR_PLAYERS");
+function joinPlayers(playerCount: number) {
+  const actor = createNewGame();
+  for (let index = 0; index < playerCount; index++) {
+    actor.send({
+      type: "JOIN_GAME",
+      playerId: `p${index + 1}`,
+      playerName: `Player ${index + 1}`,
     });
+  }
+  return actor;
+}
 
-    it("should have empty initial context", () => {
-      const gameActor = createNewGame();
-      const context = gameActor.getSnapshot().context;
+function startGame(playerCount: number) {
+  const actor = joinPlayers(playerCount);
+  actor.send({ type: "START_GAME" });
+  return actor;
+}
 
-      expect(context).toEqual({
-        players: [],
-        currentPlayerIndex: 0,
-        roundMode: null,
-        cardPile: [],
-        consecutivePasses: 0,
-        winner: undefined,
-      });
-    });
-  });
+describe("Big Two game setup", () => {
+  it("starts with an empty waiting room", () => {
+    const snapshot = createNewGame().getSnapshot();
 
-  describe("Player Management", () => {
-    it("should allow adding players", () => {
-      const gameActor = createNewGame();
-
-      gameActor.send({
-        type: "JOIN_GAME",
-        playerId: "player1",
-        playerName: "Alice",
-      });
-
-      const context = gameActor.getSnapshot().context;
-      expect(context.players).toHaveLength(1);
-      expect(context.players[0]).toEqual({
-        id: "player1",
-        name: "Alice",
-        hand: [],
-      });
-    });
-
-    it("should not allow more than 4 players", () => {
-      const gameActor = createNewGame();
-
-      // Add 4 players
-      for (let i = 1; i <= 4; i++) {
-        gameActor.send({
-          type: "JOIN_GAME",
-          playerId: `player${i}`,
-          playerName: `Player ${i}`,
-        });
-      }
-
-      // Try to add a 5th player
-      gameActor.send({
-        type: "JOIN_GAME",
-        playerId: "player5",
-        playerName: "Player 5",
-      });
-
-      const context = gameActor.getSnapshot().context;
-      expect(context.players).toHaveLength(4);
+    expect(snapshot.value).toBe("WAITING_FOR_PLAYERS");
+    expect(snapshot.context).toEqual({
+      players: [],
+      currentPlayerIndex: 0,
+      roundMode: null,
+      cardPile: [],
+      consecutivePasses: 0,
+      winner: undefined,
     });
   });
 
-  describe("Game Flow", () => {
-    it("should not start game with less than 2 players", () => {
-      const gameActor = createNewGame();
+  it("accepts unique players up to four", () => {
+    const actor = joinPlayers(4);
+    actor.send({ type: "JOIN_GAME", playerId: "p1", playerName: "Duplicate" });
+    actor.send({ type: "JOIN_GAME", playerId: "p5", playerName: "Player 5" });
 
-      // Add only 1 player
-      gameActor.send({
-        type: "JOIN_GAME",
-        playerId: "player1",
-        playerName: "Player 1",
-      });
-
-      gameActor.send({ type: "START_GAME" });
-
-      const snapshot = gameActor.getSnapshot();
-      expect(snapshot.value).toBe("WAITING_FOR_PLAYERS");
-    });
-
-    it("should transition to ROUND_FIRST_MOVE when game starts", () => {
-      const gameActor = createNewGame();
-
-      // Add 4 players
-      for (let i = 1; i <= 4; i++) {
-        gameActor.send({
-          type: "JOIN_GAME",
-          playerId: `player${i}`,
-          playerName: `Player ${i}`,
-        });
-      }
-
-      gameActor.send({ type: "START_GAME" });
-
-      const snapshot = gameActor.getSnapshot();
-      expect(snapshot.value).toBe("ROUND_FIRST_MOVE");
-      expect(snapshot.context.players.every((p) => p.hand.length > 0)).toBe(true);
-    });
-
-    it("should handle player turns correctly", () => {
-      const gameActor = createNewGame();
-
-      // Add 2 players for simplicity
-      for (let i = 1; i <= 2; i++) {
-        gameActor.send({
-          type: "JOIN_GAME",
-          playerId: `player${i}`,
-          playerName: `Player ${i}`,
-        });
-      }
-
-      gameActor.send({ type: "START_GAME" });
-
-      // Play first move with a single card
-      const sampleCard: Card = { suit: "HEART", value: "3" };
-      gameActor.send({
-        type: "PLAY_FIRST_MOVE",
-        cards: [sampleCard],
-      });
-
-      const snapshot = gameActor.getSnapshot();
-      expect(snapshot.value).toBe("NEXT_PLAYER_TURN");
-      expect(snapshot.context.currentPlayerIndex).toBe(1); // Should move to next player
-      expect(snapshot.context.roundMode).toBe("single");
+    expect(actor.getSnapshot().context.players).toHaveLength(4);
+    expect(actor.getSnapshot().context.players[0]).toEqual({
+      id: "p1",
+      name: "Player 1",
+      hand: [],
     });
   });
 
-  describe("Game Reset", () => {
-    it("should reset game state correctly", () => {
-      const gameActor = createNewGame();
+  it("does not start with fewer than two players", () => {
+    const actor = joinPlayers(1);
+    actor.send({ type: "START_GAME" });
 
-      // Setup some game state
-      gameActor.send({
-        type: "JOIN_GAME",
-        playerId: "player1",
-        playerName: "Alice",
-      });
-
-      gameActor.send({ type: "RESET_GAME" });
-
-      const context = gameActor.getSnapshot().context;
-      expect(context).toEqual({
-        players: [{ id: "player1", name: "Alice", hand: [] }],
-        currentPlayerIndex: 0,
-        roundMode: null,
-        cardPile: [],
-        consecutivePasses: 0,
-        winner: undefined,
-      });
-    });
+    expect(actor.getSnapshot().value).toBe("WAITING_FOR_PLAYERS");
   });
 
-  describe("Game end", () => {
-    it("will end once a player has played all their cards", () => {
-      const gameActor = createActor(bigTwoGameMachine, {
-        snapshot: PLAYER_ABOUT_TO_WIN,
-      }).start();
+  it.each([
+    [2, [26, 26]],
+    [3, [18, 17, 17]],
+    [4, [13, 13, 13, 13]],
+  ])("deals all cards across %i players", (playerCount, expectedHandSizes) => {
+    const snapshot = startGame(playerCount).getSnapshot();
 
-      gameActor.send({
-        type: "PLAY_CARDS",
-        cards: [{ suit: "SPADE", value: "2" }],
-      });
-      const state = gameActor.getSnapshot();
-      expect(state.value).toEqual("GAME_END");
-      expect(state.context.winner?.name).toEqual("test2");
+    expect(snapshot.value).toBe("ROUND_FIRST_MOVE");
+    expect(snapshot.context.players.map((player) => player.hand.length)).toEqual(expectedHandSizes);
+    expect(snapshot.context.players.flatMap((player) => player.hand)).toHaveLength(52);
+  });
+
+  it("starts with the player who holds 3 of DIAMOND", () => {
+    const snapshot = startGame(4).getSnapshot();
+    const holderIndex = snapshot.context.players.findIndex((player) =>
+      player.hand.some(
+        (card) => card.suit === threeOfDiamonds.suit && card.value === threeOfDiamonds.value,
+      ),
+    );
+
+    expect(holderIndex).toBeGreaterThanOrEqual(0);
+    expect(snapshot.context.currentPlayerIndex).toBe(holderIndex);
+  });
+});
+
+describe("event schema", () => {
+  it.each(["PLAY_FIRST_MOVE", "PLAY_NEW_ROUND_FIRST_MOVE", "PLAY_CARDS"] as const)(
+    "requires playerId for %s",
+    (type) => {
+      expect(gameEventSchema.safeParse({ type, cards: [threeOfDiamonds] }).success).toBe(false);
+      expect(
+        gameEventSchema.safeParse({ type, playerId: "p1", cards: [threeOfDiamonds] }).success,
+      ).toBe(true);
+    },
+  );
+
+  it("requires a non-empty playerId for PASS_TURN", () => {
+    expect(gameEventSchema.safeParse({ type: "PASS_TURN" }).success).toBe(false);
+    expect(gameEventSchema.safeParse({ type: "PASS_TURN", playerId: "" }).success).toBe(false);
+    expect(gameEventSchema.safeParse({ type: "PASS_TURN", playerId: "p1" }).success).toBe(true);
+  });
+});
+
+describe("persisted online snapshots", () => {
+  it("restores a dealt game and continues through the same machine", () => {
+    const originalActor = startGame(3);
+    const persistedSnapshot = JSON.parse(
+      JSON.stringify(originalActor.getPersistedSnapshot()),
+    ) as ReturnType<typeof originalActor.getPersistedSnapshot>;
+    const originalSnapshotCopy = structuredClone(persistedSnapshot);
+    const restoredActor = createActor(bigTwoGameMachine, { snapshot: persistedSnapshot }).start();
+    const restoredContext = restoredActor.getSnapshot().context;
+    const currentPlayer = restoredContext.players[restoredContext.currentPlayerIndex];
+
+    restoredActor.send({
+      type: "PLAY_FIRST_MOVE",
+      playerId: currentPlayer.id,
+      cards: [threeOfDiamonds],
     });
+
+    expect(restoredActor.getSnapshot().value).toBe("NEXT_PLAYER_TURN");
+    expect(restoredActor.getSnapshot().context.cardPile).toEqual([[threeOfDiamonds]]);
+    expect(persistedSnapshot).toEqual(originalSnapshotCopy);
   });
 });
