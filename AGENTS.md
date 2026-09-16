@@ -1,3 +1,8 @@
+## Project-specific local development
+
+See [agent/LOCAL_DEV.md](agent/LOCAL_DEV.md) for the macOS prerequisites,
+environment setup, local domains, service lifecycle, and troubleshooting.
+
 <!--VITE PLUS START-->
 
 # Using Vite+, the Unified Toolchain for the Web
