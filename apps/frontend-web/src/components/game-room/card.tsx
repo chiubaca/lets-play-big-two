@@ -43,6 +43,8 @@ export function Card({ card, selected, onClick, disabled, className, style }: Ca
   return (
     <button
       type="button"
+      data-suit={symbol}
+      data-red={card.suit === "DIAMOND" || card.suit === "HEART"}
       aria-label={getCardAccessibleName(card)}
       aria-pressed={onClick ? Boolean(selected) : undefined}
       onClick={onClick}

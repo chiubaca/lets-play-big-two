@@ -1,21 +1,16 @@
-import { useEffect, useState } from "react";
-import { twMerge } from "tailwind-merge";
+import { useEffect, useState, type CSSProperties } from "react";
+import { Copy, Menu, Settings, Volume2, VolumeX, HelpCircle, Check } from "lucide-react";
 import type { BigTwoGameMachineSnapshot, Card, GameEvent } from "@big-two/game-state-machine";
-
-import { Confetti } from "../confetti";
-import { Card as CardComponent, getCardAccessibleName } from "./card";
-import { makePlayerOrder } from "./helpers/make-player-order";
-import { Button } from "~/components/ui/button";
-import { Badge } from "~/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
 import { detectHandType } from "@big-two/game-core";
+import { Confetti } from "../confetti";
+import { Card as PlayingCard, getCardAccessibleName } from "./card";
+import { makePlayerOrder } from "./helpers/make-player-order";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
 import { createPlayEvent, isGameTurnState } from "./game-room-session";
+import { useTableAudio } from "./use-table-audio";
+import "./game-room.css";
 
-export type GameRoomUser = {
-  id: string;
-  name: string;
-};
-
+export type GameRoomUser = { id: string; name: string };
 type GameRoomProps = {
   gameState?: BigTwoGameMachineSnapshot;
   requestHint?: () => Card[] | null;
@@ -24,6 +19,53 @@ type GameRoomProps = {
   thinkingPlayerId?: string;
   user: GameRoomUser;
 };
+
+function PlayerSeat({
+  name,
+  count,
+  avatar,
+  active,
+  thinking,
+  position,
+}: {
+  name: string;
+  count: number;
+  avatar: string;
+  active: boolean;
+  thinking?: boolean;
+  position: string;
+}) {
+  return (
+    <div
+      className={`table-seat seat-${position} ${active ? "seat-active" : ""}`}
+      role="group"
+      aria-label={`${name}, ${count} cards remaining${active ? ", current turn" : ""}`}
+    >
+      <div className="player-plaque">
+        <span className="player-avatar" aria-hidden="true">
+          {avatar}
+        </span>
+        <div className="player-details">
+          <span className="player-name">{name}</span>
+          <span className="player-count">
+            <i aria-hidden="true">♦</i>
+            {count}
+          </span>
+        </div>
+        {active && <span className="turn-indicator">{thinking ? "Thinking…" : "Your turn"}</span>}
+      </div>
+      {position !== "you" && (
+        <div className="opponent-hand" aria-hidden="true">
+          {Array.from({ length: Math.min(count, 10) }, (_, i) => (
+            <span className="table-card-back" key={i}>
+              <span>♦</span>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export const GameRoom = ({
   gameState,
@@ -34,674 +76,401 @@ export const GameRoom = ({
   user,
 }: GameRoomProps) => {
   const [selectedCards, setSelectedCards] = useState<Card[]>([]);
-  const [hintMessage, setHintMessage] = useState<string>();
-
-  const handType = detectHandType(selectedCards);
-  const isValidPlay = Boolean(handType);
-  const selectedCardsToPlayText =
-    selectedCards.length > 0 ? (handType ? `Play ${handType}` : "Not valid") : "Pick some cards";
-
-  const currentPlayerIndex = gameState?.context.currentPlayerIndex;
-  const currentStateValue = gameState?.value;
+  const [message, setMessage] = useState<string>();
+  const [sortBySuit, setSortBySuit] = useState(false);
+  const [panel, setPanel] = useState<"menu" | "settings" | "help" | null>(null);
+  const [copied, setCopied] = useState(false);
+  const { playSound, muted, toggleMuted } = useTableAudio();
+  const currentId = gameState?.context.players[gameState.context.currentPlayerIndex]?.id;
+  const currentValue = gameState?.value;
+  const isMyTurn = currentId === user.id && isGameTurnState(currentValue);
+  const pile = gameState?.context.cardPile;
+  const lastPlayKey = JSON.stringify(pile?.at(-1) ?? []);
 
   useEffect(() => {
     setSelectedCards([]);
-    setHintMessage(undefined);
-  }, [currentPlayerIndex, currentStateValue]);
+    setMessage(undefined);
+  }, [currentId, currentValue]);
+  useEffect(() => {
+    if (isMyTurn) playSound("turn");
+  }, [isMyTurn, playSound]);
+  useEffect(() => {
+    if (currentValue === "GAME_END") playSound("turn");
+  }, [currentValue, playSound]);
+  useEffect(() => {
+    if (lastPlayKey !== "[]") playSound("play");
+  }, [lastPlayKey, playSound]);
+  useEffect(() => {
+    if (gameState?.context.guardMessage) playSound("notice");
+  }, [gameState?.context.guardMessage, playSound]);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(timer);
+  }, [copied]);
 
-  if (!gameState) {
-    return (
-      <div className="flex h-svh items-center justify-center bg-felt">
-        <div className="animate-pulse font-display text-2xl text-gold">Loading...</div>
-      </div>
-    );
-  }
-
-  const currentPlayerIdTurn = gameState.context.players[gameState.context.currentPlayerIndex]?.id;
-  const isCurrentPlayerTurn = currentPlayerIdTurn === user.id && isGameTurnState(gameState.value);
-
-  const thisPlayerIndex = gameState.context.players.findIndex((player) => player.id === user.id);
-  const isThisPlayerInRoom = gameState.context.players.some((p) => p.id === user.id);
-
-  const creatorId = gameState.context.players[0]?.id;
-  const isThisPlayerTheCreator = creatorId === user.id;
-
-  const [bottomPlayerIdx, leftPlayerIdx, topPlayerIdx, rightPlayerIdx] =
-    makePlayerOrder(thisPlayerIndex);
-  const isTurnInProgress = isGameTurnState(gameState.value);
-
-  const leftPlayer = gameState.context.players[leftPlayerIdx] || null;
-  const isLeftPlayerFocused =
-    isTurnInProgress && leftPlayerIdx === gameState.context.currentPlayerIndex;
-
-  const topPlayer = gameState.context.players[topPlayerIdx] || null;
-  const isTopPlayerFocused =
-    isTurnInProgress && topPlayerIdx === gameState.context.currentPlayerIndex;
-
-  const rightPlayer = gameState.context.players[rightPlayerIdx] || null;
-  const isRightPlayerFocused =
-    isTurnInProgress && rightPlayerIdx === gameState.context.currentPlayerIndex;
-
-  const lastHandPlayed = gameState.context.cardPile.at(-1);
-
-  const isCurrentPlayerFocused =
-    gameState.context.currentPlayerIndex === bottomPlayerIdx && isGameTurnState(gameState.value);
-
-  const hasPlayerWon = gameState.value === "GAME_END" && gameState.context.winner?.id === user.id;
-  const currentPlayer = gameState.context.players[gameState.context.currentPlayerIndex];
-  const cardCounts = gameState.context.players
-    .map((player) => `${player.name}: ${player.hand.length}`)
-    .join(", ");
-  const gameStatus =
-    gameState.value === "GAME_END"
-      ? `${gameState.context.winner?.name ?? "A player"} won the game. Remaining cards — ${cardCounts}.`
-      : gameState.value === "WAITING_FOR_PLAYERS"
-        ? `Waiting for players. ${gameState.context.players.length} of 4 seats filled.`
-        : currentPlayer
-          ? `${currentPlayer.id === user.id ? "Your" : `${currentPlayer.name}'s`} turn.${thinkingPlayerId === currentPlayer.id ? " Thinking." : ""} Remaining cards — ${cardCounts}.`
-          : "Preparing the next turn.";
-
-  const toggleSelectedCard = (card: Card) => {
-    const isCardSelected = selectedCards.some(
-      (selectedCard) => selectedCard.suit === card.suit && selectedCard.value === card.value,
-    );
-    if (isCardSelected) {
-      setSelectedCards(
-        selectedCards.filter(
-          (selectedCard) => selectedCard.suit !== card.suit || selectedCard.value !== card.value,
-        ),
-      );
-    } else {
-      setSelectedCards([...selectedCards, card]);
-    }
-  };
-
-  const handleJoinGame = async () => {
-    await send({ type: "JOIN_GAME", playerId: user.id, playerName: user.name });
-  };
-
-  const handleStartGame = async () => {
-    await send({ type: "START_GAME" });
-  };
-
-  const handlePlayCards = async () => {
-    const event = createPlayEvent(gameState, user.id, selectedCards);
-    if (!event) return;
-
-    await send(event);
-    setSelectedCards([]);
-    setHintMessage(undefined);
-  };
-
-  const handlePassTurn = async () => {
-    await send({ type: "PASS_TURN", playerId: user.id });
-    setSelectedCards([]);
-    setHintMessage(undefined);
-  };
-
-  const handleResetGame = async () => {
-    await send({ type: "RESET_GAME" });
-    setSelectedCards([]);
-    setHintMessage(undefined);
-  };
-
-  const handleRequestHint = () => {
-    const suggestedCards = requestHint?.();
-    if (!suggestedCards?.length) {
+  if (!gameState) return <main className="game-room room-loading">Taking your seat…</main>;
+  const { players, guardMessage, winner } = gameState.context;
+  const myIndex = players.findIndex((p) => p.id === user.id);
+  const [, left, top, right] = makePlayerOrder(myIndex);
+  const me = players[myIndex];
+  const host = players[0]?.id === user.id;
+  const waiting = currentValue === "WAITING_FOR_PLAYERS";
+  const handType = detectHandType(selectedCards);
+  const lastHand = pile?.at(-1);
+  const ranks = ["3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A", "2"];
+  const suits = ["DIAMOND", "CLUB", "HEART", "SPADE"];
+  const hand = [...(me?.hand ?? [])].sort((a, b) =>
+    sortBySuit
+      ? suits.indexOf(a.suit) - suits.indexOf(b.suit) ||
+        ranks.indexOf(a.value) - ranks.indexOf(b.value)
+      : ranks.indexOf(a.value) - ranks.indexOf(b.value) ||
+        suits.indexOf(a.suit) - suits.indexOf(b.suit),
+  );
+  const status = waiting
+    ? `Waiting for players · ${players.length} of 4 seats filled`
+    : isMyTurn
+      ? currentValue === "ROUND_FIRST_MOVE"
+        ? "Your turn · start with 3 ♦"
+        : "Your turn"
+      : `${players[gameState.context.currentPlayerIndex]?.name ?? "Next player"} is thinking…`;
+  const act = async (event: GameEvent) => {
+    try {
+      await send(event);
       setSelectedCards([]);
-      setHintMessage("No legal play is available. Pass this turn.");
-      return;
+      setMessage(undefined);
+    } catch {
+      setMessage("That move could not be sent. Please try again.");
+      playSound("notice");
     }
-
-    setSelectedCards(suggestedCards);
-    setHintMessage(
-      `Suggested move selected: ${suggestedCards.map(getCardAccessibleName).join(", ")}.`,
+  };
+  const hint = () => {
+    const cards = requestHint?.();
+    setSelectedCards(cards ?? []);
+    setMessage(
+      cards?.length
+        ? "A little nudge. Your move is selected."
+        : "No legal play available. Pass this turn.",
     );
+    playSound("select");
   };
 
   return (
-    <>
-      <main className="game-room flex h-svh flex-col justify-between bg-felt">
-        {/* Navigation Bar */}
-        <nav className="flex items-center justify-between border-b border-gold/20 bg-background/80 px-4 py-3 backdrop-blur-md">
-          <Button
-            variant="ghost"
-            className="text-foreground/80 transition-all hover:bg-gold/10 hover:text-gold"
-            asChild
+    <main className="game-room">
+      <div className="room-wall" aria-hidden="true" />
+      <header className="room-header">
+        <button className="room-icon" aria-label="Open table menu" onClick={() => setPanel("menu")}>
+          <Menu />
+        </button>
+        <button
+          className="room-code"
+          aria-label={`Copy room code ${tableLabel}`}
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(tableLabel);
+              setCopied(true);
+              playSound("select");
+            } catch {
+              setMessage(`Room: ${tableLabel}`);
+            }
+          }}
+        >
+          <span>
+            <small>{requestHint ? "Practice table" : "Room Code"}</small>
+            <strong>{tableLabel}</strong>
+          </span>
+          {copied ? <Check /> : <Copy />}
+        </button>
+        <div className="room-header-actions">
+          <button
+            className="room-icon help-icon"
+            aria-label="How to play"
+            onClick={() => setPanel("help")}
           >
-            <a href="/" className="flex items-center gap-2">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M10 19l-7-7m0 0l7-7m-7 7h18"
-                />
-              </svg>
-              <span className="font-display text-lg">Leave</span>
-            </a>
-          </Button>
-
-          {/* Room Info */}
-          <div className="hidden items-center gap-6 sm:flex">
-            <span className="font-display text-base font-medium tracking-wide text-gold">
-              ♠ Big Two
-            </span>
-            <span className="font-mono text-xs text-muted-foreground">{tableLabel}</span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {!isThisPlayerInRoom && (
-              <Button
-                disabled={gameState.value !== "WAITING_FOR_PLAYERS"}
-                className={twMerge([
-                  "font-display transition-all",
-                  gameState.value !== "WAITING_FOR_PLAYERS" && "cursor-not-allowed opacity-50",
-                ])}
-                onClick={handleJoinGame}
-              >
-                {gameState.value === "WAITING_FOR_PLAYERS" ? "Join Table" : "Game in Progress"}
-              </Button>
-            )}
-
-            {isThisPlayerTheCreator && (
-              <Button
-                variant="outline"
-                size="sm"
-                aria-label="Start a new game"
-                onClick={handleResetGame}
-                className="border-destructive/50 text-destructive hover:bg-destructive/10"
-              >
-                New Game
-              </Button>
-            )}
-          </div>
-        </nav>
-
-        {/* Game Table Area */}
-        <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden p-2 sm:p-4">
-          <div className="table-area">
-            {/* Played Cards Center */}
-            <div
-              className="played-cards-center"
-              role="region"
-              aria-label={
-                lastHandPlayed
-                  ? `Cards to beat: ${lastHandPlayed.map(getCardAccessibleName).join(", ")}`
-                  : "No cards have been played"
-              }
-            >
-              {gameState.value === "WAITING_FOR_PLAYERS" && (
-                <div>
-                  {isThisPlayerTheCreator ? (
-                    <Button
-                      size="lg"
-                      aria-label="Deal cards and start the game"
-                      className="bg-gold-gradient px-10 font-display text-lg text-primary-foreground transition-all hover:shadow-gold-glow"
-                      onClick={handleStartGame}
-                    >
-                      Deal Cards
-                    </Button>
-                  ) : (
-                    <div className="flex flex-col items-center p-5 text-center">
-                      <p className="mb-4 font-display text-xl text-gold/80">Waiting for host</p>
-                      <div
-                        aria-hidden="true"
-                        className="h-6 w-6 animate-spin rounded-full border-2 border-gold border-t-transparent"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-              {lastHandPlayed && (
-                <div className="flex flex-wrap justify-center gap-2">
-                  {lastHandPlayed.map((card) => {
-                    return (
-                      <CardComponent
-                        key={`${card.suit}${card.value}`}
-                        card={card}
-                        className="animate-deal"
-                      />
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* TOP PLAYER */}
-            <div
-              role="group"
-              aria-label={
-                topPlayer
-                  ? `${topPlayer.name}, ${topPlayer.hand.length} cards remaining${isTopPlayerFocused ? ", current turn" : ""}`
-                  : "Empty seat"
-              }
-              className={twMerge([
-                "top-player-position flex h-20 w-44 items-center justify-center rounded-xl border p-2 backdrop-blur-sm",
-                isTopPlayerFocused ? "border-gold/50 bg-gold/20" : "border-gold/10 bg-card/30",
-              ])}
-            >
-              <div className="relative flex items-center">
-                {isTopPlayerFocused && (
-                  <Badge className="absolute -right-5 -top-5 border-0 bg-gold-gradient text-primary-foreground">
-                    <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  </Badge>
-                )}
-                {topPlayer?.hand.slice(0, 13).map((_card, idx) => {
-                  return (
-                    <div
-                      key={idx}
-                      aria-hidden="true"
-                      className="card-back mini-card-fluid -ml-[clamp(0.25rem,0.5vw,0.5rem)] rounded-sm"
-                    />
-                  );
-                })}
-                {topPlayer && topPlayer.hand.length > 13 && (
-                  <span className="absolute grid h-full w-full items-center justify-center">
-                    <Badge
-                      variant="secondary"
-                      className="border border-gold/30 bg-card/50 py-2 font-mono text-xs text-gold backdrop-blur-sm"
-                    >
-                      {topPlayer.hand.length}
-                    </Badge>
-                  </span>
-                )}
-              </div>
-              {topPlayer?.name && (
-                <span className="absolute -bottom-5 text-xs font-medium text-muted-foreground">
-                  {topPlayer.name} · {topPlayer.hand.length}
-                </span>
-              )}
-            </div>
-
-            {/* LEFT PLAYER */}
-            <div
-              className="left-player-wrapper relative flex flex-col items-center"
-              role="group"
-              aria-label={
-                leftPlayer
-                  ? `${leftPlayer.name}, ${leftPlayer.hand.length} cards remaining${isLeftPlayerFocused ? ", current turn" : ""}`
-                  : "Empty seat"
-              }
-            >
-              {isLeftPlayerFocused && (
-                <Badge className="absolute -right-3 -top-3 z-10 border-0 bg-gold-gradient text-primary-foreground">
-                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                </Badge>
-              )}
-              <div
-                className={twMerge([
-                  "left-player-position flex h-44 w-20 flex-col items-center justify-center overflow-hidden rounded-xl border p-2 backdrop-blur-sm",
-                  isLeftPlayerFocused ? "border-gold/50 bg-gold/20" : "border-gold/10 bg-card/30",
-                ])}
-              >
-                <div className="relative flex flex-col items-center">
-                  {leftPlayer?.hand.slice(0, 13).map((_card, idx) => {
-                    const isLast = idx === Math.min(leftPlayer.hand.length, 13) - 1;
-                    return (
-                      <div
-                        key={idx}
-                        aria-hidden="true"
-                        className={twMerge([
-                          "card-back mini-card-fluid rounded-sm rotate-90",
-                          !isLast && "-mb-[clamp(0.7rem,2.5vw,2.2rem)]",
-                        ])}
-                      />
-                    );
-                  })}
-                  {leftPlayer && leftPlayer.hand.length > 13 && (
-                    <span className="absolute grid h-full w-full items-center justify-center">
-                      <Badge
-                        variant="secondary"
-                        className="border border-gold/30 bg-card/50 py-2 font-mono text-xs text-gold backdrop-blur-sm"
-                      >
-                        {leftPlayer.hand.length}
-                      </Badge>
-                    </span>
-                  )}
-                </div>
-              </div>
-              {leftPlayer?.name && (
-                <span className="mt-2 text-xs font-medium text-muted-foreground">
-                  {leftPlayer.name} · {leftPlayer.hand.length}
-                </span>
-              )}
-            </div>
-
-            {/* RIGHT PLAYER */}
-            <div
-              className="right-player-wrapper relative flex flex-col items-center"
-              role="group"
-              aria-label={
-                rightPlayer
-                  ? `${rightPlayer.name}, ${rightPlayer.hand.length} cards remaining${isRightPlayerFocused ? ", current turn" : ""}`
-                  : "Empty seat"
-              }
-            >
-              {rightPlayerIdx === gameState.context.currentPlayerIndex && (
-                <Badge className="absolute -right-3 -top-3 z-10 border-0 bg-gold-gradient text-primary-foreground">
-                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                </Badge>
-              )}
-              <div
-                className={twMerge([
-                  "right-player-position flex h-44 w-20 flex-col items-center justify-center overflow-hidden rounded-xl border p-2 backdrop-blur-sm",
-                  isRightPlayerFocused ? "border-gold/50 bg-gold/20" : "border-gold/10 bg-card/30",
-                ])}
-              >
-                <div className="relative flex flex-col items-center">
-                  <div className="flex flex-col items-center">
-                    {rightPlayer?.hand.slice(0, 13).map((_card, idx) => {
-                      const isLast = idx === Math.min(rightPlayer.hand.length, 13) - 1;
-                      return (
-                        <div
-                          key={idx}
-                          aria-hidden="true"
-                          className={twMerge([
-                            "card-back mini-card-fluid rounded-sm rotate-90",
-                            !isLast && "-mb-[clamp(0.7rem,2.5vw,2.2rem)]",
-                          ])}
-                        />
-                      );
-                    })}
-                  </div>
-                  {rightPlayer && rightPlayer.hand.length > 13 && (
-                    <span className="absolute grid h-full w-full items-center justify-center">
-                      <Badge
-                        variant="secondary"
-                        className="border border-gold/30 bg-card/50 py-2 font-mono text-xs text-gold backdrop-blur-sm"
-                      >
-                        {rightPlayer.hand.length}
-                      </Badge>
-                    </span>
-                  )}
-                </div>
-              </div>
-              {rightPlayer?.name && (
-                <span className="mt-2 text-xs font-medium text-muted-foreground">
-                  {rightPlayer.name} · {rightPlayer.hand.length}
-                </span>
-              )}
-            </div>
-
-            {/* CURRENT PLAYER */}
-            <div className="current-player mt-[clamp(0.5rem,3vw,2.5rem)] flex flex-col items-center">
-              {isCurrentPlayerFocused && (
-                <Badge className="mb-[clamp(0.25rem,1vw,0.75rem)] border-0 bg-gold-gradient px-[clamp(0.5rem,2vw,1rem)] py-[clamp(0.25rem,0.5vw,0.5rem)] font-display text-[clamp(0.625rem,1.5vw,0.875rem)] text-primary-foreground">
-                  {gameState.value === "PLAY_NEW_ROUND" ? "You won that round" : "Your turn"}
-                </Badge>
-              )}
-              {gameState.context.players[thisPlayerIndex] ? (
-                <div className="w-full">
-                  <div
-                    role="group"
-                    aria-label={`${user.name}'s hand, ${gameState.context.players[thisPlayerIndex].hand.length} cards`}
-                    className={twMerge([
-                      "mx-[clamp(0.25rem,2vw,1rem)] my-[clamp(0.25rem,1.5vw,1rem)] grid min-h-[clamp(6rem,25vw,10rem)] grid-rows-2 justify-items-center gap-[clamp(0.125rem,0.5vw,0.5rem)] overflow-x-auto rounded-[clamp(0.5rem,2vw,1rem)] border p-[clamp(0.25rem,2vw,1rem)]",
-                      isCurrentPlayerFocused
-                        ? "border-gold/50 bg-gold/10 "
-                        : "border-gold/20 bg-card/40",
-                    ])}
-                  >
-                    {gameState.context.players[thisPlayerIndex].hand.map((card, index) => {
-                      const totalCards = gameState.context.players[thisPlayerIndex].hand.length;
-                      const cardsPerRow = Math.ceil(totalCards / 2);
-                      const row = index < cardsPerRow ? 0 : 1;
-                      return (
-                        <CardComponent
-                          key={card.suit + card.value}
-                          className="shrink-0 cursor-pointer transition-all hover:-translate-y-1 md:hover:-translate-y-2"
-                          style={{ gridRow: row + 1, gridColumn: "auto" }}
-                          card={card}
-                          disabled={!isCurrentPlayerTurn}
-                          onClick={() => toggleSelectedCard(card)}
-                          selected={selectedCards.some(
-                            (selectedCard) =>
-                              selectedCard.suit === card.suit && selectedCard.value === card.value,
-                          )}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <div className="mx-[clamp(0.25rem,2vw,1rem)] my-[clamp(0.25rem,1.5vw,1rem)] grid min-h-[clamp(6rem,25vw,10rem)] w-11/12 rounded-[clamp(0.5rem,2vw,1rem)] border border-gold/20 bg-card/40" />
-              )}
-            </div>
-          </div>
+            <HelpCircle />
+          </button>
+          <button
+            className="room-icon"
+            aria-label="Table settings"
+            onClick={() => setPanel("settings")}
+          >
+            <Settings />
+          </button>
         </div>
-
-        {/* Controls */}
-        <div className="flex flex-col items-center justify-center border-t border-gold/20 bg-background/80 p-[clamp(0.5rem,2vw,1.5rem)] backdrop-blur-md">
-          <p
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-            className="mb-1 text-center font-mono text-[clamp(0.55rem,1vw,0.7rem)] text-muted-foreground"
+      </header>
+      <section className="table-shell" aria-label="Big Two game table">
+        <div className="table-felt">
+          <div
+            className={`table-brand ${lastHand?.length ? "brand-subtle" : ""}`}
+            aria-hidden="true"
           >
-            {gameStatus}
-          </p>
-
-          {/* Player info */}
-          <div className="mb-[clamp(0.25rem,1.5vw,1rem)] flex items-center gap-[clamp(0.375rem,1vw,0.75rem)]">
-            <div className="flex h-[clamp(1.75rem,3vw,2.5rem)] w-[clamp(1.75rem,3vw,2.5rem)] items-center justify-center rounded-full bg-gold-gradient shadow-gold-glow">
-              <span className="font-display text-[clamp(0.75rem,1.5vw,1.125rem)] text-primary-foreground">
-                {user.name.charAt(0).toUpperCase()}
-              </span>
-            </div>
-            <div className="text-center">
-              <span className="text-[clamp(0.625rem,1.25vw,0.875rem)] font-medium text-gold">
-                You
-              </span>
-              <span className="ml-[clamp(0.125rem,0.5vw,0.5rem)] font-mono text-[clamp(0.5rem,1vw,0.75rem)] text-muted-foreground">
-                {gameState.context.players[thisPlayerIndex]?.hand.length || 0} cards
-              </span>
-            </div>
+            <span className="brand-spade">♠</span>
+            <span>
+              BIG CARDS
+              <br />
+              BIGGER FRIENDSHIPS
+            </span>
+            <div className="brand-rule">◆</div>
           </div>
-
-          <div className="flex items-center justify-center gap-[clamp(0.375rem,1.5vw,0.75rem)]">
-            <Button
-              variant="outline"
-              size="lg"
-              aria-label="Pass turn"
-              className={twMerge([
-                "border-gold/30 px-[clamp(0.75rem,3vw,2rem)] py-[clamp(0.375rem,1.5vw,0.75rem)] text-[clamp(0.625rem,1.5vw,1rem)] font-display transition-all",
-                isCurrentPlayerTurn
-                  ? "text-foreground hover:border-gold/60 hover:bg-gold/10"
-                  : "cursor-not-allowed border-transparent text-muted-foreground opacity-50",
-              ])}
-              disabled={
-                !isCurrentPlayerTurn ||
-                gameState.value === "ROUND_FIRST_MOVE" ||
-                gameState.value === "PLAY_NEW_ROUND" ||
-                gameState.value === "WAITING_FOR_PLAYERS"
+          {[
+            { index: top, position: "top", avatar: "👨🏻" },
+            { index: left, position: "left", avatar: "👩🏻" },
+            { index: right, position: "right", avatar: "👨🏻‍✈️" },
+          ].map(({ index, position, avatar }) => (
+            <PlayerSeat
+              key={position}
+              name={players[index]?.name ?? "Open seat"}
+              count={players[index]?.hand.length ?? 0}
+              avatar={players[index] ? avatar : "♠"}
+              active={
+                isGameTurnState(currentValue) && index === gameState.context.currentPlayerIndex
               }
-              onClick={handlePassTurn}
-            >
-              Pass
-            </Button>
-            {requestHint && (
-              <Button
-                variant="outline"
-                size="lg"
-                aria-label="Suggest a move"
-                className="border-gold/30 px-[clamp(0.75rem,3vw,2rem)] py-[clamp(0.375rem,1.5vw,0.75rem)] font-display text-[clamp(0.625rem,1.5vw,1rem)] text-gold transition-all hover:border-gold/60 hover:bg-gold/10 disabled:border-transparent"
-                disabled={!isCurrentPlayerTurn}
-                onClick={handleRequestHint}
-              >
-                Hint
-              </Button>
-            )}
-            <Button
-              size="lg"
-              aria-label="Play selected cards"
-              className={twMerge([
-                "bg-gold-gradient px-[clamp(0.75rem,4vw,2.5rem)] py-[clamp(0.375rem,1.5vw,0.75rem)] text-[clamp(0.625rem,1.5vw,1rem)] font-display text-primary-foreground transition-all hover:shadow-gold-glow",
-                (!isCurrentPlayerTurn || !isValidPlay) && "cursor-not-allowed opacity-50",
-              ])}
-              disabled={!isCurrentPlayerTurn || !isValidPlay}
-              onClick={handlePlayCards}
-            >
-              {selectedCardsToPlayText}
-            </Button>
+              thinking={thinkingPlayerId === players[index]?.id}
+              position={position}
+            />
+          ))}
+          <div
+            className="table-play-area"
+            role="region"
+            aria-label={
+              lastHand?.length
+                ? `Cards to beat: ${lastHand.map(getCardAccessibleName).join(", ")}`
+                : "No cards have been played"
+            }
+          >
+            {lastHand?.length ? (
+              <>
+                <span className="pile-label">CARDS TO BEAT</span>
+                <div className="table-pile">
+                  {lastHand.map((card, i) => (
+                    <PlayingCard
+                      key={card.suit + card.value}
+                      card={card}
+                      className="table-card played-card"
+                      style={
+                        {
+                          "--pile-angle": `${(i - (lastHand.length - 1) / 2) * 5}deg`,
+                        } as CSSProperties
+                      }
+                    />
+                  ))}
+                </div>
+              </>
+            ) : null}
           </div>
-          {hintMessage && (
-            <p
-              role="status"
-              aria-live="polite"
-              className="mt-2 text-center text-xs font-medium text-gold"
-            >
-              {hintMessage}
-            </p>
+          <div className="table-prompt" role="status" aria-live="polite">
+            {waiting ? (
+              <>
+                <span>{status}</span>
+                {!me ? (
+                  <button
+                    className="table-small-button"
+                    onClick={() =>
+                      act({ type: "JOIN_GAME", playerId: user.id, playerName: user.name })
+                    }
+                  >
+                    Join Table
+                  </button>
+                ) : host ? (
+                  <button
+                    className="table-small-button"
+                    onClick={() => act({ type: "START_GAME" })}
+                  >
+                    Deal Cards
+                  </button>
+                ) : (
+                  <small>Waiting for the host to deal</small>
+                )}
+              </>
+            ) : (
+              <>
+                <small className={isMyTurn ? "your-turn-text" : ""}>{status}</small>
+                <span>
+                  {guardMessage ||
+                    message ||
+                    (selectedCards.length
+                      ? handType
+                        ? `${handType} selected`
+                        : "Choose a valid combination"
+                      : isMyTurn
+                        ? "Play a card or a valid combination"
+                        : "A good hand is worth the wait.")}
+                </span>
+              </>
+            )}
+          </div>
+          <div
+            className="your-hand"
+            role="group"
+            aria-label={`${user.name}'s hand, ${hand.length} cards`}
+          >
+            {hand.map((card, i) => {
+              const offset = i - (hand.length - 1) / 2;
+              const selected = selectedCards.some(
+                (c) => c.suit === card.suit && c.value === card.value,
+              );
+              return (
+                <PlayingCard
+                  key={card.suit + card.value}
+                  card={card}
+                  className="table-card hand-card"
+                  style={
+                    {
+                      "--card-x": `${offset * Math.min(8.2, 69 / Math.max(hand.length - 1, 1))}cqw`,
+                      "--card-angle": `${offset * Math.min(3.5, 32 / Math.max(hand.length - 1, 1))}deg`,
+                      "--card-y": `${Math.pow(offset / Math.max((hand.length - 1) / 2, 1), 2) * 5}cqw`,
+                      "--card-order": i,
+                    } as CSSProperties
+                  }
+                  selected={selected}
+                  disabled={!isMyTurn}
+                  onClick={() => {
+                    setSelectedCards((previous) =>
+                      selected
+                        ? previous.filter((c) => c.suit !== card.suit || c.value !== card.value)
+                        : [...previous, card],
+                    );
+                    setMessage(undefined);
+                    playSound(selected ? "deselect" : "select");
+                    navigator.vibrate?.(8);
+                  }}
+                />
+              );
+            })}
+          </div>
+          {me && (
+            <PlayerSeat
+              name="You"
+              count={hand.length}
+              avatar="👨🏻"
+              active={isMyTurn}
+              position="you"
+            />
           )}
         </div>
-      </main>
-
-      {/* Toast notification */}
-      {gameState.context.guardMessage && (
-        <div
-          role="alert"
-          aria-live="assertive"
-          className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center"
+      </section>
+      <footer className="table-controls">
+        <button
+          className="table-action"
+          aria-label="Pass turn"
+          disabled={
+            !isMyTurn || currentValue === "ROUND_FIRST_MOVE" || currentValue === "PLAY_NEW_ROUND"
+          }
+          onClick={() => {
+            playSound("deselect");
+            void act({ type: "PASS_TURN", playerId: user.id });
+          }}
         >
-          <div className="rounded-lg bg-destructive/90 px-6 py-3 font-display text-lg text-destructive-foreground shadow-lg backdrop-blur-sm">
-            {gameState.context.guardMessage}
-          </div>
+          Pass
+        </button>
+        <button
+          className="table-action"
+          aria-label={`Sort cards by ${sortBySuit ? "rank" : "suit"}`}
+          onClick={() => {
+            setSortBySuit(!sortBySuit);
+            playSound("select");
+          }}
+        >
+          Sort
+        </button>
+        <button
+          className="table-action action-play"
+          aria-label="Play selected cards"
+          disabled={!isMyTurn || !handType}
+          onClick={() => {
+            const event = createPlayEvent(gameState, user.id, selectedCards);
+            if (event) void act(event);
+          }}
+        >
+          Play
+        </button>
+        <div className="table-footnote">
+          <span>♠ &nbsp; BIG TWO</span>
+          {requestHint && (
+            <button disabled={!isMyTurn} onClick={hint} aria-label="Suggest a move">
+              Need a hint?
+            </button>
+          )}
+          <button onClick={toggleMuted} aria-label={muted ? "Unmute sounds" : "Mute sounds"}>
+            {muted ? <VolumeX /> : <Volume2 />}
+          </button>
         </div>
-      )}
-
-      {/* Game End Dialog */}
-      {gameState.value === "GAME_END" && (
-        <Dialog open>
-          <DialogContent
-            showCloseButton={false}
-            className="max-w-md border-gold/30 bg-card/95 backdrop-blur-xl"
-          >
-            <div className="flex flex-col items-center justify-center gap-6 py-6">
-              {hasPlayerWon && <Confetti />}
-              <DialogTitle
-                className={twMerge([
-                  "font-display text-5xl font-medium bg-gradient-to-r from-gold via-gold-bright to-gold bg-clip-text text-transparent",
-                  !hasPlayerWon && "text-muted-foreground",
-                ])}
-              >
-                {hasPlayerWon ? "Victory" : "Defeat"}
-              </DialogTitle>
-              <DialogDescription className="text-center font-display text-lg italic text-muted-foreground">
-                {hasPlayerWon
-                  ? "You played all your cards first."
-                  : `${gameState.context.winner?.name ?? "An opponent"} won. Better luck next time.`}
-              </DialogDescription>
-
-              {isThisPlayerTheCreator ? (
-                <Button
-                  size="lg"
+      </footer>
+      <Dialog
+        open={panel !== null}
+        onOpenChange={(open) => {
+          if (!open) setPanel(null);
+        }}
+      >
+        <DialogContent className="table-dialog">
+          <DialogTitle>
+            {panel === "menu"
+              ? "Your table"
+              : panel === "settings"
+                ? "Table settings"
+                : "A little table wisdom"}
+          </DialogTitle>
+          <DialogDescription>
+            {panel === "help"
+              ? "Be the first to play all your cards. Play singles, pairs, triples, or five-card poker hands. Match the previous combination with a stronger one, or pass. Ranks run from 3 up to 2; suits from diamonds, clubs, hearts to spades. The first play must include 3 ♦."
+              : panel === "settings"
+                ? "Make yourself comfortable. Sound starts after your first interaction."
+                : `${tableLabel} · ${players.length} players at the table`}
+          </DialogDescription>
+          {panel === "settings" && (
+            <button className="table-small-button" onClick={toggleMuted}>
+              {muted ? "Turn sound on" : "Turn sound off"}
+            </button>
+          )}
+          {panel === "menu" && (
+            <>
+              {host && (
+                <button
+                  className="table-small-button"
                   aria-label="Start a new game"
-                  className="bg-gold-gradient px-10 font-display text-lg text-primary-foreground hover:shadow-gold-glow"
-                  onClick={handleResetGame}
+                  onClick={() => {
+                    void act({ type: "RESET_GAME" });
+                    setPanel(null);
+                  }}
                 >
                   New Game
-                </Button>
-              ) : (
-                <div className="flex flex-col items-center gap-4">
-                  <p className="text-muted-foreground">Waiting for new game</p>
-                  <div
-                    aria-hidden="true"
-                    className="h-6 w-6 animate-spin rounded-full border-2 border-gold border-t-transparent"
-                  />
-                  <Button variant="outline" asChild className="border-gold/30">
-                    <a href="/">Return Home</a>
-                  </Button>
-                </div>
+                </button>
               )}
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      <style>{`
-        .game-room {
-          height: 100vh;
-          overflow: hidden;
-        }
-
-        .table-area {
-          height: 100%;
-          min-height: 0;
-          max-height: 850px;
-          max-width: min(900px, 95vw);
-          width: 100%;
-          border-radius: clamp(12px, 3vw, 24px);
-          display: grid;
-          background: radial-gradient(ellipse at center, hsl(152 48% 18% / 0.8) 0%, hsl(155 55% 11% / 0.9) 70%, hsl(150 40% 6% / 0.95) 100%);
-          justify-items: center;
-          align-items: end;
-          margin: 0 auto;
-          grid-template-areas:
-            "     .            player-top           .      "
-            "player-left      table-center    player-right "
-            "current-player  current-player  current-player";
-          position: relative;
-          padding: clamp(0.25rem, 2vw, 1rem);
-        }
-
-        .current-player {
-          grid-area: current-player;
-          width: 100%;
-          overflow: hidden;
-        }
-
-        .played-cards-center {
-          position: absolute;
-          border-radius: clamp(8px, 2vw, 16px);
-          top: clamp(30%, 35%, 40%);
-          left: 50%;
-          transform: translate(-50%, -50%);
-          min-width: clamp(120px, 30vw, 200px);
-          min-height: clamp(100px, 25vw, 150px);
-          display: grid;
-          align-items: center;
-          justify-items: center;
-          padding: clamp(0.5rem, 2vw, 1rem);
-        }
-
-        .top-player-position {
-          position: absolute;
-          top: clamp(0.25rem, 1.5vw, 1rem);
-          left: 50%;
-          transform: translateX(-50%);
-          width: auto;
-          min-width: clamp(120px, 35vw, 200px);
-        }
-
-        .left-player-wrapper {
-          position: absolute;
-          left: clamp(0.25rem, 1.5vw, 1rem);
-          top: 40%;
-          transform: translateY(-50%);
-        }
-
-        .left-player-position {
-          max-height: clamp(200px, 35vh, 280px);
-        }
-
-        .right-player-wrapper {
-          position: absolute;
-          right: clamp(0.25rem, 1.5vw, 1rem);
-          top: 40%;
-          transform: translateY(-50%);
-        }
-
-        .right-player-position {
-          max-height: clamp(200px, 35vh, 280px);
-        }
-      `}</style>
-    </>
+              <a className="table-small-button" href="/">
+                Leave table
+              </a>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={currentValue === "GAME_END"}>
+        <DialogContent showCloseButton={false} className="table-dialog">
+          {winner?.id === user.id && <Confetti />}
+          <DialogTitle>
+            {winner?.id === user.id
+              ? "Beautifully played."
+              : `${winner?.name ?? "An opponent"} wins!`}
+          </DialogTitle>
+          <DialogDescription>
+            {winner?.id === user.id
+              ? "Every card played. The table is yours."
+              : "Good cards. Great company. Ready for another?"}
+          </DialogDescription>
+          {host ? (
+            <button
+              className="table-small-button"
+              aria-label="Start a new game"
+              onClick={() => act({ type: "RESET_GAME" })}
+            >
+              Play again
+            </button>
+          ) : (
+            <a className="table-small-button" href="/">
+              Return home
+            </a>
+          )}
+        </DialogContent>
+      </Dialog>
+    </main>
   );
 };
