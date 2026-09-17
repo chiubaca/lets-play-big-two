@@ -18,6 +18,8 @@ type GameRoomProps = {
   tableLabel: string;
   thinkingPlayerId?: string;
   user: GameRoomUser;
+  sharedDevice?: boolean;
+  hideHand?: boolean;
 };
 
 function PlayerSeat({
@@ -74,6 +76,8 @@ export const GameRoom = ({
   tableLabel,
   thinkingPlayerId,
   user,
+  sharedDevice = false,
+  hideHand = false,
 }: GameRoomProps) => {
   const [selectedCards, setSelectedCards] = useState<Card[]>([]);
   const [message, setMessage] = useState<string>();
@@ -83,14 +87,14 @@ export const GameRoom = ({
   const { playSound, muted, toggleMuted } = useTableAudio();
   const currentId = gameState?.context.players[gameState.context.currentPlayerIndex]?.id;
   const currentValue = gameState?.value;
-  const isMyTurn = currentId === user.id && isGameTurnState(currentValue);
+  const isMyTurn = !hideHand && currentId === user.id && isGameTurnState(currentValue);
   const pile = gameState?.context.cardPile;
   const lastPlayKey = JSON.stringify(pile?.at(-1) ?? []);
 
   useEffect(() => {
     setSelectedCards([]);
     setMessage(undefined);
-  }, [currentId, currentValue]);
+  }, [currentId, currentValue, hideHand, user.id]);
   useEffect(() => {
     if (isMyTurn) playSound("turn");
   }, [isMyTurn, playSound]);
@@ -114,13 +118,13 @@ export const GameRoom = ({
   const myIndex = players.findIndex((p) => p.id === user.id);
   const [, left, top, right] = makePlayerOrder(myIndex);
   const me = players[myIndex];
-  const host = players[0]?.id === user.id;
+  const host = sharedDevice || players[0]?.id === user.id;
   const waiting = currentValue === "WAITING_FOR_PLAYERS";
   const handType = detectHandType(selectedCards);
   const lastHand = pile?.at(-1);
   const ranks = ["3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A", "2"];
   const suits = ["DIAMOND", "CLUB", "HEART", "SPADE"];
-  const hand = [...(me?.hand ?? [])].sort((a, b) =>
+  const hand = [...(hideHand ? [] : (me?.hand ?? []))].sort((a, b) =>
     sortBySuit
       ? suits.indexOf(a.suit) - suits.indexOf(b.suit) ||
         ranks.indexOf(a.value) - ranks.indexOf(b.value)
@@ -176,7 +180,9 @@ export const GameRoom = ({
           }}
         >
           <span>
-            <small>{requestHint ? "Practice table" : "Room Code"}</small>
+            <small>
+              {sharedDevice ? "Shared device" : requestHint ? "Practice table" : "Room Code"}
+            </small>
             <strong>{tableLabel}</strong>
           </span>
           {copied ? <Check /> : <Copy />}
@@ -340,8 +346,8 @@ export const GameRoom = ({
           </div>
           {me && (
             <PlayerSeat
-              name="You"
-              count={hand.length}
+              name={sharedDevice ? user.name : "You"}
+              count={me.hand.length}
               avatar="👨🏻"
               active={isMyTurn}
               position="you"
@@ -445,14 +451,14 @@ export const GameRoom = ({
       </Dialog>
       <Dialog open={currentValue === "GAME_END"}>
         <DialogContent showCloseButton={false} className="table-dialog">
-          {winner?.id === user.id && <Confetti />}
+          {(sharedDevice || winner?.id === user.id) && <Confetti />}
           <DialogTitle>
-            {winner?.id === user.id
+            {!sharedDevice && winner?.id === user.id
               ? "Beautifully played."
               : `${winner?.name ?? "An opponent"} wins!`}
           </DialogTitle>
           <DialogDescription>
-            {winner?.id === user.id
+            {!sharedDevice && winner?.id === user.id
               ? "Every card played. The table is yours."
               : "Good cards. Great company. Ready for another?"}
           </DialogDescription>

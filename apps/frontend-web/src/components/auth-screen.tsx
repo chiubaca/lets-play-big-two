@@ -284,7 +284,7 @@ export function AuthScreen() {
           >
             <Link to="/offline">
               <Bot className="mr-2 h-4 w-4 text-gold" />
-              Play solo without an account
+              Play offline without an account
             </Link>
           </Button>
 

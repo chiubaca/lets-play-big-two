@@ -32,6 +32,8 @@ const OFFLINE_PLAYERS: GameRoomUser[] = [
 
 type GameActor = ActorRefFrom<typeof bigTwoGameMachine>;
 
+export type OfflinePlayer = GameRoomUser & { isBot?: boolean };
+
 function chooseMove(gameState: BigTwoGameMachineSnapshot, hand: Card[]) {
   return chooseBotMove({
     hand,
@@ -47,16 +49,32 @@ export function useOfflineGame() {
   const botTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [gameState, setGameState] = useState<BigTwoGameMachineSnapshot>();
   const [thinkingPlayerId, setThinkingPlayerId] = useState<string>();
+  const playersRef = useRef<OfflinePlayer[]>([]);
+  const [readyPlayerId, setReadyPlayerId] = useState<string>();
 
-  const start = useCallback(() => {
+  const start = useCallback((players?: OfflinePlayer[]) => {
     if (actorRef.current) return;
+    playersRef.current =
+      players ??
+      OFFLINE_PLAYERS.map((player) => ({
+        ...player,
+        isBot: player.id !== OFFLINE_HUMAN.id,
+      }));
 
     const actor = createActor(bigTwoGameMachine);
     actorRef.current = actor;
-    subscriptionRef.current = actor.subscribe((snapshot) => setGameState(snapshot));
+    let previousPlayerId: string | undefined;
+    subscriptionRef.current = actor.subscribe((snapshot) => {
+      const currentPlayerId = snapshot.context.players[snapshot.context.currentPlayerIndex]?.id;
+      if (currentPlayerId !== previousPlayerId || !isGameTurnState(snapshot.value)) {
+        setReadyPlayerId(undefined);
+      }
+      previousPlayerId = currentPlayerId;
+      setGameState(snapshot);
+    });
     actor.start();
 
-    for (const player of OFFLINE_PLAYERS) {
+    for (const player of playersRef.current) {
       actor.send({
         type: "JOIN_GAME",
         playerId: player.id,
@@ -108,7 +126,10 @@ export function useOfflineGame() {
     }
 
     const currentPlayer = gameState.context.players[gameState.context.currentPlayerIndex];
-    if (!currentPlayer || currentPlayer.id === OFFLINE_HUMAN.id) {
+    if (
+      !currentPlayer ||
+      !playersRef.current.find((player) => player.id === currentPlayer.id)?.isBot
+    ) {
       setThinkingPlayerId(undefined);
       return;
     }
@@ -140,6 +161,21 @@ export function useOfflineGame() {
 
   return {
     gameState,
+    readyPlayerId,
+    ready: () => {
+      const snapshot = actorRef.current?.getSnapshot();
+      if (snapshot && isGameTurnState(snapshot.value)) {
+        const player = playersRef.current.find(
+          (entry) => entry.id === snapshot.context.players[snapshot.context.currentPlayerIndex]?.id,
+        );
+        if (player && !player.isBot) setReadyPlayerId(player.id);
+      }
+    },
+    isBotTurn:
+      playersRef.current.find(
+        (player) =>
+          player.id === gameState?.context.players[gameState.context.currentPlayerIndex]?.id,
+      )?.isBot ?? false,
     requestHint,
     send,
     start,

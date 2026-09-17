@@ -171,17 +171,17 @@ export function WelcomeScreen({ session }: WelcomeScreenProps) {
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <Bot className="h-6 w-6 text-gold" />
-                  <h3 className="font-display text-2xl text-gold">Solo</h3>
+                  <h3 className="font-display text-2xl text-gold">Offline</h3>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Practice instantly against three bots.
+                  Play solo or pass one device around with friends.
                 </p>
                 <Button
                   onClick={() => navigate({ to: "/offline" })}
                   variant="outline"
                   className="w-full border-gold/30 font-display text-foreground hover:border-gold/50 hover:bg-gold/10"
                 >
-                  Play solo
+                  Play offline
                 </Button>
               </div>
             </div>

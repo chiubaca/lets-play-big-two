@@ -3,6 +3,8 @@ import { ArrowLeft, Users, Bot, Sparkles } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { GameRoom } from "~/components/game-room";
 import { OFFLINE_HUMAN, useOfflineGame } from "~/components/game-room/use-offline-game";
+import { useState } from "react";
+import { PassAndPlay } from "~/components/game-room/pass-and-play.tsx";
 
 export const Route = createFileRoute("/offline/")({
   component: RouteComponent,
@@ -10,7 +12,10 @@ export const Route = createFileRoute("/offline/")({
 
 function RouteComponent() {
   const navigate = useNavigate();
+  const [passAndPlay, setPassAndPlay] = useState(false);
   const { gameState, requestHint, send, start, thinkingPlayerId } = useOfflineGame();
+
+  if (passAndPlay) return <PassAndPlay onBack={() => setPassAndPlay(false)} />;
 
   if (gameState) {
     return (
@@ -51,9 +56,9 @@ function RouteComponent() {
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gold-gradient shadow-gold-glow">
               <Bot className="h-8 w-8 text-primary-foreground" />
             </div>
-            <h1 className="font-display text-4xl text-gold text-shadow-gold">Solo Mode</h1>
+            <h1 className="font-display text-4xl text-gold text-shadow-gold">Offline Play</h1>
             <p className="text-lg text-muted-foreground">
-              Practice against AI opponents on a single device
+              Practice solo or share a table with friends on one device
             </p>
           </div>
 
@@ -81,10 +86,23 @@ function RouteComponent() {
             <Button
               size="lg"
               className="bg-gold-gradient px-12 font-display text-lg text-primary-foreground transition-all hover:shadow-gold-glow"
-              onClick={start}
+              onClick={() => start()}
             >
               Start Solo Game
             </Button>
+            <div className="mt-6 rounded-2xl border border-gold/30 bg-card/50 p-6">
+              <h2 className="font-display text-2xl text-gold">Pass &amp; Play</h2>
+              <p className="mt-2 mb-4 text-sm text-muted-foreground">
+                Two to four friends. One device. Private hands, with optional AI opponents.
+              </p>
+              <Button
+                variant="outline"
+                className="border-gold/30"
+                onClick={() => setPassAndPlay(true)}
+              >
+                Set up Pass &amp; Play
+              </Button>
+            </div>
           </div>
 
           {/* Game details */}
