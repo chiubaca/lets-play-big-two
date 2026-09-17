@@ -4,6 +4,7 @@ import type { BigTwoGameMachineSnapshot, Card, GameEvent } from "@big-two/game-s
 import { detectHandType } from "@big-two/game-core";
 import { Confetti } from "../confetti";
 import { Card as PlayingCard, getCardAccessibleName } from "./card";
+import { DEFAULT_DEV_LAYOUT, GameRoomDevTools, useViewportMetrics } from "./game-room-dev-tools";
 import { makePlayerOrder } from "./helpers/make-player-order";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
 import { createPlayEvent, isGameTurnState } from "./game-room-session";
@@ -84,7 +85,14 @@ export const GameRoom = ({
   const [sortBySuit, setSortBySuit] = useState(false);
   const [panel, setPanel] = useState<"menu" | "settings" | "help" | null>(null);
   const [copied, setCopied] = useState(false);
+  const [fanOut, setFanOut] = useState<number>(DEFAULT_DEV_LAYOUT.fanOut);
+  const [cardArc, setCardArc] = useState<number>(DEFAULT_DEV_LAYOUT.arc);
+  const [selectedLiftOverride, setSelectedLiftOverride] = useState<number>();
+  const [showGuides, setShowGuides] = useState<boolean>(DEFAULT_DEV_LAYOUT.showGuides);
+  const [showCardOrder, setShowCardOrder] = useState<boolean>(DEFAULT_DEV_LAYOUT.showCardOrder);
+  const [motion, setMotion] = useState<boolean>(DEFAULT_DEV_LAYOUT.motion);
   const { playSound, muted, toggleMuted } = useTableAudio();
+  const viewport = useViewportMetrics();
   const currentId = gameState?.context.players[gameState.context.currentPlayerIndex]?.id;
   const currentValue = gameState?.value;
   const isMyTurn = !hideHand && currentId === user.id && isGameTurnState(currentValue);
@@ -159,8 +167,32 @@ export const GameRoom = ({
     playSound("select");
   };
 
+  const resetDevLayout = () => {
+    setFanOut(DEFAULT_DEV_LAYOUT.fanOut);
+    setCardArc(DEFAULT_DEV_LAYOUT.arc);
+    setSelectedLiftOverride(undefined);
+    setShowGuides(DEFAULT_DEV_LAYOUT.showGuides);
+    setShowCardOrder(DEFAULT_DEV_LAYOUT.showCardOrder);
+    setMotion(DEFAULT_DEV_LAYOUT.motion);
+  };
+
+  const devClassName = [
+    showGuides ? "dev-show-guides" : "",
+    showCardOrder ? "dev-show-card-order" : "",
+    motion ? "" : "dev-reduce-motion",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const selectedLift =
+    selectedLiftOverride ??
+    (viewport.width > 0 && viewport.width <= 600 ? 20 : DEFAULT_DEV_LAYOUT.selectedLift);
+  const devStyle =
+    selectedLiftOverride === undefined
+      ? undefined
+      : ({ "--dev-selected-lift": `${selectedLiftOverride}px` } as CSSProperties);
+
   return (
-    <main className="game-room">
+    <main className={`game-room ${devClassName}`} style={devStyle}>
       <div className="room-wall" aria-hidden="true" />
       <header className="room-header">
         <button className="room-icon" aria-label="Open table menu" onClick={() => setPanel("menu")}>
@@ -322,9 +354,9 @@ export const GameRoom = ({
                   className="table-card hand-card"
                   style={
                     {
-                      "--card-x": `${offset * Math.min(8.2, 69 / Math.max(hand.length - 1, 1))}cqw`,
-                      "--card-angle": `${offset * Math.min(3.5, 32 / Math.max(hand.length - 1, 1))}deg`,
-                      "--card-y": `${Math.pow(offset / Math.max((hand.length - 1) / 2, 1), 2) * 5}cqw`,
+                      "--card-x": `${offset * Math.min(8.2, 69 / Math.max(hand.length - 1, 1)) * (fanOut / 100)}cqw`,
+                      "--card-angle": `${offset * Math.min(3.5, 32 / Math.max(hand.length - 1, 1)) * (fanOut / 100)}deg`,
+                      "--card-y": `${Math.pow(offset / Math.max((hand.length - 1) / 2, 1), 2) * cardArc * (fanOut / 100)}cqw`,
                       "--card-order": i,
                     } as CSSProperties
                   }
@@ -402,6 +434,25 @@ export const GameRoom = ({
           </button>
         </div>
       </footer>
+      {import.meta.env.DEV && (
+        <GameRoomDevTools
+          viewport={viewport}
+          handCount={hand.length}
+          fanOut={fanOut}
+          arc={cardArc}
+          selectedLift={selectedLift}
+          showGuides={showGuides}
+          showCardOrder={showCardOrder}
+          motion={motion}
+          onFanOutChange={setFanOut}
+          onArcChange={setCardArc}
+          onSelectedLiftChange={setSelectedLiftOverride}
+          onShowGuidesChange={setShowGuides}
+          onShowCardOrderChange={setShowCardOrder}
+          onMotionChange={setMotion}
+          onReset={resetDevLayout}
+        />
+      )}
       <Dialog
         open={panel !== null}
         onOpenChange={(open) => {

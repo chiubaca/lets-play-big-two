@@ -468,13 +468,60 @@
   color: #111510;
 }
 .game-room .hand-card[aria-pressed="true"] {
-  transform: translateX(calc(-50% + var(--card-x))) translateY(calc(var(--card-y) - 27px))
-    rotate(var(--card-angle));
+  transform: translateX(calc(-50% + var(--card-x)))
+    translateY(calc(var(--card-y) - var(--dev-selected-lift, 27px))) rotate(var(--card-angle));
   border-color: #ffe39a;
   box-shadow:
     0 0 0 2px #edc675,
     0 0 22px #e9bb5b55,
     0 14px 16px #0008;
+}
+.game-room.dev-show-guides .your-hand {
+  outline: 1px dashed #f4d58499;
+  outline-offset: 4px;
+}
+.game-room.dev-show-guides .table-play-area,
+.game-room.dev-show-guides .table-prompt {
+  outline: 1px dashed #8fd4a5aa;
+  outline-offset: 5px;
+}
+.game-room.dev-show-guides .your-hand::before {
+  content: "HAND BOUNDS";
+  position: absolute;
+  top: -17px;
+  left: 0;
+  color: #f4d584;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  pointer-events: none;
+}
+.game-room.dev-show-card-order .your-hand {
+  counter-reset: hand-card;
+}
+.game-room.dev-show-card-order .hand-card::before {
+  content: counter(hand-card);
+  counter-increment: hand-card;
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  z-index: 2;
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border-radius: 50%;
+  background: #173d28e8;
+  color: #f4d584;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.game-room.dev-reduce-motion .hand-card,
+.game-room.dev-reduce-motion .table-pile .played-card {
+  animation: none;
+  transition: none;
 }
 .game-room .hand-card:active:not(:disabled) {
   transform: translateX(calc(-50% + var(--card-x))) translateY(calc(var(--card-y) - 17px))
@@ -808,8 +855,8 @@
     display: none;
   }
   .game-room .hand-card[aria-pressed="true"] {
-    transform: translateX(calc(-50% + var(--card-x))) translateY(calc(var(--card-y) - 20px))
-      rotate(var(--card-angle));
+    transform: translateX(calc(-50% + var(--card-x)))
+      translateY(calc(var(--card-y) - var(--dev-selected-lift, 20px))) rotate(var(--card-angle));
   }
   .table-play-area {
     top: 34%;
@@ -845,6 +892,184 @@
     gap: 18px;
     margin-top: 0;
   }
+}
+
+/* Developer-only layout inspector. It is mounted only by Vite's dev build. */
+.game-room-dev-tools {
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 50;
+  width: min(300px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid #8da45a;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #12261aee, #06130cee 80%);
+  box-shadow:
+    0 14px 30px #0009,
+    inset 0 1px #d5e18b2e;
+  color: #dfe8bc;
+  font-family: "IBM Plex Mono", monospace;
+  backdrop-filter: blur(15px);
+}
+.game-room-dev-trigger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 0;
+  color: #f4d584;
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.game-room-dev-trigger > svg {
+  width: 15px;
+  height: 15px;
+}
+.game-room-dev-trigger > svg:last-child {
+  margin-left: auto;
+  transition: transform 0.2s;
+}
+.game-room-dev-tools:not(.is-open) .game-room-dev-trigger > svg:last-child {
+  transform: rotate(-90deg);
+}
+.game-room-dev-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #9ed26d;
+  box-shadow: 0 0 9px #9ed26d;
+}
+.game-room-dev-panel {
+  max-height: min(76svh, 560px);
+  overflow-y: auto;
+  border-top: 1px solid #8da45a44;
+  padding: 12px;
+  scrollbar-color: #718d4e #06130c;
+}
+.game-room-dev-section + .game-room-dev-section {
+  margin-top: 16px;
+  padding-top: 15px;
+  border-top: 1px solid #8da45a35;
+}
+.game-room-dev-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  color: #f4d584;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+.game-room-dev-section-heading > svg {
+  width: 14px;
+  height: 14px;
+  color: #94b276;
+}
+.game-room-dev-live-label {
+  color: #9ed26d;
+  font-size: 8px;
+}
+.game-room-dev-viewport {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #f2f4dc;
+}
+.game-room-dev-viewport svg {
+  width: 18px;
+  height: 18px;
+  color: #9ed26d;
+}
+.game-room-dev-viewport strong {
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+.game-room-dev-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+  margin-top: 7px;
+  color: #8ea18b;
+  font-size: 8px;
+  line-height: 1.5;
+}
+.game-room-dev-range {
+  display: block;
+  margin-top: 13px;
+}
+.game-room-dev-range-header {
+  display: flex;
+  justify-content: space-between;
+  color: #dfe8bc;
+  font-size: 10px;
+}
+.game-room-dev-range-header output {
+  color: #f4d584;
+}
+.game-room-dev-range input[type="range"] {
+  display: block;
+  width: 100%;
+  height: 18px;
+  margin: 5px 0 0;
+  accent-color: #d6a848;
+  cursor: ew-resize;
+}
+.game-room-dev-range-hint {
+  display: block;
+  color: #839684;
+  font-size: 8px;
+}
+.game-room-dev-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 28px;
+  color: #cbd8b2;
+  font-size: 10px;
+  cursor: pointer;
+}
+.game-room-dev-toggle input {
+  width: 14px;
+  height: 14px;
+  accent-color: #d6a848;
+}
+.game-room-dev-reset {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 16px;
+  padding: 8px;
+  border: 1px solid #8da45a66;
+  border-radius: 8px;
+  color: #b8c99c;
+  background: #0b1d12;
+  font: inherit;
+  font-size: 9px;
+  cursor: pointer;
+}
+.game-room-dev-reset svg {
+  width: 13px;
+  height: 13px;
+}
+.game-room-dev-tools button:hover {
+  filter: brightness(1.2);
+}
+.game-room-dev-tools button:focus-visible,
+.game-room-dev-tools input:focus-visible {
+  outline: 2px solid #fff0b5;
+  outline-offset: 2px;
 }
 @media (max-height: 700px) and (min-width: 601px) {
   .game-room {
@@ -1114,6 +1339,13 @@
   .table-footnote {
     font-size: 8px;
     margin-top: 0;
+  }
+}
+@media (max-width: 600px) {
+  .game-room-dev-tools {
+    top: max(62px, env(safe-area-inset-top));
+    right: max(10px, env(safe-area-inset-right));
+    width: min(280px, calc(100vw - 20px));
   }
 }
 @media (prefers-reduced-motion: reduce) {
