@@ -68,7 +68,7 @@ function RouteComponent() {
               <Users className="mx-auto mb-3 h-8 w-8 text-gold" />
               <h3 className="mb-2 font-display text-xl text-gold">4 Players</h3>
               <p className="text-sm text-muted-foreground">
-                You versus 3 AI opponents making quick, deterministic decisions
+                You versus two quick bots and Jev, a TypeSafe-powered strategic opponent
               </p>
             </div>
 

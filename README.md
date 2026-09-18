@@ -2,6 +2,10 @@
 
 A web-based Big Two card game.
 
+Solo play includes a TypeSafe Jev-powered opponent. Configure `TYPESAFE_API_KEY` in
+`apps/backend/.dev.vars`; if Jev is unavailable, the opponent falls back to the legal
+deterministic strategy.
+
 ## Prerequisites
 
 - Node.js >= 22.12.0

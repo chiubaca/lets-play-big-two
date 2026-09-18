@@ -2,7 +2,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { Copy, Menu, Settings, Volume2, VolumeX, HelpCircle, Check } from "lucide-react";
 import type { BigTwoGameMachineSnapshot, Card, GameEvent } from "@big-two/game-state-machine";
 import { detectHandType } from "@big-two/game-core";
-import { Confetti } from "../confetti";
+import { Confetti } from "../Confetti";
 import { Card as PlayingCard, getCardAccessibleName } from "./card";
 import { makePlayerOrder } from "./helpers/make-player-order";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";

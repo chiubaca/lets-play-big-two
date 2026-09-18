@@ -27,6 +27,16 @@
       "remote": true,
     },
   ],
+  "ratelimits": [
+    {
+      "name": "JEV_MOVE_RATE_LIMITER",
+      "namespace_id": "284611",
+      "simple": {
+        "limit": 30,
+        "period": 60,
+      },
+    },
+  ],
   "observability": {
     "enabled": true,
   },

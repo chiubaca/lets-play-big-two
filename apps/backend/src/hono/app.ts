@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { sValidator } from "@hono/standard-validator";
 import { cors } from "hono/cors";
+import { bodyLimit } from "hono/body-limit";
 import { nanoid } from "nanoid";
 import { eq } from "drizzle-orm";
 
@@ -9,6 +10,8 @@ import { roomTable } from "@big-two/data-ops/drizzle/schema";
 import { gameEventSchema } from "@big-two/game-state-machine";
 
 import { auth } from "../lib/auth";
+import { chooseJevBotMoveWithFallback } from "../lib/jev-bot";
+import { jevBotMoveRequestSchema } from "../lib/jev-bot.schema";
 
 export const App = new Hono<{ Bindings: Cloudflare.Env }>()
   .use(
@@ -26,6 +29,29 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
   .get("/", async (c) => {
     return c.text("sup");
   })
+  .post(
+    "/api/bot/jev/move",
+    bodyLimit({
+      maxSize: 32 * 1024,
+      onError: (c) => c.json({ error: "Request body is too large" }, 413),
+    }),
+    sValidator("json", jevBotMoveRequestSchema, (result, c) => {
+      if (!result.success) {
+        return c.json({ error: "Validation failed", issues: result.error }, 400);
+      }
+    }),
+    async (c) => {
+      const rateLimit = await c.env.JEV_MOVE_RATE_LIMITER.limit({
+        key: c.req.header("CF-Connecting-IP") ?? "local-development",
+      });
+      if (!rateLimit.success) return c.json({ error: "Too many Jev move requests" }, 429);
+
+      const decision = await chooseJevBotMoveWithFallback(c.req.valid("json"), {
+        apiKey: c.env.TYPESAFE_API_KEY,
+      });
+      return c.json(decision, 200, { "Cache-Control": "no-store" });
+    },
+  )
   .get("/api/room/:roomId", async (c) => {
     const roomId = c.req.param().roomId;
     if (!roomId) {
