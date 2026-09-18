@@ -1,15 +1,24 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useEffect, useState, type CSSProperties } from "react";
 import { Copy, Menu, Settings, Volume2, VolumeX, HelpCircle, Check } from "lucide-react";
 import type { BigTwoGameMachineSnapshot, Card, GameEvent } from "@big-two/game-state-machine";
 import { detectHandType } from "@big-two/game-core";
 import { Confetti } from "../confetti";
 import { Card as PlayingCard, getCardAccessibleName } from "./card";
-import { DEFAULT_DEV_LAYOUT, GameRoomDevTools, useViewportMetrics } from "./game-room-dev-tools";
+import { DEFAULT_DEV_LAYOUT } from "./game-room-dev-layout";
 import { makePlayerOrder } from "./helpers/make-player-order";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
 import { createPlayEvent, isGameTurnState } from "./game-room-session";
 import { useTableAudio } from "./use-table-audio";
 import "./game-room.css";
+
+const LOCAL_DEV_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "local.bigtwo.com"]);
+const LazyGameRoomDevTools = import.meta.env.DEV
+  ? lazy(() =>
+      import("./game-room-dev-tools").then(({ GameRoomDevTools }) => ({
+        default: GameRoomDevTools,
+      })),
+    )
+  : null;
 
 export type GameRoomUser = { id: string; name: string };
 type GameRoomProps = {
@@ -92,7 +101,7 @@ export const GameRoom = ({
   const [showCardOrder, setShowCardOrder] = useState<boolean>(DEFAULT_DEV_LAYOUT.showCardOrder);
   const [motion, setMotion] = useState<boolean>(DEFAULT_DEV_LAYOUT.motion);
   const { playSound, muted, toggleMuted } = useTableAudio();
-  const viewport = useViewportMetrics();
+  const [localDevTools, setLocalDevTools] = useState(false);
   const currentId = gameState?.context.players[gameState.context.currentPlayerIndex]?.id;
   const currentValue = gameState?.value;
   const isMyTurn = !hideHand && currentId === user.id && isGameTurnState(currentValue);
@@ -120,6 +129,14 @@ export const GameRoom = ({
     const timer = setTimeout(() => setCopied(false), 2000);
     return () => clearTimeout(timer);
   }, [copied]);
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    setLocalDevTools(
+      import.meta.env.DEV &&
+        LOCAL_DEV_HOSTS.has(window.location.hostname) &&
+        query.get("dev-tools") === "true",
+    );
+  }, []);
 
   if (!gameState) return <main className="game-room room-loading">Taking your seat…</main>;
   const { players, guardMessage, winner } = gameState.context;
@@ -183,9 +200,7 @@ export const GameRoom = ({
   ]
     .filter(Boolean)
     .join(" ");
-  const selectedLift =
-    selectedLiftOverride ??
-    (viewport.width > 0 && viewport.width <= 600 ? 20 : DEFAULT_DEV_LAYOUT.selectedLift);
+  const selectedLift = selectedLiftOverride ?? DEFAULT_DEV_LAYOUT.selectedLift;
   const devStyle =
     selectedLiftOverride === undefined
       ? undefined
@@ -434,25 +449,26 @@ export const GameRoom = ({
           </button>
         </div>
       </footer>
-      {import.meta.env.DEV && (
-        <GameRoomDevTools
-          viewport={viewport}
-          handCount={hand.length}
-          fanOut={fanOut}
-          arc={cardArc}
-          selectedLift={selectedLift}
-          showGuides={showGuides}
-          showCardOrder={showCardOrder}
-          motion={motion}
-          onFanOutChange={setFanOut}
-          onArcChange={setCardArc}
-          onSelectedLiftChange={setSelectedLiftOverride}
-          onShowGuidesChange={setShowGuides}
-          onShowCardOrderChange={setShowCardOrder}
-          onMotionChange={setMotion}
-          onReset={resetDevLayout}
-        />
-      )}
+      {import.meta.env.DEV && localDevTools && LazyGameRoomDevTools ? (
+        <Suspense fallback={null}>
+          <LazyGameRoomDevTools
+            handCount={hand.length}
+            fanOut={fanOut}
+            arc={cardArc}
+            selectedLift={selectedLift}
+            showGuides={showGuides}
+            showCardOrder={showCardOrder}
+            motion={motion}
+            onFanOutChange={setFanOut}
+            onArcChange={setCardArc}
+            onSelectedLiftChange={setSelectedLiftOverride}
+            onShowGuidesChange={setShowGuides}
+            onShowCardOrderChange={setShowCardOrder}
+            onMotionChange={setMotion}
+            onReset={resetDevLayout}
+          />
+        </Suspense>
+      ) : null}
       <Dialog
         open={panel !== null}
         onOpenChange={(open) => {

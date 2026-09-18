@@ -927,6 +927,13 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
   cursor: pointer;
+  touch-action: none;
+}
+.game-room-dev-tools.is-dragging {
+  user-select: none;
+}
+.game-room-dev-tools.is-dragging .game-room-dev-trigger {
+  cursor: grabbing;
 }
 .game-room-dev-trigger > svg {
   width: 15px;

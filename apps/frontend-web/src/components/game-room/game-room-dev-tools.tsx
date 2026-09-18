@@ -1,5 +1,5 @@
 import { ChevronDown, Crosshair, Monitor, RotateCcw, SlidersHorizontal } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
 
 export type ViewportMetrics = {
   width: number;
@@ -9,14 +9,22 @@ export type ViewportMetrics = {
   devicePixelRatio: number;
 };
 
-export const DEFAULT_DEV_LAYOUT = {
-  fanOut: 100,
-  arc: 5,
-  selectedLift: 27,
-  showGuides: false,
-  showCardOrder: false,
-  motion: true,
-} as const;
+export type GameRoomDevToolsProps = {
+  handCount: number;
+  fanOut: number;
+  arc: number;
+  selectedLift: number;
+  showGuides: boolean;
+  showCardOrder: boolean;
+  motion: boolean;
+  onFanOutChange: (value: number) => void;
+  onArcChange: (value: number) => void;
+  onSelectedLiftChange: (value: number) => void;
+  onShowGuidesChange: (value: boolean) => void;
+  onShowCardOrderChange: (value: boolean) => void;
+  onMotionChange: (value: boolean) => void;
+  onReset: () => void;
+};
 
 const EMPTY_VIEWPORT: ViewportMetrics = {
   width: 0,
@@ -120,10 +128,8 @@ function Toggle({ label, checked, onChange }: ToggleProps) {
 }
 
 export function GameRoomDevTools({
-  viewport,
   handCount,
   fanOut,
-  fanOutAuto = false,
   arc,
   selectedLift,
   showGuides,
@@ -136,25 +142,21 @@ export function GameRoomDevTools({
   onShowCardOrderChange,
   onMotionChange,
   onReset,
-}: {
-  viewport: ViewportMetrics;
-  handCount: number;
-  fanOut: number;
-  fanOutAuto?: boolean;
-  arc: number;
-  selectedLift: number;
-  showGuides: boolean;
-  showCardOrder: boolean;
-  motion: boolean;
-  onFanOutChange: (value: number) => void;
-  onArcChange: (value: number) => void;
-  onSelectedLiftChange: (value: number) => void;
-  onShowGuidesChange: (value: boolean) => void;
-  onShowCardOrderChange: (value: boolean) => void;
-  onMotionChange: (value: boolean) => void;
-  onReset: () => void;
-}) {
+}: GameRoomDevToolsProps) {
+  type DragState = {
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startPosition: { x: number; y: number };
+    bounds: { left: number; top: number; right: number; bottom: number };
+  };
   const [open, setOpen] = useState(true);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const toolsRef = useRef<HTMLElement>(null);
+  const dragRef = useRef<DragState | null>(null);
+  const draggedRef = useRef(false);
+  const viewport = useViewportMetrics();
   const orientation =
     viewport.width && viewport.height
       ? viewport.width >= viewport.height
@@ -162,16 +164,67 @@ export function GameRoomDevTools({
         : "portrait"
       : "reading viewport";
 
+  const handlePointerDown = (event: PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0 || !toolsRef.current) return;
+    const rect = toolsRef.current.getBoundingClientRect();
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startPosition: position,
+      bounds: {
+        left: 8 - rect.left + position.x,
+        top: 8 - rect.top + position.y,
+        right: window.innerWidth - rect.width - 8 - rect.left + position.x,
+        bottom: window.innerHeight - rect.height - 8 - rect.top + position.y,
+      },
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handlePointerMove = (event: PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+    if (!draggedRef.current && Math.hypot(deltaX, deltaY) < 3) return;
+    draggedRef.current = true;
+    setDragging(true);
+    setPosition({
+      x: Math.min(drag.bounds.right, Math.max(drag.bounds.left, drag.startPosition.x + deltaX)),
+      y: Math.min(drag.bounds.bottom, Math.max(drag.bounds.top, drag.startPosition.y + deltaY)),
+    });
+  };
+
+  const handlePointerUp = (event: PointerEvent<HTMLButtonElement>) => {
+    if (dragRef.current?.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    setDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (draggedRef.current) window.setTimeout(() => (draggedRef.current = false), 0);
+  };
+
   return (
     <aside
-      className={`game-room-dev-tools ${open ? "is-open" : ""}`}
+      ref={toolsRef}
+      className={`game-room-dev-tools ${open ? "is-open" : ""} ${dragging ? "is-dragging" : ""}`}
+      style={{ transform: `translate3d(${position.x}px, ${position.y}px, 0)` }}
       aria-label="Game room development tools"
     >
       <button
         type="button"
         className="game-room-dev-trigger"
         aria-expanded={open}
-        onClick={() => setOpen((isOpen) => !isOpen)}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onClick={() => {
+          if (draggedRef.current) return;
+          setOpen((isOpen) => !isOpen);
+        }}
       >
         <span className="game-room-dev-live-dot" aria-hidden="true" />
         <SlidersHorizontal aria-hidden="true" />
@@ -212,9 +265,7 @@ export function GameRoomDevTools({
               step={5}
               value={fanOut}
               output={`${fanOut}%`}
-              hint={
-                fanOutAuto ? "19+ cards → auto 160% · move to override" : "stacked ← current → wide"
-              }
+              hint="stacked ← current → wide"
               onChange={onFanOutChange}
             />
             <RangeControl

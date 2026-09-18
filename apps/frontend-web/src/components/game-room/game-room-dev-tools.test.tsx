@@ -3,20 +3,11 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { GameRoomDevTools, type ViewportMetrics } from "./game-room-dev-tools";
-
-const viewport: ViewportMetrics = {
-  width: 1280,
-  height: 720,
-  screenWidth: 1440,
-  screenHeight: 900,
-  devicePixelRatio: 2,
-};
+import { GameRoomDevTools } from "./game-room-dev-tools";
 
 function renderTools() {
   return render(
     <GameRoomDevTools
-      viewport={viewport}
       handCount={13}
       fanOut={100}
       arc={5}
@@ -41,8 +32,8 @@ describe("GameRoomDevTools", () => {
   it("shows live viewport metrics and hand controls", () => {
     renderTools();
 
-    expect(screen.getByText("1280 × 720")).toBeTruthy();
-    expect(screen.getByText("screen 1440 × 900")).toBeTruthy();
+    expect(screen.getByText(/^\d+ × \d+$/)).toBeTruthy();
+    expect(screen.getByText(/screen/)).toBeTruthy();
     expect(screen.getByText("13 cards")).toBeTruthy();
     expect(screen.getByLabelText("Fan out")).toBeTruthy();
     expect(screen.getByLabelText("Card arc")).toBeTruthy();
