@@ -47,7 +47,7 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
       if (!rateLimit.success) return c.json({ error: "Too many Jev move requests" }, 429);
 
       const decision = await chooseJevBotMoveWithFallback(c.req.valid("json"), {
-        apiKey: c.env.TYPESAFE_API_KEY,
+        ai: c.env.AI,
       });
       return c.json(decision, 200, { "Cache-Control": "no-store" });
     },

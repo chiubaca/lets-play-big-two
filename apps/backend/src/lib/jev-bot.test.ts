@@ -1,19 +1,19 @@
 import type { Card } from "@big-two/game-state-machine";
-import type { Fetch } from "@typesafe-ai/sdk";
 import { describe, expect, it } from "vite-plus/test";
 
-import { chooseJevBotMove, chooseJevBotMoveWithFallback } from "./jev-bot";
+import { chooseJevBotMove, chooseJevBotMoveWithFallback, type JevAiBinding } from "./jev-bot";
 
 const card = (value: Card["value"], suit: Card["suit"]): Card => ({ value, suit });
 
 describe("chooseJevBotMove", () => {
   it("asks Jev to select from legal moves using its hand and the played deck", async () => {
-    let requestBody: unknown;
-    const fetch: Fetch = async (_input, init) => {
-      if (typeof init?.body !== "string") throw new Error("Expected a JSON request body");
-      requestBody = JSON.parse(init.body);
-      return new Response(
-        JSON.stringify({
+    let model: string | undefined;
+    let input: unknown;
+    const ai: JevAiBinding = {
+      async run(requestedModel, requestedInput) {
+        model = requestedModel;
+        input = requestedInput;
+        return {
           model: "jev-1.13.0",
           answers: {
             best_move: {
@@ -24,9 +24,8 @@ describe("chooseJevBotMove", () => {
             },
           },
           usage: { input_tokens: 200, output_tokens: 20 },
-        }),
-        { status: 200, headers: { "content-type": "application/json" } },
-      );
+        };
+      },
     };
 
     const decision = await chooseJevBotMove(
@@ -36,11 +35,11 @@ describe("chooseJevBotMove", () => {
         roundMode: "single",
         opponentHandSizes: [1, 5, 8],
       },
-      { apiKey: "test-key", fetch },
+      { ai },
     );
 
-    expect(requestBody).toMatchObject({
-      model: "jev-latest",
+    expect(model).toBe("typesafe/jev");
+    expect(input).toMatchObject({
       state: {
         turn: {
           own_hand: ["3 of diamonds", "4 of hearts"],
@@ -67,10 +66,12 @@ describe("chooseJevBotMove", () => {
   });
 
   it("returns a forced pass without calling Jev when no play can win the trick", async () => {
-    let fetchCalled = false;
-    const fetch: Fetch = async () => {
-      fetchCalled = true;
-      throw new Error("fetch should not be called");
+    let aiCalled = false;
+    const ai: JevAiBinding = {
+      async run() {
+        aiCalled = true;
+        throw new Error("AI binding should not be called");
+      },
     };
 
     const decision = await chooseJevBotMove(
@@ -79,16 +80,18 @@ describe("chooseJevBotMove", () => {
         playedHands: [[card("2", "SPADE")]],
         roundMode: "single",
       },
-      { apiKey: "test-key", fetch },
+      { ai },
     );
 
-    expect(fetchCalled).toBe(false);
+    expect(aiCalled).toBe(false);
     expect(decision).toEqual({ cards: null, source: "forced" });
   });
 
   it("falls back to the deterministic bot when Jev is unavailable", async () => {
-    const fetch: Fetch = async () => {
-      throw new Error("network unavailable");
+    const ai: JevAiBinding = {
+      async run() {
+        throw new Error("AI binding unavailable");
+      },
     };
 
     const decision = await chooseJevBotMoveWithFallback(
@@ -97,7 +100,7 @@ describe("chooseJevBotMove", () => {
         playedHands: [[card("4", "HEART")]],
         roundMode: "single",
       },
-      { apiKey: "test-key", fetch },
+      { ai },
     );
 
     expect(decision).toEqual({ cards: [card("4", "SPADE")], source: "fallback" });

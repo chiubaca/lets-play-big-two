@@ -2,9 +2,8 @@
 
 A web-based Big Two card game.
 
-Solo play includes a TypeSafe Jev-powered opponent. Configure `TYPESAFE_API_KEY` in
-`apps/backend/.dev.vars`; if Jev is unavailable, the opponent falls back to the legal
-deterministic strategy.
+Solo play includes a TypeSafe Jev-powered opponent through the backend's Cloudflare Workers AI
+binding. If Jev is unavailable, the opponent falls back to the legal deterministic strategy.
 
 ## Prerequisites
 

@@ -4,7 +4,44 @@ import {
   resolveJevBotMove,
   type JevMoveRequest,
 } from "@big-two/game-ai";
-import { choice, TypeSafeClient, type Fetch } from "@typesafe-ai/sdk";
+
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+type JevChoiceQuestion = {
+  type: "choice";
+  instructions: JsonValue;
+  criteria: Record<string, JsonValue>;
+};
+
+type JevInput = {
+  state: JsonValue;
+  questions: Record<string, JevChoiceQuestion>;
+};
+
+type JevChoiceAnswer = {
+  type: "choice";
+  choice: string;
+  probabilities: Record<string, number>;
+  confidence: number;
+};
+
+type JevOutput = {
+  model: string;
+  answers: Record<string, JevChoiceAnswer>;
+  usage: {
+    input_tokens: number;
+    output_tokens: number;
+  };
+};
+
+declare global {
+  interface AiModels {
+    "typesafe/jev": {
+      inputs: JevInput;
+      postProcessedOutputs: JevOutput;
+    };
+  }
+}
 
 export type JevBotDecision =
   | { cards: JevMoveRequest["hand"][number][] | null; source: "forced" | "fallback" }
@@ -15,9 +52,12 @@ export type JevBotDecision =
       model: string;
     };
 
+export type JevAiBinding = {
+  run(model: "typesafe/jev", input: JevInput): Promise<JevOutput>;
+};
+
 type JevBotOptions = {
-  apiKey?: string;
-  fetch?: Fetch;
+  ai: JevAiBinding;
 };
 
 export async function chooseJevBotMove(
@@ -32,20 +72,14 @@ export async function chooseJevBotMove(
     return { cards: forcedMove ?? null, source: "forced" };
   }
 
-  const client = new TypeSafeClient({
-    apiKey: options.apiKey,
-    ...(options.fetch ? { fetch: options.fetch } : {}),
-    timeout: 4_000,
-    retry: {
-      maxRetries: 1,
-      maxRetryAfterMs: 1_000,
-    },
-  });
-  const response = await client.systemOne({
-    model: "jev-latest",
+  const response = await options.ai.run("typesafe/jev", {
     state: plan.state,
     questions: {
-      best_move: choice(plan.instructions, plan.criteria),
+      best_move: {
+        type: "choice",
+        instructions: plan.instructions,
+        criteria: plan.criteria,
+      },
     },
   });
   const answer = response.answers.best_move;

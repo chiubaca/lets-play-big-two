@@ -3,5 +3,3 @@ BETTER_AUTH_SECRET=generate-with-https://better-auth.com/docs/concepts/cli#secre
 
 GOOGLE_CLIENT_ID=example.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=secret
-
-TYPESAFE_API_KEY=typesafe-api-key

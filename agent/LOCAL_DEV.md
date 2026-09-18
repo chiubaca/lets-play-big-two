@@ -24,8 +24,9 @@ cp apps/backend/.dev.vars.example apps/backend/.dev.vars
 Set a real `BETTER_AUTH_SECRET` in `apps/backend/.dev.vars`. Add Google OAuth
 credentials there if Google sign-in is needed. Do not commit this file.
 
-Set `TYPESAFE_API_KEY` in `apps/backend/.dev.vars` to enable the Jev opponent in
-solo games. Without it, that seat safely falls back to the deterministic bot.
+The Jev opponent uses the backend's remote Cloudflare Workers AI binding. Local inference
+requires Wrangler to be authenticated with Cloudflare and incurs Workers AI usage charges. If
+Jev is unavailable, that seat safely falls back to the deterministic bot.
 
 Configure the local HTTPS domains and certificates:
 

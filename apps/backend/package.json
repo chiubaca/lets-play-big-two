@@ -18,7 +18,6 @@
     "@big-two/game-ai": "workspace:*",
     "@big-two/game-state-machine": "workspace:*",
     "@hono/standard-validator": "catalog:",
-    "@typesafe-ai/sdk": "catalog:",
     "better-auth": "catalog:",
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
