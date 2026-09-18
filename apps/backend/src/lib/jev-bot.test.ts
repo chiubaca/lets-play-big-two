@@ -16,11 +16,17 @@ describe("chooseJevBotMove", () => {
         return {
           model: "jev-1.13.0",
           answers: {
-            best_move: {
+            best_play: {
               type: "choice",
               choice: "play_1",
               confidence: 0.82,
-              probabilities: { play_1: 0.9, pass: 0.1 },
+              probabilities: { play_1: 1 },
+            },
+            play_or_pass: {
+              type: "choice",
+              choice: "play",
+              confidence: 0.91,
+              probabilities: { play: 0.95, pass: 0.05 },
             },
           },
           usage: { input_tokens: 200, output_tokens: 20 },
@@ -48,18 +54,80 @@ describe("chooseJevBotMove", () => {
         },
       },
       questions: {
-        best_move: {
+        best_play: {
           type: "choice",
+          instructions: {
+            question: expect.stringContaining("Assuming the bot will play rather than pass"),
+            priorities: expect.arrayContaining([
+              expect.stringContaining("Plan beyond this trick"),
+              expect.stringContaining("played-card history"),
+            ]),
+          },
           criteria: {
             play_1: expect.stringContaining("4 of hearts"),
-            pass: expect.any(String),
+          },
+        },
+        play_or_pass: {
+          type: "choice",
+          instructions: {
+            focus: expect.stringContaining("Passing is a deliberate tempo play"),
+          },
+          criteria: {
+            play: expect.any(Object),
+            pass: expect.any(Object),
           },
         },
       },
     });
+    expect(
+      (input as { questions: { best_play: { criteria: Record<string, unknown> } } }).questions
+        .best_play.criteria,
+    ).not.toHaveProperty("pass");
     expect(decision).toEqual({
       cards: [card("4", "HEART")],
       confidence: 0.82,
+      model: "jev-1.13.0",
+      source: "jev",
+    });
+  });
+
+  it("strategically passes while a legal play is available", async () => {
+    const ai: JevAiBinding = {
+      async run() {
+        return {
+          model: "jev-1.13.0",
+          answers: {
+            best_play: {
+              type: "choice",
+              choice: "play_1",
+              confidence: 0.76,
+              probabilities: { play_1: 1 },
+            },
+            play_or_pass: {
+              type: "choice",
+              choice: "pass",
+              confidence: 0.88,
+              probabilities: { play: 0.04, pass: 0.96 },
+            },
+          },
+          usage: { input_tokens: 300, output_tokens: 30 },
+        };
+      },
+    };
+
+    const decision = await chooseJevBotMove(
+      {
+        hand: [card("4", "HEART"), card("2", "SPADE")],
+        playedHands: [[card("3", "CLUB")]],
+        roundMode: "single",
+        opponentHandSizes: [6, 7, 8],
+      },
+      { ai },
+    );
+
+    expect(decision).toEqual({
+      cards: null,
+      confidence: 0.88,
       model: "jev-1.13.0",
       source: "jev",
     });
