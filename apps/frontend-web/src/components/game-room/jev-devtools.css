@@ -1,0 +1,464 @@
+.jev-devtools,
+.jev-devtools-trigger {
+  --jev-ink: #07100d;
+  --jev-panel: #0b1713;
+  --jev-grid: #263d3440;
+  --jev-line: #365348;
+  --jev-text: #e1eadf;
+  --jev-muted: #859c91;
+  --jev-signal: #a7ff83;
+  --jev-gold: #f0bd58;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+.jev-devtools {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 70;
+  width: min(390px, calc(100vw - 24px));
+  max-height: min(720px, calc(100svh - 32px));
+  overflow: hidden;
+  border: 1px solid var(--jev-line);
+  border-radius: 8px 8px 3px 3px;
+  color: var(--jev-text);
+  background-color: color-mix(in srgb, var(--jev-panel) 96%, transparent);
+  background-image:
+    linear-gradient(var(--jev-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--jev-grid) 1px, transparent 1px);
+  background-size: 18px 18px;
+  box-shadow:
+    0 24px 80px #000c,
+    inset 3px 0 var(--jev-signal),
+    inset 0 1px #ffffff12;
+  backdrop-filter: blur(16px);
+  transform: translate3d(var(--jev-drag-x, 0), var(--jev-drag-y, 0), 0);
+  animation: jev-panel-in 180ms ease-out;
+}
+
+.jev-devtools button,
+.jev-devtools-trigger {
+  color: inherit;
+  cursor: pointer;
+}
+
+.jev-devtools-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 58px;
+  padding: 11px 12px 10px 17px;
+  border-bottom: 1px solid var(--jev-line);
+  background: #07100de8;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.jev-devtools.is-dragging .jev-devtools-header {
+  cursor: grabbing;
+}
+
+.jev-devtools-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.jev-devtools-title > div {
+  display: grid;
+  gap: 1px;
+}
+
+.jev-devtools-title strong {
+  color: var(--jev-signal);
+  font-size: 11px;
+  letter-spacing: 0.11em;
+}
+
+.jev-devtools-title small {
+  color: var(--jev-muted);
+  font-size: 8px;
+  letter-spacing: 0.18em;
+}
+
+.jev-live-light {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--jev-signal);
+  box-shadow:
+    0 0 0 4px #a7ff8317,
+    0 0 12px #a7ff83aa;
+  animation: jev-live-pulse 1.8s ease-in-out infinite;
+}
+
+.jev-devtools-header > button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.jev-devtools-header > button:hover {
+  border-color: var(--jev-line);
+  background: #ffffff08;
+}
+
+.jev-devtools-header svg {
+  width: 16px;
+  height: 16px;
+}
+
+.jev-devtools-body {
+  max-height: calc(min(720px, 100svh - 32px) - 58px);
+  overflow-y: auto;
+  scrollbar-color: var(--jev-line) transparent;
+}
+
+.jev-verdict {
+  padding: 15px 17px 17px;
+  border-bottom: 1px solid var(--jev-line);
+  background: linear-gradient(110deg, #12231cdd, #08120eee);
+}
+
+.jev-verdict-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--jev-muted);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+}
+
+.jev-source {
+  margin-left: auto;
+  padding: 2px 5px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  color: var(--jev-signal);
+}
+
+.jev-source-fallback {
+  color: #ff916e;
+}
+
+.jev-source-forced {
+  color: var(--jev-gold);
+}
+
+.jev-verdict-action {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.jev-verdict-action small {
+  color: var(--jev-gold);
+  font-size: 8px;
+  letter-spacing: 0.14em;
+}
+
+.jev-verdict-action strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #fff6da;
+  font-size: 19px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jev-verdict-action > span {
+  color: var(--jev-signal);
+  font-size: 9px;
+}
+
+.jev-question-list {
+  display: grid;
+}
+
+.jev-question {
+  padding: 14px 17px 15px;
+  border-bottom: 1px solid var(--jev-line);
+  background: #0a1511e8;
+}
+
+.jev-question-heading,
+.jev-probability-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.jev-question-heading {
+  margin-bottom: 11px;
+  color: #cad7d0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+.jev-question-heading small {
+  flex-shrink: 0;
+  color: var(--jev-muted);
+  font-size: 8px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.jev-probability-list {
+  display: grid;
+  gap: 9px;
+}
+
+.jev-probability {
+  opacity: 0.62;
+}
+
+.jev-probability.is-selected {
+  opacity: 1;
+}
+
+.jev-probability-label {
+  margin-bottom: 4px;
+  color: var(--jev-muted);
+  font-size: 9px;
+}
+
+.jev-probability-label span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jev-probability-label strong {
+  flex-shrink: 0;
+  color: #b8c9c0;
+  font-size: 9px;
+  font-weight: 500;
+}
+
+.jev-probability.is-selected .jev-probability-label span,
+.jev-probability.is-selected .jev-probability-label strong {
+  color: var(--jev-signal);
+}
+
+.jev-probability-track {
+  height: 3px;
+  overflow: hidden;
+  background: #25372f;
+}
+
+.jev-probability-track i {
+  display: block;
+  height: 100%;
+  background: #6d897c;
+  transition: width 260ms ease-out;
+}
+
+.jev-probability.is-selected .jev-probability-track i {
+  background: linear-gradient(90deg, #56c96e, var(--jev-signal));
+  box-shadow: 0 0 8px #a7ff8366;
+}
+
+.jev-more-options {
+  display: block;
+  margin-top: 10px;
+  color: #687d73;
+  font-size: 8px;
+}
+
+.jev-no-trace,
+.jev-devtools-empty {
+  display: grid;
+  place-items: center;
+  gap: 7px;
+  padding: 32px 24px;
+  text-align: center;
+  background: #08120eee;
+}
+
+.jev-no-trace strong,
+.jev-devtools-empty strong {
+  color: var(--jev-gold);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.jev-no-trace span,
+.jev-devtools-empty span {
+  max-width: 270px;
+  color: var(--jev-muted);
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+.jev-devtools-empty svg {
+  width: 26px;
+  color: var(--jev-signal);
+}
+
+.jev-history {
+  padding: 13px 12px 11px 17px;
+  border-bottom: 1px solid var(--jev-line);
+  background: #07100df2;
+}
+
+.jev-history-label {
+  display: block;
+  margin-bottom: 7px;
+  color: #667d72;
+  font-size: 8px;
+  letter-spacing: 0.16em;
+}
+
+.jev-history > div {
+  display: grid;
+  max-height: 116px;
+  overflow-y: auto;
+}
+
+.jev-history button {
+  display: grid;
+  grid-template-columns: 28px 70px 1fr 14px;
+  align-items: center;
+  gap: 6px;
+  min-height: 29px;
+  padding: 2px 4px;
+  color: var(--jev-muted);
+  text-align: left;
+  font-size: 8px;
+}
+
+.jev-history button:hover,
+.jev-history button.is-active {
+  color: var(--jev-text);
+  background: #ffffff08;
+}
+
+.jev-history button span {
+  color: #60776c;
+}
+
+.jev-history button strong,
+.jev-history button i {
+  overflow: hidden;
+  font-weight: 400;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jev-history button.is-active strong {
+  color: var(--jev-signal);
+}
+
+.jev-history svg {
+  width: 12px;
+}
+
+.jev-devtools-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 17px;
+  color: #5f776c;
+  background: #050c09f5;
+  font-size: 8px;
+}
+
+.jev-devtools-trigger {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 70;
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 7px;
+  min-width: 82px;
+  padding: 8px 11px 7px;
+  border: 1px solid var(--jev-line);
+  border-left: 3px solid var(--jev-signal);
+  border-radius: 4px;
+  color: var(--jev-text);
+  background: #07100df2;
+  box-shadow: 0 12px 30px #000a;
+}
+
+.jev-devtools-trigger svg {
+  grid-row: 1 / 3;
+  width: 17px;
+  color: var(--jev-signal);
+}
+
+.jev-devtools-trigger span {
+  font-size: 11px;
+  letter-spacing: 0.13em;
+}
+
+.jev-devtools-trigger i {
+  color: var(--jev-signal);
+  font-size: 7px;
+  font-style: normal;
+  letter-spacing: 0.16em;
+}
+
+.jev-devtools button:focus-visible,
+.jev-devtools-trigger:focus-visible {
+  outline: 2px solid var(--jev-signal);
+  outline-offset: 2px;
+}
+
+@keyframes jev-panel-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes jev-live-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (max-width: 600px) {
+  .jev-devtools {
+    right: 8px;
+    bottom: 8px;
+    width: calc(100vw - 16px);
+    max-height: 62svh;
+  }
+
+  .jev-devtools-body {
+    max-height: calc(62svh - 58px);
+  }
+
+  .jev-devtools-trigger {
+    right: 8px;
+    bottom: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jev-devtools,
+  .jev-live-light {
+    animation: none;
+  }
+
+  .jev-probability-track i {
+    transition: none;
+  }
+}

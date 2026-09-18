@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState, type CSSProperties } from "react";
-import { Copy, Menu, Settings, Volume2, VolumeX, HelpCircle, Check } from "lucide-react";
+import { Check, Copy, HelpCircle, Menu, Settings, Volume2, VolumeX, WifiOff } from "lucide-react";
 import type { BigTwoGameMachineSnapshot, Card, GameEvent } from "@big-two/game-state-machine";
 import { detectHandType } from "@big-two/game-core";
 import { Confetti } from "../Confetti";
@@ -29,6 +29,7 @@ export type BotSettings = {
 type GameRoomProps = {
   botSettings?: BotSettings;
   gameState?: BigTwoGameMachineSnapshot;
+  jevFallbackPlayerIds?: ReadonlySet<string>;
   requestHint?: () => Card[] | null;
   send: (event: GameEvent) => Promise<void> | void;
   tableLabel: string;
@@ -44,6 +45,7 @@ function PlayerSeat({
   avatar,
   active,
   thinking,
+  jevFallback,
   position,
 }: {
   name: string;
@@ -51,20 +53,28 @@ function PlayerSeat({
   avatar: string;
   active: boolean;
   thinking?: boolean;
+  jevFallback?: boolean;
   position: string;
 }) {
   return (
     <div
       className={`table-seat seat-${position} ${active ? "seat-active" : ""}`}
       role="group"
-      aria-label={`${name}, ${count} cards remaining${active ? ", current turn" : ""}`}
+      aria-label={`${name}, ${count} cards remaining${active ? ", current turn" : ""}${jevFallback ? ", Jev unavailable; using Basic AI" : ""}`}
     >
       <div className="player-plaque">
         <span className="player-avatar" aria-hidden="true">
           {avatar}
         </span>
         <div className="player-details">
-          <span className="player-name">{name}</span>
+          <span className="player-name">
+            <span>{name}</span>
+            {jevFallback && (
+              <span className="jev-fallback-mark" title="Jev unavailable — using Basic AI">
+                <WifiOff aria-hidden="true" />
+              </span>
+            )}
+          </span>
           <span className="player-count">
             <i aria-hidden="true">♦</i>
             {count}
@@ -88,6 +98,7 @@ function PlayerSeat({
 export const GameRoom = ({
   botSettings,
   gameState,
+  jevFallbackPlayerIds,
   requestHint,
   send,
   tableLabel,
@@ -290,6 +301,7 @@ export const GameRoom = ({
                 isGameTurnState(currentValue) && index === gameState.context.currentPlayerIndex
               }
               thinking={thinkingPlayerId === players[index]?.id}
+              jevFallback={jevFallbackPlayerIds?.has(players[index]?.id)}
               position={position}
             />
           ))}
@@ -408,6 +420,7 @@ export const GameRoom = ({
               count={me.hand.length}
               avatar="👨🏻"
               active={isMyTurn}
+              jevFallback={jevFallbackPlayerIds?.has(me.id)}
               position="you"
             />
           )}

@@ -100,12 +100,28 @@ describe("pass-and-play turns", () => {
     vi.useFakeTimers();
     requestJevBotMoveMock.mockImplementation(async (state, playerId) => {
       const player = state.context.players.find((entry) => entry.id === playerId)!;
-      return chooseBotMove({
-        hand: player.hand,
-        roundMode: state.context.roundMode,
-        cardsToBeat: getCardsToBeat(state),
-        requiredCard: getRequiredCard(state),
-      });
+      return {
+        cards: chooseBotMove({
+          hand: player.hand,
+          roundMode: state.context.roundMode,
+          cardsToBeat: getCardsToBeat(state),
+          requiredCard: getRequiredCard(state),
+        }),
+        source: "jev",
+        confidence: 0.84,
+        model: "jev-test",
+        trace: {
+          selectedAction: "play_1",
+          questions: {
+            best_play: {
+              choice: "play_1",
+              confidence: 0.84,
+              probabilities: { play_1: 1 },
+              options: { play_1: "test move" },
+            },
+          },
+        },
+      };
     });
     const { result } = renderHook(() => useOfflineGame());
     act(() =>
@@ -131,6 +147,51 @@ describe("pass-and-play turns", () => {
 
     expect(requestJevBotMoveMock).toHaveBeenCalledOnce();
     expect(requestJevBotMoveMock).toHaveBeenCalledWith(jevTurn, "jev");
+    expect(result.current.jevDecisionLog).toMatchObject([
+      {
+        sequence: 1,
+        playerId: "jev",
+        playerName: "Jev",
+        decision: { source: "jev", confidence: 0.84, model: "jev-test" },
+      },
+    ]);
+    expect(result.current.jevFallbackPlayerIds.size).toBe(0);
+  });
+
+  it("marks a Jev seat when the service falls back to the basic bot", async () => {
+    vi.useFakeTimers();
+    requestJevBotMoveMock.mockImplementation(async (state, playerId) => {
+      const player = state.context.players.find((entry) => entry.id === playerId)!;
+      return {
+        cards: chooseBotMove({
+          hand: player.hand,
+          roundMode: state.context.roundMode,
+          cardsToBeat: getCardsToBeat(state),
+          requiredCard: getRequiredCard(state),
+        }),
+        source: "fallback",
+      };
+    });
+    const { result } = renderHook(() => useOfflineGame());
+    act(() =>
+      result.current.start([
+        { id: "basic-1", name: "Basic 1", isBot: true },
+        { id: "jev", name: "Jev", isBot: true, botStrategy: "jev" },
+        { id: "basic-2", name: "Basic 2", isBot: true },
+        { id: "basic-3", name: "Basic 3", isBot: true },
+      ]),
+    );
+
+    for (let turn = 0; turn < 4; turn += 1) {
+      const state = result.current.gameState!;
+      const current = state.context.players[state.context.currentPlayerIndex];
+      if (current.id === "jev") break;
+      await act(async () => vi.advanceTimersByTimeAsync(650));
+    }
+    await act(async () => vi.advanceTimersByTimeAsync(650));
+
+    expect(result.current.jevFallbackPlayerIds.has("jev")).toBe(true);
+    expect(result.current.jevDecisionLog[0]?.decision.source).toBe("fallback");
   });
 });
 

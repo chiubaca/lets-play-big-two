@@ -35,11 +35,19 @@ type JevOutput = {
   };
 };
 
+type JevRunOutput =
+  | JevOutput
+  | {
+      state: string;
+      result: JevOutput;
+      gatewayMetadata?: Record<string, JsonValue>;
+    };
+
 declare global {
   interface AiModels {
     "typesafe/jev": {
       inputs: JevInput;
-      postProcessedOutputs: JevOutput;
+      postProcessedOutputs: JevRunOutput;
     };
   }
 }
@@ -51,10 +59,24 @@ export type JevBotDecision =
       source: "jev";
       confidence: number;
       model: string;
+      trace: JevBotDecisionTrace;
     };
 
+export type JevBotDecisionTrace = {
+  selectedAction: string;
+  questions: Record<
+    string,
+    {
+      choice: string;
+      confidence: number;
+      probabilities: Record<string, number>;
+      options: Record<string, string>;
+    }
+  >;
+};
+
 export type JevAiBinding = {
-  run(model: "typesafe/jev", input: JevInput): Promise<JevOutput>;
+  run(model: "typesafe/jev", input: JevInput): Promise<JevRunOutput>;
 };
 
 type JevBotOptions = {
@@ -141,6 +163,43 @@ function requireChoiceAnswer(response: JevOutput, questionId: string): JevChoice
   return answer;
 }
 
+function unwrapJevOutput(output: JevRunOutput): JevOutput {
+  return "result" in output ? output.result : output;
+}
+
+function createDecisionTrace(
+  plan: JevBotMovePlan,
+  response: JevOutput,
+  selectedAction: string,
+): JevBotDecisionTrace {
+  const moveOptions = Object.fromEntries(
+    plan.state.turn.candidate_moves
+      .filter((move) => move.id !== "pass")
+      .map((move) => [
+        move.id,
+        `${move.category}: ${move.cards.length ? move.cards.join(", ") : "pass"}`,
+      ]),
+  );
+
+  return {
+    selectedAction,
+    questions: Object.fromEntries(
+      Object.entries(response.answers).map(([questionId, answer]) => [
+        questionId,
+        {
+          choice: answer.choice,
+          confidence: answer.confidence,
+          probabilities: answer.probabilities,
+          options:
+            questionId === "play_or_pass"
+              ? { play: "Contest the trick", pass: "Strategically pass" }
+              : moveOptions,
+        },
+      ]),
+    ),
+  };
+}
+
 export async function chooseJevBotMove(
   request: JevMoveRequest,
   options: JevBotOptions,
@@ -161,10 +220,12 @@ export async function chooseJevBotMove(
     ...(canPass ? { play_or_pass: PLAY_OR_PASS_QUESTION } : {}),
   };
 
-  const response = await options.ai.run("typesafe/jev", {
-    state: plan.state,
-    questions,
-  });
+  const response = unwrapJevOutput(
+    await options.ai.run("typesafe/jev", {
+      state: plan.state,
+      questions,
+    }),
+  );
 
   if (canPass) {
     const playOrPassAnswer = requireChoiceAnswer(response, "play_or_pass");
@@ -174,6 +235,7 @@ export async function chooseJevBotMove(
         source: "jev",
         confidence: playOrPassAnswer.confidence,
         model: response.model,
+        trace: createDecisionTrace(plan, response, "pass"),
       };
     }
     if (playOrPassAnswer.choice !== "play") {
@@ -198,6 +260,7 @@ export async function chooseJevBotMove(
     source: "jev",
     confidence: Math.min(answer.confidence, playOrPassConfidence),
     model: response.model,
+    trace: createDecisionTrace(plan, response, answer.choice),
   };
 }
 
@@ -207,7 +270,8 @@ export async function chooseJevBotMoveWithFallback(
 ): Promise<JevBotDecision> {
   try {
     return await chooseJevBotMove(request, options);
-  } catch {
+  } catch (error) {
+    console.error("Jev move failed; using deterministic fallback", error);
     return {
       cards: chooseBotMove({
         hand: request.hand,

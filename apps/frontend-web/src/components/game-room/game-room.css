@@ -217,11 +217,28 @@
   gap: 5px;
 }
 .player-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 15px;
   max-width: 105px;
+}
+.player-name > span:first-child {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.jev-fallback-mark {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: #cbb27c;
+  opacity: 0.48;
+}
+.jev-fallback-mark svg {
+  width: 11px;
+  height: 11px;
+  stroke-width: 1.6;
 }
 .player-count {
   display: flex;

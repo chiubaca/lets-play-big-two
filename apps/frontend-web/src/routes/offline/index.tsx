@@ -1,10 +1,18 @@
+import { lazy, Suspense, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Users, Bot, Sparkles } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { GameRoom } from "~/components/game-room";
 import { OFFLINE_HUMAN, useOfflineGame } from "~/components/game-room/use-offline-game";
-import { useState } from "react";
 import { PassAndPlay } from "~/components/game-room/pass-and-play.tsx";
+
+const LazyJevDevtools = import.meta.env.DEV
+  ? lazy(() =>
+      import("~/components/game-room/jev-devtools").then(({ JevDevtools }) => ({
+        default: JevDevtools,
+      })),
+    )
+  : null;
 
 export const Route = createFileRoute("/offline/")({
   component: RouteComponent,
@@ -13,22 +21,39 @@ export const Route = createFileRoute("/offline/")({
 function RouteComponent() {
   const navigate = useNavigate();
   const [passAndPlay, setPassAndPlay] = useState(false);
-  const { botPlayers, gameState, requestHint, send, setBotStrategy, start, thinkingPlayerId } =
-    useOfflineGame();
+  const {
+    botPlayers,
+    gameState,
+    jevDecisionLog,
+    jevFallbackPlayerIds,
+    requestHint,
+    send,
+    setBotStrategy,
+    start,
+    thinkingPlayerId,
+  } = useOfflineGame();
 
   if (passAndPlay) return <PassAndPlay onBack={() => setPassAndPlay(false)} />;
 
   if (gameState) {
     return (
-      <GameRoom
-        gameState={gameState}
-        botSettings={{ players: botPlayers, onStrategyChange: setBotStrategy }}
-        requestHint={requestHint}
-        send={send}
-        tableLabel="Solo table"
-        thinkingPlayerId={thinkingPlayerId}
-        user={OFFLINE_HUMAN}
-      />
+      <>
+        <GameRoom
+          gameState={gameState}
+          botSettings={{ players: botPlayers, onStrategyChange: setBotStrategy }}
+          jevFallbackPlayerIds={jevFallbackPlayerIds}
+          requestHint={requestHint}
+          send={send}
+          tableLabel="Solo table"
+          thinkingPlayerId={thinkingPlayerId}
+          user={OFFLINE_HUMAN}
+        />
+        {LazyJevDevtools && (
+          <Suspense fallback={null}>
+            <LazyJevDevtools decisions={jevDecisionLog} />
+          </Suspense>
+        )}
+      </>
     );
   }
 

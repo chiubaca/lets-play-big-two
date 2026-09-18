@@ -1,5 +1,5 @@
 import type { Card } from "@big-two/game-state-machine";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { chooseJevBotMove, chooseJevBotMoveWithFallback, type JevAiBinding } from "./jev-bot";
 
@@ -14,22 +14,26 @@ describe("chooseJevBotMove", () => {
         model = requestedModel;
         input = requestedInput;
         return {
-          model: "jev-1.13.0",
-          answers: {
-            best_play: {
-              type: "choice",
-              choice: "play_1",
-              confidence: 0.82,
-              probabilities: { play_1: 1 },
+          state: "Completed",
+          result: {
+            model: "jev-1.13.0",
+            answers: {
+              best_play: {
+                type: "choice",
+                choice: "play_1",
+                confidence: 0.82,
+                probabilities: { play_1: 1 },
+              },
+              play_or_pass: {
+                type: "choice",
+                choice: "play",
+                confidence: 0.91,
+                probabilities: { play: 0.95, pass: 0.05 },
+              },
             },
-            play_or_pass: {
-              type: "choice",
-              choice: "play",
-              confidence: 0.91,
-              probabilities: { play: 0.95, pass: 0.05 },
-            },
+            usage: { input_tokens: 200, output_tokens: 20 },
           },
-          usage: { input_tokens: 200, output_tokens: 20 },
+          gatewayMetadata: { keySource: "BYOK" },
         };
       },
     };
@@ -83,11 +87,28 @@ describe("chooseJevBotMove", () => {
       (input as { questions: { best_play: { criteria: Record<string, unknown> } } }).questions
         .best_play.criteria,
     ).not.toHaveProperty("pass");
-    expect(decision).toEqual({
+    expect(decision).toMatchObject({
       cards: [card("4", "HEART")],
       confidence: 0.82,
       model: "jev-1.13.0",
       source: "jev",
+      trace: {
+        selectedAction: "play_1",
+        questions: {
+          best_play: {
+            choice: "play_1",
+            confidence: 0.82,
+            options: { play_1: "single: 4 of hearts" },
+            probabilities: { play_1: 1 },
+          },
+          play_or_pass: {
+            choice: "play",
+            confidence: 0.91,
+            options: { play: "Contest the trick", pass: "Strategically pass" },
+            probabilities: { play: 0.95, pass: 0.05 },
+          },
+        },
+      },
     });
   });
 
@@ -125,11 +146,20 @@ describe("chooseJevBotMove", () => {
       { ai },
     );
 
-    expect(decision).toEqual({
+    expect(decision).toMatchObject({
       cards: null,
       confidence: 0.88,
       model: "jev-1.13.0",
       source: "jev",
+      trace: {
+        selectedAction: "pass",
+        questions: {
+          play_or_pass: {
+            choice: "pass",
+            probabilities: { play: 0.04, pass: 0.96 },
+          },
+        },
+      },
     });
   });
 
@@ -156,6 +186,7 @@ describe("chooseJevBotMove", () => {
   });
 
   it("falls back to the deterministic bot when Jev is unavailable", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const ai: JevAiBinding = {
       async run() {
         throw new Error("AI binding unavailable");
@@ -172,5 +203,10 @@ describe("chooseJevBotMove", () => {
     );
 
     expect(decision).toEqual({ cards: [card("4", "SPADE")], source: "fallback" });
+    expect(consoleError).toHaveBeenCalledWith(
+      "Jev move failed; using deterministic fallback",
+      expect.any(Error),
+    );
+    consoleError.mockRestore();
   });
 });

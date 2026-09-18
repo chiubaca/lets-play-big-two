@@ -44,6 +44,7 @@ function SoloTable() {
           ),
       }}
       gameState={gameState}
+      jevFallbackPlayerIds={new Set(["jev"])}
       send={() => {}}
       tableLabel="Solo table"
       user={{ id: "solo-player", name: "You" }}
@@ -55,6 +56,7 @@ it("changes a solo opponent between Basic and Jev and marks Jev at the table", (
   render(<SoloTable />);
 
   expect(screen.getByText("Jev ✨[jev]")).toBeTruthy();
+  expect(screen.getByTitle("Jev unavailable — using Basic AI")).toBeTruthy();
   expect(screen.queryByText("Ada ✨[jev]")).toBeNull();
 
   fireEvent.click(screen.getByRole("button", { name: "Table settings" }));

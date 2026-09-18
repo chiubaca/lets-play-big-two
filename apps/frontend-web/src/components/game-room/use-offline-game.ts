@@ -14,7 +14,7 @@ import {
   getRequiredCard,
   isGameTurnState,
 } from "./game-room-session";
-import { requestJevBotMove } from "./jev-bot-client";
+import { requestJevBotMove, type JevBotMoveDecision } from "./jev-bot-client";
 import type { BotStrategy, GameRoomUser } from "./game-room";
 
 const BOT_THINKING_DELAY_MS = 650;
@@ -25,6 +25,13 @@ export const OFFLINE_HUMAN: GameRoomUser = {
 };
 
 export type OfflinePlayer = GameRoomUser & { isBot?: boolean; botStrategy?: BotStrategy };
+
+export type JevDecisionLogEntry = {
+  sequence: number;
+  playerId: string;
+  playerName: string;
+  decision: JevBotMoveDecision;
+};
 
 const OFFLINE_PLAYERS: OfflinePlayer[] = [
   OFFLINE_HUMAN,
@@ -48,7 +55,10 @@ export function useOfflineGame() {
   const actorRef = useRef<GameActor | null>(null);
   const subscriptionRef = useRef<Subscription | null>(null);
   const botTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const decisionSequenceRef = useRef(0);
   const [gameState, setGameState] = useState<BigTwoGameMachineSnapshot>();
+  const [jevDecisionLog, setJevDecisionLog] = useState<JevDecisionLogEntry[]>([]);
+  const [jevFallbackPlayerIds, setJevFallbackPlayerIds] = useState<Set<string>>(new Set());
   const [thinkingPlayerId, setThinkingPlayerId] = useState<string>();
   const playersRef = useRef<OfflinePlayer[]>([]);
   const [players, setPlayers] = useState<OfflinePlayer[]>([]);
@@ -57,6 +67,9 @@ export function useOfflineGame() {
   const start = useCallback((players?: OfflinePlayer[]) => {
     if (actorRef.current) return;
     const gamePlayers = (players ?? OFFLINE_PLAYERS).map((player) => ({ ...player }));
+    decisionSequenceRef.current = 0;
+    setJevDecisionLog([]);
+    setJevFallbackPlayerIds(new Set());
     playersRef.current = gamePlayers;
     setPlayers(gamePlayers);
 
@@ -96,6 +109,14 @@ export function useOfflineGame() {
     if (!changed) return;
     playersRef.current = updatedPlayers;
     setPlayers(updatedPlayers);
+    if (botStrategy === "basic") {
+      setJevFallbackPlayerIds((current) => {
+        if (!current.has(playerId)) return current;
+        const updated = new Set(current);
+        updated.delete(playerId);
+        return updated;
+      });
+    }
   }, []);
 
   const send = useCallback((event: GameEvent) => {
@@ -105,6 +126,9 @@ export function useOfflineGame() {
     actor.send(event);
 
     if (event.type === "RESET_GAME") {
+      decisionSequenceRef.current = 0;
+      setJevDecisionLog([]);
+      setJevFallbackPlayerIds(new Set());
       actor.send({ type: "START_GAME" });
     }
   }, []);
@@ -163,10 +187,14 @@ export function useOfflineGame() {
           playersRef.current.find((player) => player.id === decisionPlayer.id)?.botStrategy ??
           "basic";
         let cards: Card[] | null;
+        let jevDecision: JevBotMoveDecision | undefined;
+        let clientFallback = false;
         if (botStrategy === "jev") {
           try {
-            cards = await requestJevBotMove(decisionState, decisionPlayer.id);
+            jevDecision = await requestJevBotMove(decisionState, decisionPlayer.id);
+            cards = jevDecision.cards;
           } catch {
+            clientFallback = true;
             cards = chooseMove(decisionState, decisionPlayer.hand);
           }
         } else {
@@ -174,6 +202,31 @@ export function useOfflineGame() {
         }
 
         if (actorRef.current !== actor || actor.getSnapshot() !== decisionState) return;
+
+        if (clientFallback || jevDecision?.source === "fallback") {
+          setJevFallbackPlayerIds((current) => {
+            if (current.has(decisionPlayer.id)) return current;
+            return new Set(current).add(decisionPlayer.id);
+          });
+        } else if (jevDecision?.source === "jev") {
+          setJevFallbackPlayerIds((current) => {
+            if (!current.has(decisionPlayer.id)) return current;
+            const updated = new Set(current);
+            updated.delete(decisionPlayer.id);
+            return updated;
+          });
+        }
+
+        if (jevDecision) {
+          decisionSequenceRef.current += 1;
+          const entry: JevDecisionLogEntry = {
+            sequence: decisionSequenceRef.current,
+            playerId: decisionPlayer.id,
+            playerName: decisionPlayer.name,
+            decision: jevDecision,
+          };
+          setJevDecisionLog((previous) => [entry, ...previous].slice(0, 12));
+        }
 
         const playEvent = cards?.length
           ? createPlayEvent(decisionState, decisionPlayer.id, cards)
@@ -193,6 +246,8 @@ export function useOfflineGame() {
   return {
     botPlayers: players.filter((player) => player.isBot),
     gameState,
+    jevDecisionLog,
+    jevFallbackPlayerIds,
     readyPlayerId,
     ready: () => {
       const snapshot = actorRef.current?.getSnapshot();
