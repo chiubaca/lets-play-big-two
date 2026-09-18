@@ -2,6 +2,9 @@
 
 A web-based Big Two card game.
 
+Solo play includes a TypeSafe Jev-powered opponent through the backend's Cloudflare Workers AI
+binding. If Jev is unavailable, the opponent falls back to the legal deterministic strategy.
+
 ## Prerequisites
 
 - Node.js >= 22.12.0

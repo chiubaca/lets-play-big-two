@@ -1,7 +1,12 @@
-import type { Card } from "@big-two/game-core";
+import { CARD_VALUES, type Card } from "@big-two/game-core";
 import { describe, expect, it } from "vite-plus/test";
 
-import { chooseBotMove, getLegalPlays } from "./game-ai.ts";
+import {
+  chooseBotMove,
+  createJevBotMovePlan,
+  getLegalPlays,
+  resolveJevBotMove,
+} from "./game-ai.ts";
 
 const card = (value: Card["value"], suit: Card["suit"]): Card => ({ value, suit });
 
@@ -171,5 +176,63 @@ describe("chooseBotMove", () => {
 
     expect(getLegalPlays(request)).toEqual([]);
     expect(chooseBotMove(request)).toBeNull();
+  });
+});
+
+describe("Jev bot move planning", () => {
+  it("gives Jev its hand, the played deck, and only legal move options", () => {
+    const hand = [threeOfDiamonds, threeOfClubs, fourOfHearts];
+    const playedHands = [[card("3", "HEART")], [card("4", "DIAMOND")]];
+    const plan = createJevBotMovePlan({
+      hand,
+      playedHands,
+      roundMode: "single",
+      opponentHandSizes: [2, 7, 9],
+    });
+
+    expect(plan.state.turn.own_hand).toEqual(["3 of diamonds", "3 of clubs", "4 of hearts"]);
+    expect(plan.state.turn.played_hands).toEqual([["3 of hearts"], ["4 of diamonds"]]);
+    expect(plan.state.turn.opponent_hand_sizes).toEqual([2, 7, 9]);
+    expect(plan.state.turn.current_play_to_beat).toEqual(["4 of diamonds"]);
+    expect(plan.state.turn.candidate_moves).toEqual([
+      {
+        id: "play_1",
+        cards: ["4 of hearts"],
+        category: "single",
+        cards_left_after_play: 2,
+      },
+      {
+        id: "pass",
+        cards: [],
+        category: "pass",
+        cards_left_after_play: 3,
+      },
+    ]);
+    expect(resolveJevBotMove(plan, "play_1")).toEqual([fourOfHearts]);
+    expect(resolveJevBotMove(plan, "pass")).toBeNull();
+    expect(resolveJevBotMove(plan, "invented_move")).toBeUndefined();
+  });
+
+  it("requires the opening move to include the 3 of diamonds", () => {
+    const plan = createJevBotMovePlan({
+      hand: [threeOfDiamonds, threeOfClubs, fourOfHearts],
+      playedHands: [],
+      roundMode: null,
+      requiredCard: threeOfDiamonds,
+    });
+
+    expect(Object.keys(plan.moves)).not.toContain("pass");
+    expect(Object.values(plan.moves).every((play) => play?.includes(threeOfDiamonds))).toBe(true);
+  });
+
+  it("caps large legal move sets while retaining different kinds of play", () => {
+    const hand = CARD_VALUES.map((value) => card(value, "DIAMOND"));
+    const plan = createJevBotMovePlan({ hand, playedHands: [], roundMode: null });
+    const categories = new Set(plan.state.turn.candidate_moves.map((move) => move.category));
+
+    expect(Object.keys(plan.moves)).toHaveLength(80);
+    expect(categories).toContain("single");
+    expect(categories).toContain("flush");
+    expect(categories).toContain("straight flush");
   });
 });

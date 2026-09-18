@@ -14,7 +14,8 @@ import {
   getRequiredCard,
   isGameTurnState,
 } from "./game-room-session";
-import type { GameRoomUser } from "./game-room";
+import { requestJevBotMove } from "./jev-bot-client";
+import type { BotStrategy, GameRoomUser } from "./game-room";
 
 const BOT_THINKING_DELAY_MS = 650;
 
@@ -23,16 +24,16 @@ export const OFFLINE_HUMAN: GameRoomUser = {
   name: "You",
 };
 
-const OFFLINE_PLAYERS: GameRoomUser[] = [
+export type OfflinePlayer = GameRoomUser & { isBot?: boolean; botStrategy?: BotStrategy };
+
+const OFFLINE_PLAYERS: OfflinePlayer[] = [
   OFFLINE_HUMAN,
-  { id: "bot-ada", name: "Ada" },
-  { id: "bot-grace", name: "Grace" },
-  { id: "bot-alan", name: "Alan" },
+  { id: "bot-ada", name: "Eve", isBot: true, botStrategy: "basic" },
+  { id: "bot-jev", name: "Bob", isBot: true, botStrategy: "basic" },
+  { id: "bot-alan", name: "Alan", isBot: true, botStrategy: "basic" },
 ];
 
 type GameActor = ActorRefFrom<typeof bigTwoGameMachine>;
-
-export type OfflinePlayer = GameRoomUser & { isBot?: boolean };
 
 function chooseMove(gameState: BigTwoGameMachineSnapshot, hand: Card[]) {
   return chooseBotMove({
@@ -50,16 +51,14 @@ export function useOfflineGame() {
   const [gameState, setGameState] = useState<BigTwoGameMachineSnapshot>();
   const [thinkingPlayerId, setThinkingPlayerId] = useState<string>();
   const playersRef = useRef<OfflinePlayer[]>([]);
+  const [players, setPlayers] = useState<OfflinePlayer[]>([]);
   const [readyPlayerId, setReadyPlayerId] = useState<string>();
 
   const start = useCallback((players?: OfflinePlayer[]) => {
     if (actorRef.current) return;
-    playersRef.current =
-      players ??
-      OFFLINE_PLAYERS.map((player) => ({
-        ...player,
-        isBot: player.id !== OFFLINE_HUMAN.id,
-      }));
+    const gamePlayers = (players ?? OFFLINE_PLAYERS).map((player) => ({ ...player }));
+    playersRef.current = gamePlayers;
+    setPlayers(gamePlayers);
 
     const actor = createActor(bigTwoGameMachine);
     actorRef.current = actor;
@@ -82,6 +81,21 @@ export function useOfflineGame() {
       });
     }
     actor.send({ type: "START_GAME" });
+  }, []);
+
+  const setBotStrategy = useCallback((playerId: string, botStrategy: BotStrategy) => {
+    let changed = false;
+    const updatedPlayers = playersRef.current.map((player) => {
+      if (!player.isBot || player.id !== playerId || player.botStrategy === botStrategy) {
+        return player;
+      }
+      changed = true;
+      return { ...player, botStrategy };
+    });
+
+    if (!changed) return;
+    playersRef.current = updatedPlayers;
+    setPlayers(updatedPlayers);
   }, []);
 
   const send = useCallback((event: GameEvent) => {
@@ -136,22 +150,39 @@ export function useOfflineGame() {
 
     setThinkingPlayerId(currentPlayer.id);
     botTimerRef.current = setTimeout(() => {
-      const actor = actorRef.current;
-      const latestState = actor?.getSnapshot();
-      if (!actor || !latestState || !isGameTurnState(latestState.value)) return;
+      void (async () => {
+        const actor = actorRef.current;
+        const decisionState = actor?.getSnapshot();
+        if (!actor || !decisionState || !isGameTurnState(decisionState.value)) return;
 
-      const latestPlayer = latestState.context.players[latestState.context.currentPlayerIndex];
-      if (!latestPlayer || latestPlayer.id !== currentPlayer.id) return;
+        const decisionPlayer =
+          decisionState.context.players[decisionState.context.currentPlayerIndex];
+        if (!decisionPlayer || decisionPlayer.id !== currentPlayer.id) return;
 
-      const cards = chooseMove(latestState, latestPlayer.hand);
-      const playEvent = cards?.length
-        ? createPlayEvent(latestState, latestPlayer.id, cards)
-        : undefined;
+        const botStrategy =
+          playersRef.current.find((player) => player.id === decisionPlayer.id)?.botStrategy ??
+          "basic";
+        let cards: Card[] | null;
+        if (botStrategy === "jev") {
+          try {
+            cards = await requestJevBotMove(decisionState, decisionPlayer.id);
+          } catch {
+            cards = chooseMove(decisionState, decisionPlayer.hand);
+          }
+        } else {
+          cards = chooseMove(decisionState, decisionPlayer.hand);
+        }
 
-      actor.send(
-        playEvent ?? ({ type: "PASS_TURN", playerId: latestPlayer.id } satisfies GameEvent),
-      );
-      setThinkingPlayerId(undefined);
+        if (actorRef.current !== actor || actor.getSnapshot() !== decisionState) return;
+
+        const playEvent = cards?.length
+          ? createPlayEvent(decisionState, decisionPlayer.id, cards)
+          : undefined;
+        actor.send(
+          playEvent ?? ({ type: "PASS_TURN", playerId: decisionPlayer.id } satisfies GameEvent),
+        );
+        setThinkingPlayerId(undefined);
+      })();
     }, BOT_THINKING_DELAY_MS);
 
     return () => {
@@ -160,6 +191,7 @@ export function useOfflineGame() {
   }, [gameState]);
 
   return {
+    botPlayers: players.filter((player) => player.isBot),
     gameState,
     readyPlayerId,
     ready: () => {
@@ -178,6 +210,7 @@ export function useOfflineGame() {
       )?.isBot ?? false,
     requestHint,
     send,
+    setBotStrategy,
     start,
     thinkingPlayerId,
   };

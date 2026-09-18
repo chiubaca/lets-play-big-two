@@ -105,6 +105,9 @@ importers:
       '@big-two/data-ops':
         specifier: workspace:*
         version: link:../../packages/data-ops
+      '@big-two/game-ai':
+        specifier: workspace:*
+        version: link:../../packages/game-ai
       '@big-two/game-state-machine':
         specifier: workspace:*
         version: link:../../packages/game-state-machine

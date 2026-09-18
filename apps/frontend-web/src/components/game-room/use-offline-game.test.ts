@@ -1,12 +1,19 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, renderHook } from "@testing-library/react";
+import { chooseBotMove } from "@big-two/game-ai";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { useOfflineGame } from "./use-offline-game";
-import { createPlayEvent } from "./game-room-session";
+import { createPlayEvent, getCardsToBeat, getRequiredCard } from "./game-room-session";
+import { requestJevBotMove } from "./jev-bot-client";
+
+vi.mock("./jev-bot-client", () => ({ requestJevBotMove: vi.fn() }));
+
+const requestJevBotMoveMock = vi.mocked(requestJevBotMove);
 
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
   vi.useRealTimers();
 });
 
@@ -87,5 +94,64 @@ describe("pass-and-play turns", () => {
       vi.advanceTimersByTime(5000);
     });
     expect(result.current.gameState).toBe(state);
+  });
+
+  it("uses the Jev move service only for a Jev strategy seat", async () => {
+    vi.useFakeTimers();
+    requestJevBotMoveMock.mockImplementation(async (state, playerId) => {
+      const player = state.context.players.find((entry) => entry.id === playerId)!;
+      return chooseBotMove({
+        hand: player.hand,
+        roundMode: state.context.roundMode,
+        cardsToBeat: getCardsToBeat(state),
+        requiredCard: getRequiredCard(state),
+      });
+    });
+    const { result } = renderHook(() => useOfflineGame());
+    act(() =>
+      result.current.start([
+        { id: "basic-1", name: "Basic 1", isBot: true },
+        { id: "jev", name: "Jev", isBot: true, botStrategy: "basic" },
+        { id: "basic-2", name: "Basic 2", isBot: true },
+        { id: "basic-3", name: "Basic 3", isBot: true },
+      ]),
+    );
+    act(() => result.current.setBotStrategy("jev", "jev"));
+
+    for (let turn = 0; turn < 4; turn += 1) {
+      const state = result.current.gameState!;
+      const current = state.context.players[state.context.currentPlayerIndex];
+      if (current.id === "jev") break;
+      await act(async () => vi.advanceTimersByTimeAsync(650));
+    }
+
+    const jevTurn = result.current.gameState!;
+    expect(jevTurn.context.players[jevTurn.context.currentPlayerIndex].id).toBe("jev");
+    await act(async () => vi.advanceTimersByTimeAsync(650));
+
+    expect(requestJevBotMoveMock).toHaveBeenCalledOnce();
+    expect(requestJevBotMoveMock).toHaveBeenCalledWith(jevTurn, "jev");
+  });
+});
+
+describe("solo bot settings", () => {
+  it("updates the strategy for an AI seat only", () => {
+    const { result } = renderHook(() => useOfflineGame());
+    act(() =>
+      result.current.start([
+        { id: "human", name: "Human" },
+        { id: "bot", name: "Bot", isBot: true, botStrategy: "basic" },
+      ]),
+    );
+
+    expect(result.current.botPlayers).toEqual([
+      { id: "bot", name: "Bot", isBot: true, botStrategy: "basic" },
+    ]);
+
+    act(() => result.current.setBotStrategy("bot", "jev"));
+    expect(result.current.botPlayers[0]?.botStrategy).toBe("jev");
+
+    act(() => result.current.setBotStrategy("human", "jev"));
+    expect(result.current.botPlayers).toHaveLength(1);
   });
 });
