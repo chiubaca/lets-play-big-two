@@ -15,7 +15,7 @@ import {
   isGameTurnState,
 } from "./game-room-session";
 import { requestJevBotMove } from "./jev-bot-client";
-import type { GameRoomUser } from "./game-room";
+import type { BotStrategy, GameRoomUser } from "./game-room";
 
 const BOT_THINKING_DELAY_MS = 650;
 
@@ -24,7 +24,6 @@ export const OFFLINE_HUMAN: GameRoomUser = {
   name: "You",
 };
 
-export type BotStrategy = "basic" | "jev";
 export type OfflinePlayer = GameRoomUser & { isBot?: boolean; botStrategy?: BotStrategy };
 
 const OFFLINE_PLAYERS: OfflinePlayer[] = [
@@ -52,11 +51,14 @@ export function useOfflineGame() {
   const [gameState, setGameState] = useState<BigTwoGameMachineSnapshot>();
   const [thinkingPlayerId, setThinkingPlayerId] = useState<string>();
   const playersRef = useRef<OfflinePlayer[]>([]);
+  const [players, setPlayers] = useState<OfflinePlayer[]>([]);
   const [readyPlayerId, setReadyPlayerId] = useState<string>();
 
   const start = useCallback((players?: OfflinePlayer[]) => {
     if (actorRef.current) return;
-    playersRef.current = players ?? OFFLINE_PLAYERS.map((player) => ({ ...player }));
+    const gamePlayers = (players ?? OFFLINE_PLAYERS).map((player) => ({ ...player }));
+    playersRef.current = gamePlayers;
+    setPlayers(gamePlayers);
 
     const actor = createActor(bigTwoGameMachine);
     actorRef.current = actor;
@@ -79,6 +81,21 @@ export function useOfflineGame() {
       });
     }
     actor.send({ type: "START_GAME" });
+  }, []);
+
+  const setBotStrategy = useCallback((playerId: string, botStrategy: BotStrategy) => {
+    let changed = false;
+    const updatedPlayers = playersRef.current.map((player) => {
+      if (!player.isBot || player.id !== playerId || player.botStrategy === botStrategy) {
+        return player;
+      }
+      changed = true;
+      return { ...player, botStrategy };
+    });
+
+    if (!changed) return;
+    playersRef.current = updatedPlayers;
+    setPlayers(updatedPlayers);
   }, []);
 
   const send = useCallback((event: GameEvent) => {
@@ -174,6 +191,7 @@ export function useOfflineGame() {
   }, [gameState]);
 
   return {
+    botPlayers: players.filter((player) => player.isBot),
     gameState,
     readyPlayerId,
     ready: () => {
@@ -192,6 +210,7 @@ export function useOfflineGame() {
       )?.isBot ?? false,
     requestHint,
     send,
+    setBotStrategy,
     start,
     thinkingPlayerId,
   };

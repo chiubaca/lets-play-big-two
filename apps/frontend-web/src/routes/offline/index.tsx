@@ -13,7 +13,8 @@ export const Route = createFileRoute("/offline/")({
 function RouteComponent() {
   const navigate = useNavigate();
   const [passAndPlay, setPassAndPlay] = useState(false);
-  const { gameState, requestHint, send, start, thinkingPlayerId } = useOfflineGame();
+  const { botPlayers, gameState, requestHint, send, setBotStrategy, start, thinkingPlayerId } =
+    useOfflineGame();
 
   if (passAndPlay) return <PassAndPlay onBack={() => setPassAndPlay(false)} />;
 
@@ -21,6 +22,7 @@ function RouteComponent() {
     return (
       <GameRoom
         gameState={gameState}
+        botSettings={{ players: botPlayers, onStrategyChange: setBotStrategy }}
         requestHint={requestHint}
         send={send}
         tableLabel="Solo table"
@@ -68,7 +70,7 @@ function RouteComponent() {
               <Users className="mx-auto mb-3 h-8 w-8 text-gold" />
               <h3 className="mb-2 font-display text-xl text-gold">4 Players</h3>
               <p className="text-sm text-muted-foreground">
-                You versus two quick bots and Jev, a TypeSafe-powered strategic opponent
+                You versus three bots. Choose Basic or TypeSafe-powered Jev AI for each opponent
               </p>
             </div>
 

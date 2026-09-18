@@ -111,11 +111,12 @@ describe("pass-and-play turns", () => {
     act(() =>
       result.current.start([
         { id: "basic-1", name: "Basic 1", isBot: true },
-        { id: "jev", name: "Jev", isBot: true, botStrategy: "jev" },
+        { id: "jev", name: "Jev", isBot: true, botStrategy: "basic" },
         { id: "basic-2", name: "Basic 2", isBot: true },
         { id: "basic-3", name: "Basic 3", isBot: true },
       ]),
     );
+    act(() => result.current.setBotStrategy("jev", "jev"));
 
     for (let turn = 0; turn < 4; turn += 1) {
       const state = result.current.gameState!;
@@ -130,5 +131,27 @@ describe("pass-and-play turns", () => {
 
     expect(requestJevBotMoveMock).toHaveBeenCalledOnce();
     expect(requestJevBotMoveMock).toHaveBeenCalledWith(jevTurn, "jev");
+  });
+});
+
+describe("solo bot settings", () => {
+  it("updates the strategy for an AI seat only", () => {
+    const { result } = renderHook(() => useOfflineGame());
+    act(() =>
+      result.current.start([
+        { id: "human", name: "Human" },
+        { id: "bot", name: "Bot", isBot: true, botStrategy: "basic" },
+      ]),
+    );
+
+    expect(result.current.botPlayers).toEqual([
+      { id: "bot", name: "Bot", isBot: true, botStrategy: "basic" },
+    ]);
+
+    act(() => result.current.setBotStrategy("bot", "jev"));
+    expect(result.current.botPlayers[0]?.botStrategy).toBe("jev");
+
+    act(() => result.current.setBotStrategy("human", "jev"));
+    expect(result.current.botPlayers).toHaveLength(1);
   });
 });
