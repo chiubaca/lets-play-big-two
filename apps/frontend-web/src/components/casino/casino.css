@@ -3,36 +3,7 @@
   inset: 0;
   z-index: -1;
   overflow: hidden;
-  background:
-    repeating-linear-gradient(
-      90deg,
-      transparent 0 17%,
-      #3b2915 17.1% 17.5%,
-      #92703a 17.6%,
-      #110f08 17.8% 19%,
-      transparent 19.2% 39%
-    ),
-    radial-gradient(ellipse at 50% 25%, var(--casino-wall), var(--casino-night-deep) 85%);
-}
-
-.casino-backdrop::before {
-  content: "";
-  position: absolute;
-  inset: -20%;
-  opacity: 0.06;
-  background-image: repeating-conic-gradient(#476241 0% 25%, transparent 0% 50%);
-  background-size: 58px 80px;
-  mask-image: linear-gradient(90deg, black, transparent 30% 70%, black);
-}
-
-.casino-backdrop::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 50% 0%, #d7b86816, transparent 30%),
-    linear-gradient(90deg, #0009, transparent 17% 83%, #0009);
+  background: var(--casino-night) url("/desktop-bg.png") center / cover no-repeat;
 }
 
 .casino-panel {
@@ -177,7 +148,6 @@
   margin: 0 auto;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #e6bc6833;
 }
 
 .casino-lobby-content {
@@ -236,7 +206,6 @@
   width: min(100% - 32px, 1080px);
   margin: 0 auto;
   padding: 16px 0 22px;
-  border-top: 1px solid #e6bc6833;
   color: #8e8668;
   font-family: var(--font-mono);
   font-size: 8px;
@@ -340,6 +309,13 @@
   from {
     opacity: 0;
     transform: translateX(-50%) translateY(90px) rotate(0deg) scale(0.88);
+  }
+}
+
+@media (max-width: 760px), (orientation: portrait) {
+  .casino-backdrop {
+    background-image: url("/vertical-bg.png");
+    background-position: center top;
   }
 }
 

@@ -15,14 +15,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { AuthPanel } from "~/components/auth-panel";
-import {
-  CasinoBackdrop,
-  CasinoKicker,
-  CasinoPanel,
-  CasinoTableMark,
-  CasinoWordmark,
-  DecorativeCardFan,
-} from "~/components/casino/casino";
+import { CasinoBackdrop, CasinoKicker, CasinoPanel } from "~/components/casino/casino";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
@@ -76,7 +69,6 @@ export function HomeScreen({
     <main className="home-page">
       <CasinoBackdrop />
       <header className="home-nav">
-        <CasinoWordmark />
         {session ? (
           <div className="home-account">
             <span>
@@ -106,25 +98,23 @@ export function HomeScreen({
       </header>
 
       <div className="home-content">
-        <section className="home-hero" aria-labelledby="home-title">
+        <section className="home-hero">
           <div className="home-copy">
-            <CasinoKicker>Hong Kong’s favourite shedding game</CasinoKicker>
-            <h1 id="home-title">
-              Big cards.
-              <em>Better company.</em>
+            <h1 className="home-logo-title">
+              <img
+                className="home-logo"
+                src="/big-two-crew-logo.png"
+                alt="Big Two Crew"
+                width="1039"
+                height="1043"
+              />
             </h1>
-            <p className="home-intro">
-              Outsmart the table, empty your hand, and make the mighty 2 count. No account needed
-              for local play.
-            </p>
-
             <div className="home-mode-grid" aria-label="Choose a way to play">
               <Link
                 to="/offline"
                 search={{ mode: undefined }}
                 className="home-mode-card home-mode-solo"
               >
-                <span className="home-mode-number">01</span>
                 <span className="home-mode-icon">
                   <Bot aria-hidden="true" />
                 </span>
@@ -141,7 +131,6 @@ export function HomeScreen({
                 search={{ mode: "pass-and-play" }}
                 className="home-mode-card home-mode-pass"
               >
-                <span className="home-mode-number">02</span>
                 <span className="home-mode-icon">
                   <UsersRound aria-hidden="true" />
                 </span>
@@ -152,17 +141,6 @@ export function HomeScreen({
                 </span>
                 <ArrowRight className="home-mode-arrow" aria-hidden="true" />
               </Link>
-            </div>
-          </div>
-
-          <div className="home-table-scene" aria-hidden="true">
-            <span className="home-table-light" />
-            <div className="home-mini-table">
-              <CasinoTableMark />
-              <DecorativeCardFan />
-              <span className="home-chip chip-one">♠</span>
-              <span className="home-chip chip-two">2</span>
-              <span className="home-table-plaque">PLAY ANYWHERE · STAY SHARP</span>
             </div>
           </div>
         </section>
@@ -238,12 +216,6 @@ export function HomeScreen({
           )}
         </CasinoPanel>
       </div>
-
-      <footer className="home-footer">
-        <span>♠ BIG TWO</span>
-        <span>Big cards · Bigger friendships</span>
-        <span>Play responsibly</span>
-      </footer>
 
       <Dialog open={authOpen} onOpenChange={setAuthOpen}>
         <DialogContent className="home-auth-dialog" showCloseButton={false}>
