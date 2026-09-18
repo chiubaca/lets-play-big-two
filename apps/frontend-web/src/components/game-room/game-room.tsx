@@ -9,6 +9,7 @@ import { makePlayerOrder } from "./helpers/make-player-order";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
 import { createPlayEvent, isGameTurnState } from "./game-room-session";
 import { useTableAudio } from "./use-table-audio";
+import { CasinoBackdrop, CasinoTableMark } from "~/components/casino/casino";
 import "./game-room.css";
 
 const LOCAL_DEV_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "local.bigtwo.com"]);
@@ -230,7 +231,7 @@ export const GameRoom = ({
 
   return (
     <main className={`game-room ${devClassName}`} style={devStyle}>
-      <div className="room-wall" aria-hidden="true" />
+      <CasinoBackdrop />
       <header className="room-header">
         <button className="room-icon" aria-label="Open table menu" onClick={() => setPanel("menu")}>
           <Menu />
@@ -275,18 +276,7 @@ export const GameRoom = ({
       </header>
       <section className="table-shell" aria-label="Big Two game table">
         <div className="table-felt">
-          <div
-            className={`table-brand ${lastHand?.length ? "brand-subtle" : ""}`}
-            aria-hidden="true"
-          >
-            <span className="brand-spade">♠</span>
-            <span>
-              BIG CARDS
-              <br />
-              BIGGER FRIENDSHIPS
-            </span>
-            <div className="brand-rule">◆</div>
-          </div>
+          <CasinoTableMark subtle={Boolean(lastHand?.length)} />
           {[
             { index: top, position: "top", avatar: "👨🏻" },
             { index: left, position: "left", avatar: "👩🏻" },

@@ -7,34 +7,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  color: #f9e8b9;
+  color: var(--casino-cream);
   font-family: "Inter Variable", sans-serif;
-  background: #030e09;
+  background: var(--casino-night);
   padding: 18px 26px max(12px, env(safe-area-inset-bottom));
-}
-.room-wall {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background:
-    repeating-linear-gradient(
-      90deg,
-      transparent 0 17%,
-      #3b2915 17.1% 17.5%,
-      #92703a 17.6%,
-      #110f08 17.8% 19%,
-      transparent 19.2% 39%
-    ),
-    radial-gradient(ellipse at 50% 25%, #183523, #020b07 85%);
-}
-.room-wall::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  opacity: 0.06;
-  background-image: repeating-conic-gradient(#476241 0% 25%, transparent 0% 50%);
-  background-size: 58px 80px;
-  mask-image: linear-gradient(90deg, black, transparent 30% 70%, black);
 }
 .room-header {
   width: min(100%, 1160px);
@@ -50,10 +26,10 @@
   height: 58px;
   display: grid;
   place-items: center;
-  border: 1.5px solid #f4d88b;
+  border: 1.5px solid var(--casino-gold);
   border-radius: 50%;
-  color: #ffcf69;
-  background: linear-gradient(145deg, #192014, #000703 75%);
+  color: var(--casino-gold);
+  background: var(--casino-panel-gradient);
   box-shadow:
     inset 0 -3px 1px #a96e23,
     0 6px 12px #0009;
@@ -77,9 +53,9 @@
   max-width: 45%;
   height: 67px;
   padding: 9px 18px;
-  border: 1px solid #eccb7e;
+  border: 1px solid var(--casino-gold);
   border-radius: 16px;
-  background: linear-gradient(150deg, #1c2013, #030b06 65%);
+  background: var(--casino-panel-gradient);
   box-shadow:
     inset 0 -2px #9f651d,
     0 5px 14px #0008;
@@ -110,7 +86,7 @@
 .room-code svg {
   width: 25px;
   flex-shrink: 0;
-  color: #f4ce78;
+  color: var(--casino-gold);
 }
 .table-shell {
   container-type: inline-size;
@@ -121,20 +97,32 @@
   padding: 19px;
   border: 1px solid #785020;
   border-radius: 110px 110px 65px 65px;
-  background: repeating-linear-gradient(3deg, #281b10 0px, #302015 2px, #25190f 4px, #342316 6px);
+  background: repeating-linear-gradient(
+    3deg,
+    var(--casino-wood) 0px,
+    #302015 2px,
+    #25190f 4px,
+    #342316 6px
+  );
   box-shadow:
     0 14px 0 #090c07,
     0 22px 28px #000a,
     inset 0 0 0 5px #170f09,
-    inset 0 0 0 7px #594025,
+    inset 0 0 0 7px var(--casino-wood-light),
     inset 0 0 24px 8px #080703;
 }
 .table-felt {
   position: relative;
   height: 100%;
-  border: 3px solid #d4a44a;
+  border: 3px solid var(--casino-brass);
   border-radius: 90px 90px 47px 47px;
-  background: radial-gradient(ellipse at 50% 35%, #12603c, #06462a 48%, #002b17 85%, #011d10);
+  background: radial-gradient(
+    ellipse at 50% 35%,
+    var(--casino-felt-bright),
+    var(--casino-felt) 48%,
+    var(--casino-felt-deep) 85%,
+    #011d10
+  );
   box-shadow:
     0 0 0 3px #060b05,
     inset 0 0 0 4px #152c13,
@@ -191,7 +179,7 @@
   gap: 12px;
   min-width: 160px;
   padding: 5px 20px 5px 7px;
-  border: 1px solid #edc56b;
+  border: 1px solid var(--casino-gold);
   border-radius: 24px;
   background: linear-gradient(135deg, #0a1d0c, #000c04 70%);
   box-shadow:
@@ -304,52 +292,6 @@
   font-size: 17px;
   background: repeating-conic-gradient(#ac2921 0% 25%, #852019 0% 50%) 0 0 / 8px 8px;
 }
-.table-brand {
-  position: absolute;
-  top: 26%;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  color: #b6bd60;
-  opacity: 0.65;
-  text-align: center;
-  pointer-events: none;
-}
-.brand-spade {
-  font-family: Georgia, serif;
-  font-size: clamp(90px, 15cqw, 160px);
-  line-height: 1;
-  color: #97af486b;
-}
-.table-brand > span:not(.brand-spade) {
-  font-family: Georgia, serif;
-  font-size: 11px;
-  line-height: 1.8;
-  letter-spacing: 0.32em;
-  white-space: nowrap;
-}
-.brand-rule {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 10px;
-  margin-top: 13px;
-}
-.brand-rule::before,
-.brand-rule::after {
-  content: "";
-  width: 44px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, #e6bc68);
-}
-.brand-rule::after {
-  transform: rotate(180deg);
-}
-.brand-subtle {
-  opacity: 0.17;
-}
 .table-play-area {
   position: absolute;
   top: 22%;
@@ -403,7 +345,7 @@
   color: #a4b391;
 }
 .table-prompt .your-turn-text {
-  color: #f4d584;
+  color: var(--casino-gold);
   text-transform: uppercase;
   letter-spacing: 0.13em;
   font-weight: 650;
@@ -418,8 +360,8 @@
 .game-room .table-card {
   border: 1px solid #d0c6b4;
   border-radius: 8px;
-  background: linear-gradient(115deg, #fffaf0, #eee5d7 65%, #d5c7b4);
-  color: #121510;
+  background: linear-gradient(115deg, var(--casino-card), #eee5d7 65%, var(--casino-card-shadow));
+  color: var(--casino-black);
   box-shadow:
     inset 0 0 0 2px #fff6,
     0 5px 8px #0006;
@@ -476,13 +418,13 @@
   line-height: 1;
 }
 .game-room .table-card[data-red="true"]::after {
-  color: #c52420;
+  color: var(--casino-red);
 }
 .game-room .table-card .text-suit-red {
-  color: #c52420;
+  color: var(--casino-red);
 }
 .game-room .table-card .text-suit-black {
-  color: #111510;
+  color: var(--casino-black);
 }
 .game-room .hand-card[aria-pressed="true"] {
   transform: translateX(calc(-50% + var(--card-x)))
@@ -556,7 +498,7 @@
 }
 .game-room button:focus-visible,
 .table-dialog a:focus-visible {
-  outline: 3px solid #fff0b5;
+  outline: 3px solid var(--casino-focus);
   outline-offset: 4px;
 }
 .game-room .hand-card:focus-visible {
@@ -572,14 +514,14 @@
 }
 .table-action {
   height: 60px;
-  border: 1.5px solid #f7d991;
+  border: 1.5px solid var(--casino-gold);
   border-radius: 24px;
   background: linear-gradient(135deg, #0b2513, #001108 80%);
   box-shadow:
     inset 0 -3px #a5681f,
     inset 0 2px #fff2,
     0 6px 10px #0008;
-  color: #f8cd70;
+  color: var(--casino-gold);
   font-size: 23px;
   font-weight: 550;
   cursor: pointer;
@@ -595,8 +537,8 @@
   color: #b5a978;
 }
 .table-action.action-play {
-  background: linear-gradient(170deg, #ffdc87, #f5b943 55%, #d68a1c);
-  color: #1c1b0d;
+  background: var(--casino-gold-gradient);
+  color: var(--casino-black);
   box-shadow:
     inset 0 -3px #aa681b,
     inset 0 2px #fff6,
@@ -630,8 +572,8 @@
 }
 .table-dialog {
   border: 1px solid #c5a461;
-  background: #071b10;
-  color: #f7dfab;
+  background: var(--casino-panel);
+  color: var(--casino-cream);
   border-radius: 22px;
 }
 .table-dialog [data-slot="dialog-description"] {
@@ -643,8 +585,8 @@
   border: 1px solid #c5a461;
   border-radius: 10px;
   padding: 10px 18px;
-  color: #f3cf84;
-  background: #122b18;
+  color: var(--casino-gold);
+  background: var(--casino-panel-raised);
   text-align: center;
   cursor: pointer;
 }

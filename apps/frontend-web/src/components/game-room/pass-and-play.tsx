@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ArrowLeft, Smartphone, UserPlus, X } from "lucide-react";
+import { Smartphone, UserPlus, X } from "lucide-react";
+import { CasinoLobby, CasinoPanel } from "~/components/casino/casino";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
@@ -55,23 +56,18 @@ export function PassAndPlay({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <main className="min-h-svh bg-felt px-4 py-6 sm:py-10">
-      <div className="mx-auto max-w-xl">
-        <Button variant="ghost" onClick={onBack} className="mb-8 text-gold">
-          <ArrowLeft className="h-4 w-4" /> Back to offline modes
-        </Button>
-        <header className="mb-8 text-center">
-          <span className="text-5xl text-gold" aria-hidden="true">
-            ♠
-          </span>
-          <p className="mt-4 text-xs uppercase tracking-[0.3em] text-gold">
-            One device. Great company.
-          </p>
-          <h1 className="mt-3 font-display text-4xl text-gold">Pass &amp; Play</h1>
-          <p className="mt-3 text-muted-foreground">Take a seat. Keep your cards to yourself.</p>
-        </header>
+    <CasinoLobby
+      backLabel="Offline modes"
+      description="Add your players, keep each hand private, and pass the device when the table calls the next name."
+      footer="♠ Big Two · One device · Great company"
+      icon={<Smartphone />}
+      kicker="Shared device · private hands"
+      onBack={onBack}
+      title="Pass & Play"
+    >
+      <CasinoPanel className="p-6 sm:p-8">
         <form
-          className="space-y-6 rounded-2xl border border-gold/30 bg-card/80 p-6 sm:p-8"
+          className="space-y-6"
           onSubmit={(event) => {
             event.preventDefault();
             if (!validNames) return;
@@ -93,13 +89,20 @@ export function PassAndPlay({ onBack }: { onBack: () => void }) {
           }}
         >
           <div className="flex items-baseline justify-between gap-3">
-            <h2 className="font-display text-xl text-gold">Who’s at the table?</h2>
-            <span className="text-xs text-muted-foreground">2–4 people</span>
+            <h2 className="font-display text-2xl text-[var(--casino-gold-bright)]">
+              Who’s at the table?
+            </h2>
+            <span className="font-mono text-[9px] tracking-wider text-[var(--casino-cream-muted)]">
+              2–4 PEOPLE
+            </span>
           </div>
           <div className="space-y-4">
             {names.map((name, index) => (
               <div key={index}>
-                <label htmlFor={`player-${index}`} className="mb-2 block text-sm text-gold">
+                <label
+                  htmlFor={`player-${index}`}
+                  className="mb-2 block text-xs text-[var(--casino-cream-muted)]"
+                >
                   Player {index + 1}
                 </label>
                 <div className="flex gap-2">
@@ -110,7 +113,7 @@ export function PassAndPlay({ onBack }: { onBack: () => void }) {
                     maxLength={24}
                     autoComplete="off"
                     placeholder="Enter a name"
-                    className="border-gold/30"
+                    className="h-11 rounded-xl border-[var(--casino-gold)]/30 bg-[var(--casino-night-deep)]/70"
                     onChange={(event) =>
                       setNames(
                         names.map((value, seat) => (seat === index ? event.target.value : value)),
@@ -121,6 +124,7 @@ export function PassAndPlay({ onBack }: { onBack: () => void }) {
                     <Button
                       type="button"
                       variant="ghost"
+                      className="h-11 text-[var(--casino-gold)]"
                       aria-label={`Remove player ${index + 1}`}
                       onClick={() => setNames(names.filter((_, seat) => seat !== index))}
                     >
@@ -135,22 +139,22 @@ export function PassAndPlay({ onBack }: { onBack: () => void }) {
             <>
               <Button
                 type="button"
-                variant="outline"
-                className="w-full border-gold/30"
+                variant="lacquer"
+                className="h-11 w-full"
                 onClick={() => setNames([...names, ""])}
               >
                 <UserPlus className="h-4 w-4" /> Add player
               </Button>
-              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-gold/20 p-4">
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[var(--casino-gold)]/25 bg-black/10 p-4">
                 <input
                   type="checkbox"
                   checked={fillWithAI}
                   onChange={(event) => setFillWithAI(event.target.checked)}
-                  className="h-4 w-4 accent-gold"
+                  className="h-4 w-4 accent-[var(--casino-gold)]"
                 />
                 <span className="text-sm">
                   Fill empty seats with AI{" "}
-                  <span className="text-muted-foreground">
+                  <span className="text-[#a9aa95]">
                     ({4 - names.length} {names.length === 3 ? "bot" : "bots"})
                   </span>
                 </span>
@@ -162,7 +166,7 @@ export function PassAndPlay({ onBack }: { onBack: () => void }) {
               Use a different name for each player.
             </p>
           )}
-          <p className="text-sm leading-relaxed text-muted-foreground">
+          <p className="text-sm leading-relaxed text-[#a9aa95]">
             {fillWithAI && names.length < 4
               ? "AI plays automatically between your turns."
               : "Play with just your group; unused seats stay empty."}{" "}
@@ -171,13 +175,14 @@ export function PassAndPlay({ onBack }: { onBack: () => void }) {
           <Button
             type="submit"
             disabled={!validNames}
-            className="w-full bg-gold-gradient font-display text-lg text-primary-foreground"
+            className="h-12 w-full text-lg"
+            variant="gold"
             size="lg"
           >
             Deal cards
           </Button>
         </form>
-      </div>
-    </main>
+      </CasinoPanel>
+    </CasinoLobby>
   );
 }

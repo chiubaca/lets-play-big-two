@@ -120,6 +120,31 @@
   --playcard-foreground: 155 30% 10%;
   --suit-red: 358 70% 48%;
   --suit-black: 155 30% 10%;
+
+  /* Casino surfaces — shared by the game table and the surrounding product UI */
+  --casino-night: #030e09;
+  --casino-night-deep: #020b07;
+  --casino-wall: #183523;
+  --casino-panel: #071b10;
+  --casino-panel-raised: #122b18;
+  --casino-felt: #06462a;
+  --casino-felt-bright: #12603c;
+  --casino-felt-deep: #002b17;
+  --casino-wood: #281b10;
+  --casino-wood-light: #594025;
+  --casino-brass: #d4a44a;
+  --casino-gold: #f4ce78;
+  --casino-gold-bright: #ffe39a;
+  --casino-gold-deep: #a5681f;
+  --casino-cream: #f9e8b9;
+  --casino-cream-muted: #cdb77f;
+  --casino-card: #fffaf0;
+  --casino-card-shadow: #d5c7b4;
+  --casino-red: #c52420;
+  --casino-black: #111510;
+  --casino-focus: #fff0b5;
+  --casino-panel-gradient: linear-gradient(145deg, #192014, #000703 75%);
+  --casino-gold-gradient: linear-gradient(170deg, #ffdc87, #f5b943 55%, #d68a1c);
 }
 
 @layer base {

@@ -10,6 +10,9 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
+        gold: "rounded-xl border-[var(--casino-gold)] [background:var(--casino-gold-gradient)] font-heading text-[var(--casino-black)] shadow-[inset_0_-3px_var(--casino-gold-deep),inset_0_2px_#fff6,0_7px_16px_#0007] hover:brightness-110",
+        lacquer:
+          "rounded-xl border-[var(--casino-gold)] [background:var(--casino-panel-gradient)] font-heading text-[var(--casino-gold)] shadow-[inset_0_-2px_var(--casino-gold-deep),0_7px_16px_#0007] hover:brightness-125",
         outline:
           "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
