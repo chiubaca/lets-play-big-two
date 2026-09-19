@@ -17,6 +17,7 @@ interface MyRouterContext {
 }
 
 const THEME_INIT_SCRIPT = `(function(){try{var root=document.documentElement;root.classList.remove('light');root.classList.add('dark');root.style.colorScheme='dark';}catch(e){}})();`;
+const SERVICE_WORKER_SCRIPT = `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/service-worker.js');});}`;
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
   head: () => ({
@@ -26,21 +27,65 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
       },
       {
         name: "viewport",
-        content: "width=device-width, initial-scale=1",
+        content: "width=device-width, initial-scale=1, viewport-fit=cover",
       },
       {
-        title: "Lets Play Big Two",
+        title: "Big Two Crew",
       },
       {
         name: "description",
         content:
           "The classic four-player Chinese card game - refined, real-time, and ready when you are.",
       },
+      {
+        name: "application-name",
+        content: "Big Two Crew",
+      },
+      {
+        name: "theme-color",
+        content: "#030e09",
+      },
+      {
+        name: "mobile-web-app-capable",
+        content: "yes",
+      },
+      {
+        name: "apple-mobile-web-app-capable",
+        content: "yes",
+      },
+      {
+        name: "apple-mobile-web-app-status-bar-style",
+        content: "black-translucent",
+      },
+      {
+        name: "apple-mobile-web-app-title",
+        content: "Big Two Crew",
+      },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
+      },
+      {
+        rel: "manifest",
+        href: "/manifest.webmanifest",
+      },
+      {
+        rel: "icon",
+        href: "/favicon.ico",
+        sizes: "any",
+      },
+      {
+        rel: "icon",
+        href: "/favicon-32x32.png",
+        type: "image/png",
+        sizes: "32x32",
+      },
+      {
+        rel: "apple-touch-icon",
+        href: "/apple-touch-icon.png",
+        sizes: "180x180",
       },
       {
         rel: "preconnect",
@@ -84,6 +129,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             ]}
           />
         </TanStackQueryProvider>
+        <script dangerouslySetInnerHTML={{ __html: SERVICE_WORKER_SCRIPT }} />
         <Scripts />
       </body>
     </html>

@@ -30,14 +30,26 @@
   color: var(--casino-gold);
 }
 
-.home-account > span {
+.home-account-profile {
   display: grid;
+  color: inherit;
   text-align: right;
+  text-decoration: none;
   font-family: var(--font-heading);
   font-size: 15px;
 }
 
-.home-account small {
+.home-account-profile:hover {
+  color: var(--casino-gold-bright);
+}
+
+.home-account-profile:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--casino-focus);
+  outline-offset: 4px;
+}
+
+.home-account-profile small {
   color: var(--casino-cream-muted);
   font-family: var(--font-mono);
   font-size: 7px;
@@ -308,6 +320,29 @@
   margin: 0;
   color: #ff9c91;
   font-size: 12px;
+}
+
+.home-legal {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  width: min(100% - 40px, 920px);
+  margin: 0 auto;
+  padding: 0 0 28px;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 18px;
+  color: #898b78;
+  font-size: 10px;
+}
+
+.home-legal a {
+  color: var(--casino-cream-muted);
+  text-underline-offset: 3px;
+}
+
+.home-legal a:hover {
+  color: var(--casino-gold-bright);
 }
 
 .home-auth-dialog {

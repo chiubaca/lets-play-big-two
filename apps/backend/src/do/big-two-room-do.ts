@@ -8,6 +8,7 @@ import {
   type Player,
 } from "@big-two/game-state-machine";
 import { getGameActionAuthorizationError } from "./authorize-game-action";
+import { redactPlayerIdentity } from "./redact-player-identity";
 
 export class BigTwoRoomObject extends DurableObject<Env> {
   sql: SqlStorage;
@@ -30,7 +31,7 @@ export class BigTwoRoomObject extends DurableObject<Env> {
   ): Promise<{ success: true } | { success: false; error: string }> {
     const query = this.sql.exec(`SELECT game_state FROM game_room WHERE id = 1`);
 
-    const record = query.one();
+    const record = query.toArray()[0];
     if (!record) {
       throw new Error("No game state found");
     }
@@ -68,7 +69,7 @@ export class BigTwoRoomObject extends DurableObject<Env> {
   async getGameState() {
     const query = this.sql.exec(`SELECT game_state FROM game_room WHERE id = 1`);
 
-    const record = query.one();
+    const record = query.toArray()[0];
     if (!record) {
       return null;
     }
@@ -94,6 +95,27 @@ export class BigTwoRoomObject extends DurableObject<Env> {
       1,
       JSON.stringify(gameState),
     );
+  }
+
+  redactPlayer(playerId: string) {
+    const query = this.sql.exec(`SELECT game_state FROM game_room WHERE id = 1`);
+    const record = query.toArray()[0];
+    if (!record) return;
+
+    const gameState = JSON.parse(record.game_state as string) as BigTwoGameMachineSnapshot;
+    const redactedState = redactPlayerIdentity(
+      gameState,
+      playerId,
+      `deleted-${crypto.randomUUID()}`,
+    );
+    if (!redactedState) return;
+
+    const serialisedGameState = JSON.stringify(redactedState);
+    this.sql.exec(`UPDATE game_room SET game_state = ? WHERE id = 1`, serialisedGameState);
+
+    for (const socket of this.ctx.getWebSockets()) {
+      socket.send(serialisedGameState);
+    }
   }
 
   async fetch(_: Request) {

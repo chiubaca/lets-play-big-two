@@ -71,10 +71,10 @@ export function HomeScreen({
       <header className="home-nav">
         {session ? (
           <div className="home-account">
-            <span>
+            <Link to="/account" className="home-account-profile" aria-label="Account settings">
               <small>Member</small>
               {displayName}
-            </span>
+            </Link>
             <Button
               variant="ghost"
               size="icon"
@@ -216,6 +216,12 @@ export function HomeScreen({
           )}
         </CasinoPanel>
       </div>
+
+      <footer className="home-legal">
+        <span>© {new Date().getFullYear()} Big Two Crew</span>
+        <Link to="/privacy">Privacy</Link>
+        <Link to="/account">Account &amp; data deletion</Link>
+      </footer>
 
       <Dialog open={authOpen} onOpenChange={setAuthOpen}>
         <DialogContent className="home-auth-dialog" showCloseButton={false}>

@@ -1,0 +1,130 @@
+.legal-page {
+  position: relative;
+  isolation: isolate;
+  min-height: 100svh;
+  padding: 28px 18px 56px;
+  color: var(--casino-cream);
+  background: var(--casino-night);
+}
+
+.legal-shell {
+  position: relative;
+  z-index: 2;
+  width: min(100%, 820px);
+  margin: 0 auto;
+}
+
+.legal-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 20px;
+  color: var(--casino-gold);
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.legal-back svg {
+  width: 16px;
+}
+
+.legal-back:hover {
+  color: var(--casino-gold-bright);
+}
+
+.legal-back:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--casino-focus);
+  outline-offset: 4px;
+}
+
+.legal-card {
+  padding: clamp(24px, 6vw, 56px);
+  border: 1px solid #eccb7e70;
+  border-radius: 24px;
+  background: linear-gradient(150deg, #102619f5, #031009fa 70%);
+  box-shadow:
+    0 28px 70px #0009,
+    inset 0 -3px var(--casino-gold-deep);
+}
+
+.legal-card > header {
+  padding-bottom: 24px;
+  border-bottom: 1px solid #eccb7e38;
+}
+
+.legal-card > header p {
+  margin: 0 0 8px;
+  color: var(--casino-cream-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.legal-card h1 {
+  margin: 0;
+  color: var(--casino-gold-bright);
+  font-size: clamp(34px, 7vw, 56px);
+  line-height: 1;
+}
+
+.legal-content {
+  display: grid;
+  gap: 24px;
+  margin-top: 28px;
+  color: #c7c5b1;
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+.legal-content section {
+  display: grid;
+  gap: 8px;
+}
+
+.legal-content h2 {
+  margin: 0;
+  color: var(--casino-gold);
+  font-size: 22px;
+}
+
+.legal-content p,
+.legal-content ul {
+  margin: 0;
+}
+
+.legal-content ul {
+  padding-left: 20px;
+}
+
+.legal-content a {
+  color: var(--casino-gold-bright);
+  text-underline-offset: 3px;
+}
+
+.legal-action-card {
+  padding: 20px;
+  border: 1px solid #eccb7e40;
+  border-radius: 16px;
+  background: #020b0788;
+}
+
+.legal-action-card label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--casino-cream-muted);
+  font-size: 11px;
+}
+
+.legal-action-card input {
+  height: 46px;
+  border-color: #eccb7e66;
+  color: var(--casino-cream);
+  background: #020b07b8;
+}
+
+.legal-error {
+  color: #ff9c91;
+  font-size: 12px;
+}

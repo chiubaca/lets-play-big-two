@@ -6,12 +6,22 @@ import { nanoid } from "nanoid";
 import { eq } from "drizzle-orm";
 
 import { getDb } from "@big-two/data-ops/database";
-import { roomTable } from "@big-two/data-ops/drizzle/schema";
+import { accountDeletionTable, roomTable } from "@big-two/data-ops/drizzle/schema";
 import { gameEventSchema } from "@big-two/game-state-machine";
 
 import { auth } from "../lib/auth";
 import { chooseJevBotMoveWithFallback } from "../lib/jev-bot";
 import { jevBotMoveRequestSchema } from "../lib/jev-bot.schema";
+
+async function accountDeletionIsPending(userId: string) {
+  const db = getDb();
+  const deletion = await db
+    .select({ userId: accountDeletionTable.userId })
+    .from(accountDeletionTable)
+    .where(eq(accountDeletionTable.userId, userId))
+    .limit(1);
+  return deletion.length > 0;
+}
 
 export const App = new Hono<{ Bindings: Cloudflare.Env }>()
   .use(
@@ -84,6 +94,9 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
     if (!session) {
       return c.json({ error: "Unauthorized" }, 401);
     }
+    if (await accountDeletionIsPending(session.user.id)) {
+      return c.json({ error: "Account deletion is in progress" }, 409);
+    }
 
     const roomId = c.req.param().roomid;
     if (!roomId) return c.notFound();
@@ -101,22 +114,29 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
     if (!session) {
       return c.json({ error: "Unauthorized" }, 401);
     }
+    if (await accountDeletionIsPending(session.user.id)) {
+      return c.json({ error: "Account deletion is in progress" }, 409);
+    }
 
     const roomId = nanoid(8);
 
     const durableObjectId = c.env.BIG_TWO_ROOM_DURABLE_OBJECT.idFromName(roomId);
     const roomStub = c.env.BIG_TWO_ROOM_DURABLE_OBJECT.get(durableObjectId);
 
-    await roomStub.createRoom({
-      id: session.user.id,
-      name: session.user.name,
-    });
-
     const db = getDb();
     await db.insert(roomTable).values({
       id: roomId,
       status: "waiting",
     });
+    await roomStub.createRoom({
+      id: session.user.id,
+      name: session.user.name,
+    });
+
+    if (await accountDeletionIsPending(session.user.id)) {
+      await roomStub.redactPlayer(session.user.id);
+      return c.json({ error: "Account deletion is in progress" }, 409);
+    }
 
     return c.json({
       roomId,
@@ -143,6 +163,10 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
 
       const gameEvent = c.req.valid("json");
 
+      if (gameEvent.type === "JOIN_GAME" && (await accountDeletionIsPending(session.user.id))) {
+        return c.json({ error: "Account deletion is in progress" }, 409);
+      }
+
       if ("playerId" in gameEvent && gameEvent.playerId !== session.user.id) {
         return c.json({ error: "Cannot act as another player" }, 403);
       }
@@ -161,6 +185,13 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
 
       if (!result.success) {
         return c.json({ error: result.error }, 403);
+      }
+
+      if (gameEvent.type === "JOIN_GAME") {
+        if (await accountDeletionIsPending(session.user.id)) {
+          await stub.redactPlayer(session.user.id);
+          return c.json({ error: "Account deletion is in progress" }, 409);
+        }
       }
 
       return c.json({ success: true });
