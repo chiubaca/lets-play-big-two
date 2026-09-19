@@ -110,6 +110,7 @@
     inset 0 0 0 5px #170f09,
     inset 0 0 0 7px var(--casino-wood-light),
     inset 0 0 24px 8px #080703;
+  transform: perspective(1350px) rotateX(25deg);
 }
 .table-felt {
   position: relative;
@@ -505,6 +506,8 @@
   z-index: 30;
 }
 .table-controls {
+  position: relative;
+  z-index: 40;
   width: min(100%, 880px);
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -513,6 +516,8 @@
   flex-shrink: 0;
 }
 .table-action {
+  position: relative;
+  z-index: 41;
   height: 60px;
   border: 1.5px solid var(--casino-gold);
   border-radius: 24px;
