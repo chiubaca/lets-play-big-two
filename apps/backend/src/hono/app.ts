@@ -50,10 +50,9 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
       if (!result.success) return c.json({ error: "Invalid bug report" }, 400);
     }),
     async (c) => {
-      const apiKey = c.env.RESEND_API_KEY;
-      const from = c.env.BUG_REPORT_FROM;
-      if (!apiKey || !from) {
-        console.error("RESEND_API_KEY is not configured");
+      const githubToken = c.env.GITHUB_ISSUES_TOKEN;
+      if (!githubToken) {
+        console.error("GITHUB_ISSUES_TOKEN is not configured");
         return c.json({ error: "Bug reports are temporarily unavailable" }, 503);
       }
 
@@ -63,32 +62,33 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
       if (!rateLimit.success) return c.json({ error: "Too many bug reports" }, 429);
 
       const report = c.req.valid("json");
-      const emailResponse = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
+      const screenshotMarkdown =
+        report.screenshot && report.screenshot.length <= 45_000
+          ? `![Screenshot captured before the report form opened](${report.screenshot})`
+          : report.screenshot
+            ? "Screenshot was captured, but was too large to embed in the GitHub issue."
+            : "Screenshot capture was unavailable.";
+      const issueResponse = await fetch(
+        "https://api.github.com/repos/chiubaca/lets-play-big-two/issues",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${githubToken}`,
+            Accept: "application/vnd.github+json",
+            "Content-Type": "application/json",
+            "User-Agent": "lets-play-big-two-bug-reporter",
+          },
+          body: JSON.stringify({
+            title: `Bug report: ${report.message.split("\n")[0].slice(0, 70)}`,
+            body: `${report.message}\n\n## Device details\n\n${Object.entries(report.device)
+              .map(([key, value]) => `- **${key}:** ${value}`)
+              .join("\n")}\n\n## Screenshot\n\n${screenshotMarkdown}`,
+          }),
         },
-        body: JSON.stringify({
-          from,
-          to: ["alexchiu11@gmail.com"],
-          subject: "Big Two bug report",
-          text: `${report.message}\n\nDevice details:\n${JSON.stringify(report.device, null, 2)}`,
-          ...(report.screenshot
-            ? {
-                attachments: [
-                  {
-                    filename: "big-two-bug-report.png",
-                    content: report.screenshot.replace(/^data:image\/[^;]+;base64,/, ""),
-                  },
-                ],
-              }
-            : {}),
-        }),
-      });
+      );
 
-      if (!emailResponse.ok) {
-        console.error("Resend rejected bug report", await emailResponse.text());
+      if (!issueResponse.ok) {
+        console.error("GitHub rejected bug report", await issueResponse.text());
         return c.json({ error: "Could not send bug report" }, 502);
       }
 

@@ -55,11 +55,12 @@ After running `pnpm dev:local`:
 
 ### Bug reports
 
-Bug reports are emailed through Resend. Before deploying the backend, add the API key as a
-Cloudflare secret and verify the sender domain configured in `apps/backend/wrangler.jsonc`:
+Bug reports are created directly as GitHub issues in
+`chiubaca/lets-play-big-two`. Before deploying the backend, add a GitHub token with permission
+to create issues as a Cloudflare secret:
 
 ```bash
-wrangler secret put RESEND_API_KEY --config apps/backend/wrangler.jsonc
+wrangler secret put GITHUB_ISSUES_TOKEN --config apps/backend/wrangler.jsonc
 ```
 
 ### Check Everything
