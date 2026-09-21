@@ -12,6 +12,7 @@ import { gameEventSchema } from "@big-two/game-state-machine";
 import { auth } from "../lib/auth";
 import { chooseJevBotMoveWithFallback } from "../lib/jev-bot";
 import { jevBotMoveRequestSchema } from "../lib/jev-bot.schema";
+import { bugReportSchema } from "../lib/bug-report.schema";
 
 async function accountDeletionIsPending(userId: string) {
   const db = getDb();
@@ -39,6 +40,61 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
   .get("/", async (c) => {
     return c.text("sup");
   })
+  .post(
+    "/api/bug/report",
+    bodyLimit({
+      maxSize: 6 * 1024 * 1024,
+      onError: (c) => c.json({ error: "Bug report is too large" }, 413),
+    }),
+    sValidator("json", bugReportSchema, (result, c) => {
+      if (!result.success) return c.json({ error: "Invalid bug report" }, 400);
+    }),
+    async (c) => {
+      const apiKey = c.env.RESEND_API_KEY;
+      const from = c.env.BUG_REPORT_FROM;
+      if (!apiKey || !from) {
+        console.error("RESEND_API_KEY is not configured");
+        return c.json({ error: "Bug reports are temporarily unavailable" }, 503);
+      }
+
+      const rateLimit = await c.env.JEV_MOVE_RATE_LIMITER.limit({
+        key: `bug-report:${c.req.header("CF-Connecting-IP") ?? "local-development"}`,
+      });
+      if (!rateLimit.success) return c.json({ error: "Too many bug reports" }, 429);
+
+      const report = c.req.valid("json");
+      const emailResponse = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from,
+          to: ["alexchiu11@gmail.com"],
+          subject: "Big Two bug report",
+          text: `${report.message}\n\nDevice details:\n${JSON.stringify(report.device, null, 2)}`,
+          ...(report.screenshot
+            ? {
+                attachments: [
+                  {
+                    filename: "big-two-bug-report.png",
+                    content: report.screenshot.replace(/^data:image\/[^;]+;base64,/, ""),
+                  },
+                ],
+              }
+            : {}),
+        }),
+      });
+
+      if (!emailResponse.ok) {
+        console.error("Resend rejected bug report", await emailResponse.text());
+        return c.json({ error: "Could not send bug report" }, 502);
+      }
+
+      return c.json({ success: true });
+    },
+  )
   .post(
     "/api/bot/jev/move",
     bodyLimit({

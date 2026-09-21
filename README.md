@@ -53,6 +53,15 @@ After running `pnpm dev:local`:
 
 ## Development
 
+### Bug reports
+
+Bug reports are emailed through Resend. Before deploying the backend, add the API key as a
+Cloudflare secret and verify the sender domain configured in `apps/backend/wrangler.jsonc`:
+
+```bash
+wrangler secret put RESEND_API_KEY --config apps/backend/wrangler.jsonc
+```
+
 ### Check Everything
 
 ```bash

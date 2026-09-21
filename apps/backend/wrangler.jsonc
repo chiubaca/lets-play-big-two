@@ -46,6 +46,7 @@
   },
   "vars": {
     "BETTER_AUTH_URL": "https://big-two-api.chiubaca.com",
+    "BUG_REPORT_FROM": "Big Two <bugs@big-two.chiubaca.com>",
   },
   "routes": [
     {
