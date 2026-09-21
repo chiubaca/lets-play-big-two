@@ -1,18 +1,14 @@
 import { Link } from "@tanstack/react-router";
 import ThemeToggle from "./theme-toggle";
+import { ReportBugDialog } from "./report-bug-dialog";
 
 export default function Header() {
   return (
     <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-lg px-4">
       <nav className="mx-auto max-w-5xl flex flex-wrap items-center gap-x-3 gap-y-2 py-3 sm:py-4">
-        <h2 className="m-0 shrink-0 text-base font-semibold tracking-tight">
-          <Link
-            to="/"
-            className="inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-sm text-foreground no-underline shadow-sm transition-colors hover:bg-accent sm:px-4 sm:py-2"
-          >
-            <span className="h-2 w-2 rounded-full bg-primary" />
-            Big Two
-          </Link>
+        <h2 className="m-0 inline-flex shrink-0 items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-sm font-semibold tracking-tight text-foreground shadow-sm sm:px-4 sm:py-2">
+          <span className="h-2 w-2 rounded-full bg-primary" />
+          <ReportBugDialog />
         </h2>
 
         <div className="ml-auto flex items-center gap-1.5 sm:ml-0 sm:gap-2">

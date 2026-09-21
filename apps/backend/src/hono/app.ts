@@ -12,6 +12,7 @@ import { gameEventSchema } from "@big-two/game-state-machine";
 import { auth } from "../lib/auth";
 import { chooseJevBotMoveWithFallback } from "../lib/jev-bot";
 import { jevBotMoveRequestSchema } from "../lib/jev-bot.schema";
+import { bugReportSchema } from "../lib/bug-report.schema";
 
 async function accountDeletionIsPending(userId: string) {
   const db = getDb();
@@ -39,6 +40,61 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
   .get("/", async (c) => {
     return c.text("sup");
   })
+  .post(
+    "/api/bug/report",
+    bodyLimit({
+      maxSize: 6 * 1024 * 1024,
+      onError: (c) => c.json({ error: "Bug report is too large" }, 413),
+    }),
+    sValidator("json", bugReportSchema, (result, c) => {
+      if (!result.success) return c.json({ error: "Invalid bug report" }, 400);
+    }),
+    async (c) => {
+      const githubToken = c.env.GITHUB_ISSUES_TOKEN;
+      if (!githubToken) {
+        console.error("GITHUB_ISSUES_TOKEN is not configured");
+        return c.json({ error: "Bug reports are temporarily unavailable" }, 503);
+      }
+
+      const rateLimit = await c.env.JEV_MOVE_RATE_LIMITER.limit({
+        key: `bug-report:${c.req.header("CF-Connecting-IP") ?? "local-development"}`,
+      });
+      if (!rateLimit.success) return c.json({ error: "Too many bug reports" }, 429);
+
+      const report = c.req.valid("json");
+      const screenshotMarkdown =
+        report.screenshot && report.screenshot.length <= 45_000
+          ? `![Screenshot captured before the report form opened](${report.screenshot})`
+          : report.screenshot
+            ? "Screenshot was captured, but was too large to embed in the GitHub issue."
+            : "Screenshot capture was unavailable.";
+      const issueResponse = await fetch(
+        "https://api.github.com/repos/chiubaca/lets-play-big-two/issues",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${githubToken}`,
+            Accept: "application/vnd.github+json",
+            "Content-Type": "application/json",
+            "User-Agent": "lets-play-big-two-bug-reporter",
+          },
+          body: JSON.stringify({
+            title: `Bug report: ${report.message.split("\n")[0].slice(0, 70)}`,
+            body: `${report.message}\n\n## Device details\n\n${Object.entries(report.device)
+              .map(([key, value]) => `- **${key}:** ${value}`)
+              .join("\n")}\n\n## Screenshot\n\n${screenshotMarkdown}`,
+          }),
+        },
+      );
+
+      if (!issueResponse.ok) {
+        console.error("GitHub rejected bug report", await issueResponse.text());
+        return c.json({ error: "Could not send bug report" }, 502);
+      }
+
+      return c.json({ success: true });
+    },
+  )
   .post(
     "/api/bot/jev/move",
     bodyLimit({

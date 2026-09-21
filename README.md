@@ -53,6 +53,16 @@ After running `pnpm dev:local`:
 
 ## Development
 
+### Bug reports
+
+Bug reports are created directly as GitHub issues in
+`chiubaca/lets-play-big-two`. Before deploying the backend, add a GitHub token with permission
+to create issues as a Cloudflare secret:
+
+```bash
+wrangler secret put GITHUB_ISSUES_TOKEN --config apps/backend/wrangler.jsonc
+```
+
 ### Check Everything
 
 ```bash

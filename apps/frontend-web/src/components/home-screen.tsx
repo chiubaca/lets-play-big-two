@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { AuthPanel } from "~/components/auth-panel";
+import { ReportBugDialog } from "~/components/report-bug-dialog";
 import { CasinoBackdrop, CasinoKicker, CasinoPanel } from "~/components/casino/casino";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
@@ -69,6 +70,7 @@ export function HomeScreen({
     <main className="home-page">
       <CasinoBackdrop />
       <header className="home-nav">
+        <ReportBugDialog />
         {session ? (
           <div className="home-account">
             <Link to="/account" className="home-account-profile" aria-label="Account settings">

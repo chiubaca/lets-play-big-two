@@ -37,6 +37,7 @@
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "hono": "catalog:",
+    "html2canvas": "catalog:",
     "lucide-react": "^0.545.0",
     "next-themes": "catalog:",
     "radix-ui": "catalog:",

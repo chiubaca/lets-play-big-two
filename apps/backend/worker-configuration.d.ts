@@ -14,6 +14,7 @@ declare namespace Cloudflare {
     BETTER_AUTH_SECRET: string;
     GOOGLE_CLIENT_ID: string;
     GOOGLE_CLIENT_SECRET: string;
+    GITHUB_ISSUES_TOKEN: string;
     BIG_TWO_ROOM_DURABLE_OBJECT: DurableObjectNamespace<import("./src/index").BigTwoRoomObject>;
   }
 }
