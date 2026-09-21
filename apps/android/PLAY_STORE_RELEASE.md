@@ -51,8 +51,9 @@
 ## App content answers
 
 - **Contains ads:** No
-- **App access:** No special access is required for solo and pass-and-play. Reviewers can create an
-  account from the sign-in panel if they need to test private online rooms.
+- **App access:** Solo and pass-and-play require no account. Dedicated reviewer credentials and
+  online-room instructions are saved in Play Console; the secret remains only in the ignored local
+  `.play-review.env` file.
 - **Target audience:** 13 and older; the app is not directed to children under 13.
 - **News app:** No
 - **COVID-19 app:** No
@@ -63,35 +64,60 @@
 
 Complete the content-rating questionnaire truthfully based on those behaviours.
 
-## Data safety starting point
+## Data safety declaration
 
-Confirm these answers against the production services and current Play Console wording before
-submission.
+The following answers are saved in Play Console and staged for review:
 
-- Data is encrypted in transit.
-- Users can request deletion in the app and at the public account deletion URL.
-- Account creation is optional and is used only for online multiplayer.
-- Personal information collected for accounts: name, email address, username/user ID, and optional
-  profile image.
-- Authentication and security data: sign-in method, session cookie, IP address, and user agent.
-- App activity: room membership and gameplay actions needed to run online matches.
-- Diagnostics/analytics: basic usage, security, and reliability events processed by Cloudflare.
-- Purposes: app functionality, account management, fraud/security prevention, analytics, and
-  developer communications when a user contacts support.
-- Service providers: Cloudflare for hosting, security, analytics, real-time rooms, and optional AI;
-  Google only when the user chooses Google sign-in.
-- Personal data is not sold and is not used for targeted advertising.
+- **Collects or shares required data types:** Yes.
+- **Encrypted in transit:** Yes.
+- **Account creation:** Username and password; OAuth.
+- **External accounts:** Users can sign in with a Google account created outside the app.
+- **Account deletion URL:** `https://big-two.chiubaca.com/account`.
+- **Partial data deletion without deleting the account:** No. Users can instead delete their whole
+  account and associated authentication data.
+- **Sharing:** No data shared with third parties. Cloudflare processes data as a contracted service
+  provider, and Google sign-in is a user-initiated action.
+- **Ephemeral processing:** None of the declared data types is marked as ephemeral.
 
-In Play's definition, processing by a contracted service provider may be excluded from “sharing.”
-Use the current form's definitions rather than guessing.
+Declared collection and purposes:
+
+| Data type           | Required or optional | Purposes                                                                         |
+| ------------------- | -------------------- | -------------------------------------------------------------------------------- |
+| Name                | Optional             | App functionality; account management                                            |
+| Email address       | Optional             | App functionality; account management                                            |
+| User IDs            | Optional             | App functionality; fraud prevention, security and compliance; account management |
+| Photos              | Optional             | Account management                                                               |
+| Diagnostics         | Required             | Analytics                                                                        |
+| App interactions    | Required             | App functionality; analytics                                                     |
+| Other actions       | Optional             | App functionality                                                                |
+| Device or other IDs | Optional             | App functionality; fraud prevention, security and compliance; account management |
+
+IP addresses are used for session security and rate limiting, not to infer location, so location is
+not declared. Personal data is not sold or used for targeted advertising.
+
+## Play Console status
+
+- Internal release `1 (1.0.0)` is active for the `Testers` email list.
+- Store listing, app access, target audience, content rating, and Data safety changes are saved in
+  Publishing overview but have not been sent for review.
+- App content shows no outstanding declarations.
+- Content rating declares decorative gambling themes, with no playable gambling, wagering, prizes,
+  purchases, or redeemable value. Australia rates this as Parental Guidance with mild gambling
+  themes; other generated ratings range from all ages to 16 depending on the territory.
+- Publishing overview currently keeps **Send app for review** disabled. The dashboard requires a
+  closed-testing release, at least 12 opted-in testers, and 14 days of qualifying closed testing
+  before production access can be requested.
+- A Play-installed build still needs verification on an Android device. The internal opt-in URL is
+  `https://play.google.com/apps/internaltest/4701694469301389582`.
 
 ## Release order
 
 1. Create the Play Console app with package ID `com.chiubaca.bigtwocrew`.
 2. Upload `app-release-bundle.aab` to **Internal testing** and enable Play App Signing.
-3. Add Play's app-signing SHA-256 fingerprint to the web Digital Asset Links file as documented in
-   `README.md`, then deploy the frontend again.
+3. Verify every current and previous Play app-signing SHA-256 fingerprint remains in the web Digital
+   Asset Links file as documented in `README.md`, then deploy the frontend if any changed.
 4. Finish Store listing, App content, Data safety, Content rating, and target-audience forms.
 5. Add trusted testers and verify the installed test build opens without a browser toolbar.
-6. Promote through closed/open testing as required by the developer account, then submit production
-   for review.
+6. Run the required closed test with at least 12 opted-in testers for at least 14 days, then apply for
+   production access.
+7. Submit production for review only after the staged listing and policy changes have been reviewed.

@@ -5,7 +5,10 @@
       "namespace": "android_app",
       "package_name": "com.chiubaca.bigtwocrew",
       "sha256_cert_fingerprints": [
-        "13:78:0C:D0:7D:60:14:52:5A:85:40:D8:38:1E:38:A5:FB:47:C1:7D:23:59:55:22:10:E6:6D:68:2B:13:D1:90"
+        "13:78:0C:D0:7D:60:14:52:5A:85:40:D8:38:1E:38:A5:FB:47:C1:7D:23:59:55:22:10:E6:6D:68:2B:13:D1:90",
+        "BF:4B:DE:E8:BF:E3:94:F9:C8:A3:4A:CE:3C:8A:C9:5E:C3:32:B0:F9:E6:9F:E9:93:50:6E:BA:36:6E:14:88:7F",
+        "9E:9F:4F:B3:33:08:6C:7B:F2:8B:DA:F2:E1:C7:2B:C6:63:12:BD:8D:CA:41:93:97:0A:8C:D8:86:72:AC:A4:CA",
+        "FA:8B:75:5F:71:9E:4B:92:87:BF:17:F7:54:6E:A3:E1:E3:7F:F7:97:FA:CE:8C:D2:BC:B3:CF:7C:66:34:01:8C"
       ]
     }
   }

@@ -81,17 +81,19 @@ Outputs (ignored by Git):
 For every update, increase both `appVersion` and `appVersionCode` in `twa-manifest.json`, regenerate,
 and build with the same upload key.
 
-## Play App Signing follow-up
+## Play App Signing certificates
 
-Google Play signs distributed APKs with a different certificate from the upload key. After the first
-AAB is uploaded:
+Google Play signs distributed APKs with different certificates from the upload key. Find them in
+Play Console:
 
-1. Open **Play Console → Test and release → Setup → App signing**.
-2. Copy the SHA-256 fingerprint under **App signing key certificate** (not the upload certificate).
-3. Add it to `fingerprints` in `twa-manifest.json`.
-4. Add it to `sha256_cert_fingerprints` in
-   `apps/frontend-web/public/.well-known/assetlinks.json`.
-5. Regenerate the Android project, rebuild the frontend, and deploy it.
+1. Open **Protected with Play**.
+2. Expand **Play Store protection** and select **Manage Play app signing**.
+3. Copy every SHA-256 fingerprint under **App signing key**, including the current classical and
+   post-quantum keys and any previous key still used for older Android versions.
+4. Keep those values in both `fingerprints` in `twa-manifest.json` and
+   `sha256_cert_fingerprints` in `apps/frontend-web/public/.well-known/assetlinks.json`.
+5. Regenerate the Android project, rebuild the frontend, deploy it, and validate the live Digital
+   Asset Links response.
 
-Keep both fingerprints. The upload fingerprint verifies direct/local APK installs; the Play signing
-fingerprint verifies installations delivered by Google Play.
+The upload fingerprint verifies direct/local APK installs. All Google-held app-signing fingerprints
+verify the variants delivered by Google Play's quantum-ready signing configuration.
