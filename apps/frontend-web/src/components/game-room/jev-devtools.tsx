@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
-import { Activity, ChevronRight, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Activity, ChevronRight } from "lucide-react";
 
+import { useJevDevtools } from "./jev-devtools-context";
 import type { JevDecisionLogEntry } from "./use-offline-game";
 import "./jev-devtools.css";
 
@@ -28,121 +29,21 @@ function formatPercent(probability: number): string {
   return `${Math.round(probability * 100)}%`;
 }
 
-type PanelPosition = { x: number; y: number };
-
-type DragState = {
-  pointerId: number;
-  pointerX: number;
-  pointerY: number;
-  panelX: number;
-  panelY: number;
-  originLeft: number;
-  originTop: number;
-  width: number;
-  height: number;
-};
-
-const VIEWPORT_MARGIN = 8;
-
-export function JevDevtools({ decisions }: { decisions: readonly JevDecisionLogEntry[] }) {
-  const [open, setOpen] = useState(true);
-  const [dragging, setDragging] = useState(false);
-  const [position, setPosition] = useState<PanelPosition>({ x: 0, y: 0 });
+export function JevDevtools() {
+  const { decisions } = useJevDevtools();
   const [selectedSequence, setSelectedSequence] = useState<number>();
-  const panelRef = useRef<HTMLElement>(null);
-  const dragRef = useRef<DragState | null>(null);
   const newestSequence = decisions[0]?.sequence;
 
   useEffect(() => {
     if (newestSequence !== undefined) setSelectedSequence(newestSequence);
   }, [newestSequence]);
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        className="jev-devtools-trigger"
-        aria-label="Open Jev decision devtools"
-        onClick={() => setOpen(true)}
-      >
-        <Activity aria-hidden="true" />
-        <span>JEV</span>
-        <i>LIVE</i>
-      </button>
-    );
-  }
-
   const selected = decisions.find((entry) => entry.sequence === selectedSequence) ?? decisions[0];
   const trace = selected?.decision.trace;
-  const panelStyle = {
-    "--jev-drag-x": `${position.x}px`,
-    "--jev-drag-y": `${position.y}px`,
-  } as CSSProperties;
-
-  const startDragging = (event: PointerEvent<HTMLElement>) => {
-    if (event.button !== 0 || (event.target as Element).closest("button")) return;
-    const panel = panelRef.current;
-    if (!panel) return;
-
-    const bounds = panel.getBoundingClientRect();
-    dragRef.current = {
-      pointerId: event.pointerId,
-      pointerX: event.clientX,
-      pointerY: event.clientY,
-      panelX: position.x,
-      panelY: position.y,
-      originLeft: bounds.left - position.x,
-      originTop: bounds.top - position.y,
-      width: bounds.width,
-      height: bounds.height,
-    };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    setDragging(true);
-  };
-
-  const movePanel = (event: PointerEvent<HTMLElement>) => {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-
-    const nextX = drag.panelX + event.clientX - drag.pointerX;
-    const nextY = drag.panelY + event.clientY - drag.pointerY;
-    setPosition({
-      x: Math.min(
-        window.innerWidth - VIEWPORT_MARGIN - drag.originLeft - drag.width,
-        Math.max(VIEWPORT_MARGIN - drag.originLeft, nextX),
-      ),
-      y: Math.min(
-        window.innerHeight - VIEWPORT_MARGIN - drag.originTop - drag.height,
-        Math.max(VIEWPORT_MARGIN - drag.originTop, nextY),
-      ),
-    });
-  };
-
-  const stopDragging = (event: PointerEvent<HTMLElement>) => {
-    if (dragRef.current?.pointerId !== event.pointerId) return;
-    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    dragRef.current = null;
-    setDragging(false);
-  };
 
   return (
-    <aside
-      ref={panelRef}
-      className={`jev-devtools ${dragging ? "is-dragging" : ""}`}
-      style={panelStyle}
-      aria-label="Jev decision devtools"
-    >
-      <header
-        className="jev-devtools-header"
-        title="Drag to move · Double-click to reset"
-        onDoubleClick={() => setPosition({ x: 0, y: 0 })}
-        onPointerDown={startDragging}
-        onPointerMove={movePanel}
-        onPointerUp={stopDragging}
-        onPointerCancel={stopDragging}
-      >
+    <section className="jev-devtools" aria-label="Jev decision devtools">
+      <header className="jev-devtools-header">
         <div className="jev-devtools-title">
           <span className="jev-live-light" aria-hidden="true" />
           <div>
@@ -150,13 +51,6 @@ export function JevDevtools({ decisions }: { decisions: readonly JevDecisionLogE
             <small>LOCAL TELEMETRY</small>
           </div>
         </div>
-        <button
-          type="button"
-          aria-label="Close Jev decision devtools"
-          onClick={() => setOpen(false)}
-        >
-          <X aria-hidden="true" />
-        </button>
       </header>
 
       {!selected ? (
@@ -273,6 +167,6 @@ export function JevDevtools({ decisions }: { decisions: readonly JevDecisionLogE
           </footer>
         </div>
       )}
-    </aside>
+    </section>
   );
 }

@@ -1,5 +1,4 @@
-.jev-devtools,
-.jev-devtools-trigger {
+.jev-devtools {
   --jev-ink: #07100d;
   --jev-panel: #0b1713;
   --jev-grid: #263d3440;
@@ -12,12 +11,9 @@
 }
 
 .jev-devtools {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  z-index: 70;
-  width: min(390px, calc(100vw - 24px));
-  max-height: min(720px, calc(100svh - 32px));
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--jev-line);
   border-radius: 8px 8px 3px 3px;
@@ -32,12 +28,9 @@
     inset 3px 0 var(--jev-signal),
     inset 0 1px #ffffff12;
   backdrop-filter: blur(16px);
-  transform: translate3d(var(--jev-drag-x, 0), var(--jev-drag-y, 0), 0);
-  animation: jev-panel-in 180ms ease-out;
 }
 
-.jev-devtools button,
-.jev-devtools-trigger {
+.jev-devtools button {
   color: inherit;
   cursor: pointer;
 }
@@ -45,18 +38,10 @@
 .jev-devtools-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   min-height: 58px;
   padding: 11px 12px 10px 17px;
   border-bottom: 1px solid var(--jev-line);
   background: #07100de8;
-  cursor: grab;
-  touch-action: none;
-  user-select: none;
-}
-
-.jev-devtools.is-dragging .jev-devtools-header {
-  cursor: grabbing;
 }
 
 .jev-devtools-title {
@@ -93,28 +78,8 @@
   animation: jev-live-pulse 1.8s ease-in-out infinite;
 }
 
-.jev-devtools-header > button {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  border: 1px solid transparent;
-  border-radius: 3px;
-  cursor: pointer;
-}
-
-.jev-devtools-header > button:hover {
-  border-color: var(--jev-line);
-  background: #ffffff08;
-}
-
-.jev-devtools-header svg {
-  width: 16px;
-  height: 16px;
-}
-
 .jev-devtools-body {
-  max-height: calc(min(720px, 100svh - 32px) - 58px);
+  max-height: calc(100% - 58px);
   overflow-y: auto;
   scrollbar-color: var(--jev-line) transparent;
 }
@@ -378,54 +343,9 @@
   font-size: 8px;
 }
 
-.jev-devtools-trigger {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  z-index: 70;
-  display: grid;
-  grid-template-columns: auto auto;
-  grid-template-rows: auto auto;
-  align-items: center;
-  column-gap: 7px;
-  min-width: 82px;
-  padding: 8px 11px 7px;
-  border: 1px solid var(--jev-line);
-  border-left: 3px solid var(--jev-signal);
-  border-radius: 4px;
-  color: var(--jev-text);
-  background: #07100df2;
-  box-shadow: 0 12px 30px #000a;
-}
-
-.jev-devtools-trigger svg {
-  grid-row: 1 / 3;
-  width: 17px;
-  color: var(--jev-signal);
-}
-
-.jev-devtools-trigger span {
-  font-size: 11px;
-  letter-spacing: 0.13em;
-}
-
-.jev-devtools-trigger i {
-  color: var(--jev-signal);
-  font-size: 7px;
-  font-style: normal;
-  letter-spacing: 0.16em;
-}
-
-.jev-devtools button:focus-visible,
-.jev-devtools-trigger:focus-visible {
+.jev-devtools button:focus-visible {
   outline: 2px solid var(--jev-signal);
   outline-offset: 2px;
-}
-
-@keyframes jev-panel-in {
-  from {
-    opacity: 0;
-  }
 }
 
 @keyframes jev-live-pulse {
@@ -434,26 +354,7 @@
   }
 }
 
-@media (max-width: 600px) {
-  .jev-devtools {
-    right: 8px;
-    bottom: 8px;
-    width: calc(100vw - 16px);
-    max-height: 62svh;
-  }
-
-  .jev-devtools-body {
-    max-height: calc(62svh - 58px);
-  }
-
-  .jev-devtools-trigger {
-    right: 8px;
-    bottom: 8px;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .jev-devtools,
   .jev-live-light {
     animation: none;
   }

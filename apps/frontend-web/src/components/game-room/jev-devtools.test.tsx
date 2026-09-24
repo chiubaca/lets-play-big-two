@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 
+import { useEffect } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it } from "vite-plus/test";
 
 import type { JevDecisionLogEntry } from "./use-offline-game";
 import { JevDevtools } from "./jev-devtools";
+import { JevDevtoolsProvider, useJevDevtools } from "./jev-devtools-context";
 
 afterEach(cleanup);
 
@@ -42,10 +44,28 @@ const decisions: JevDecisionLogEntry[] = [
   },
 ];
 
-it("shows Jev's action and question probabilities", () => {
-  render(<JevDevtools decisions={decisions} />);
+function DecisionFeed({ entries }: { entries: JevDecisionLogEntry[] }) {
+  const { setDecisions } = useJevDevtools();
+  useEffect(() => {
+    setDecisions(entries);
+    return () => setDecisions([]);
+  }, [entries, setDecisions]);
+  return null;
+}
 
-  expect(screen.getByRole("complementary", { name: "Jev decision devtools" })).toBeTruthy();
+function renderDevtools(entries: JevDecisionLogEntry[]) {
+  return render(
+    <JevDevtoolsProvider>
+      <DecisionFeed entries={entries} />
+      <JevDevtools />
+    </JevDevtoolsProvider>,
+  );
+}
+
+it("shows Jev's action and question probabilities", () => {
+  renderDevtools(decisions);
+
+  expect(screen.getByRole("region", { name: "Jev decision devtools" })).toBeTruthy();
   expect(screen.getByText("PASS")).toBeTruthy();
   expect(screen.getByText("Tempo decision")).toBeTruthy();
   expect(
@@ -56,28 +76,21 @@ it("shows Jev's action and question probabilities", () => {
   expect(screen.getByText("single: ace of hearts")).toBeTruthy();
 });
 
-it("collapses to a compact trigger", () => {
-  render(<JevDevtools decisions={decisions} />);
-
-  fireEvent.click(screen.getByRole("button", { name: "Close Jev decision devtools" }));
-
-  expect(screen.queryByRole("complementary", { name: "Jev decision devtools" })).toBeNull();
-  expect(screen.getByRole("button", { name: "Open Jev decision devtools" })).toBeTruthy();
+it("shows an empty state when no offline decisions are available", () => {
+  renderDevtools([]);
+  expect(screen.getByText("Awaiting inference")).toBeTruthy();
 });
 
-it("can be dragged by its header and reset with a double click", () => {
-  render(<JevDevtools decisions={decisions} />);
-  const panel = screen.getByRole("complementary", { name: "Jev decision devtools" });
-  const header = panel.querySelector<HTMLElement>(".jev-devtools-header")!;
-
-  fireEvent.pointerDown(header, { button: 0, pointerId: 1, clientX: 100, clientY: 100 });
-  fireEvent.pointerMove(header, { pointerId: 1, clientX: 140, clientY: 125 });
-  fireEvent.pointerUp(header, { pointerId: 1 });
-
-  expect(panel.getAttribute("style")).toContain("--jev-drag-x: 40px");
-  expect(panel.getAttribute("style")).toContain("--jev-drag-y: 25px");
-
-  fireEvent.doubleClick(header);
-  expect(panel.getAttribute("style")).toContain("--jev-drag-x: 0px");
-  expect(panel.getAttribute("style")).toContain("--jev-drag-y: 0px");
+it("selects earlier decisions from the event buffer", () => {
+  renderDevtools([
+    ...decisions,
+    {
+      ...decisions[0],
+      sequence: 2,
+      playerName: "Alice",
+      decision: { cards: null, source: "forced" },
+    },
+  ]);
+  fireEvent.click(screen.getByRole("button", { name: "#02AlicePASS" }));
+  expect(screen.getByText("Only one legal action was available.")).toBeTruthy();
 });

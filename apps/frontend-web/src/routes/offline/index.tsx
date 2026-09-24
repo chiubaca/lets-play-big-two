@@ -1,16 +1,9 @@
-import { lazy, Suspense, useEffect } from "react";
+import { useEffect } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { GameRoom } from "~/components/game-room";
 import { OFFLINE_HUMAN, useOfflineGame } from "~/components/game-room/use-offline-game";
 import { PassAndPlay } from "~/components/game-room/pass-and-play.tsx";
-
-const LazyJevDevtools = import.meta.env.DEV
-  ? lazy(() =>
-      import("~/components/game-room/jev-devtools").then(({ JevDevtools }) => ({
-        default: JevDevtools,
-      })),
-    )
-  : null;
+import { useJevDevtools } from "~/components/game-room/jev-devtools-context";
 
 export const Route = createFileRoute("/offline/")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -30,6 +23,7 @@ function RouteComponent() {
 }
 
 function SoloGame() {
+  const { setDecisions } = useJevDevtools();
   const {
     botPlayers,
     gameState,
@@ -46,25 +40,23 @@ function SoloGame() {
     start();
   }, [start]);
 
+  useEffect(() => {
+    setDecisions(jevDecisionLog);
+    return () => setDecisions([]);
+  }, [jevDecisionLog, setDecisions]);
+
   if (gameState) {
     return (
-      <>
-        <GameRoom
-          gameState={gameState}
-          botSettings={{ players: botPlayers, onStrategyChange: setBotStrategy }}
-          jevFallbackPlayerIds={jevFallbackPlayerIds}
-          requestHint={requestHint}
-          send={send}
-          tableLabel="Solo table"
-          thinkingPlayerId={thinkingPlayerId}
-          user={OFFLINE_HUMAN}
-        />
-        {LazyJevDevtools && (
-          <Suspense fallback={null}>
-            <LazyJevDevtools decisions={jevDecisionLog} />
-          </Suspense>
-        )}
-      </>
+      <GameRoom
+        gameState={gameState}
+        botSettings={{ players: botPlayers, onStrategyChange: setBotStrategy }}
+        jevFallbackPlayerIds={jevFallbackPlayerIds}
+        requestHint={requestHint}
+        send={send}
+        tableLabel="Solo table"
+        thinkingPlayerId={thinkingPlayerId}
+        user={OFFLINE_HUMAN}
+      />
     );
   }
 

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { HeadContent, Scripts, createRootRouteWithContext } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { TanStackDevtools } from "@tanstack/react-devtools";
@@ -7,6 +8,7 @@ import TanStackQueryProvider from "../integrations/tanstack-query/root-provider"
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 
 import { Toaster } from "~/components/ui/sonner";
+import { JevDevtoolsProvider } from "~/components/game-room/jev-devtools-context";
 
 import appCss from "../styles.css?url";
 
@@ -18,6 +20,14 @@ interface MyRouterContext {
 
 const THEME_INIT_SCRIPT = `(function(){try{var root=document.documentElement;root.classList.remove('light');root.classList.add('dark');root.style.colorScheme='dark';}catch(e){}})();`;
 const SERVICE_WORKER_SCRIPT = `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/service-worker.js');});}`;
+
+const LazyJevDevtools = import.meta.env.DEV
+  ? lazy(() =>
+      import("~/components/game-room/jev-devtools").then(({ JevDevtools }) => ({
+        default: JevDevtools,
+      })),
+    )
+  : null;
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
   head: () => ({
@@ -110,24 +120,38 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body className="font-sans antialiased wrap-anywhere selection:bg-gold/30">
         <TanStackQueryProvider>
-          {children}
-          <Toaster
-            toastOptions={{
-              className: "border-gold/30 bg-card/95 text-foreground",
-            }}
-          />
-          <TanStackDevtools
-            config={{
-              position: "bottom-right",
-            }}
-            plugins={[
-              {
-                name: "Tanstack Router",
-                render: <TanStackRouterDevtoolsPanel />,
-              },
-              TanStackQueryDevtools,
-            ]}
-          />
+          <JevDevtoolsProvider>
+            {children}
+            <Toaster
+              toastOptions={{
+                className: "border-gold/30 bg-card/95 text-foreground",
+              }}
+            />
+            <TanStackDevtools
+              config={{
+                position: "bottom-right",
+              }}
+              plugins={[
+                {
+                  name: "Tanstack Router",
+                  render: <TanStackRouterDevtoolsPanel />,
+                },
+                TanStackQueryDevtools,
+                ...(LazyJevDevtools
+                  ? [
+                      {
+                        name: "Jev Decisions",
+                        render: (
+                          <Suspense fallback={null}>
+                            <LazyJevDevtools />
+                          </Suspense>
+                        ),
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          </JevDevtoolsProvider>
         </TanStackQueryProvider>
         <script dangerouslySetInnerHTML={{ __html: SERVICE_WORKER_SCRIPT }} />
         <Scripts />
