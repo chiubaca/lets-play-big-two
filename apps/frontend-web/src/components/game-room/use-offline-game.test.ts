@@ -3,7 +3,7 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { chooseBotMove } from "@big-two/game-ai";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { useOfflineGame } from "./use-offline-game";
+import { matchesJevSuggestion, useOfflineGame } from "./use-offline-game";
 import { createPlayEvent, getCardsToBeat, getRequiredCard } from "./game-room-session";
 import { requestJevBotMove } from "./jev-bot-client";
 
@@ -191,7 +191,7 @@ describe("pass-and-play turns", () => {
     await act(async () => vi.advanceTimersByTimeAsync(650));
 
     expect(result.current.jevFallbackPlayerIds.has("jev")).toBe(true);
-    expect(result.current.jevDecisionLog[0]?.decision.source).toBe("fallback");
+    expect(result.current.jevDecisionLog[0]?.decision?.source).toBe("fallback");
   });
 });
 
@@ -214,5 +214,124 @@ describe("solo bot settings", () => {
 
     act(() => result.current.setBotStrategy("human", "jev"));
     expect(result.current.botPlayers).toHaveLength(1);
+  });
+});
+
+describe("human Jev suggestions", () => {
+  it("compares plays by card identity regardless of selection order, including passes", () => {
+    const cards = [
+      { suit: "DIAMOND" as const, value: "3" as const },
+      { suit: "CLUB" as const, value: "3" as const },
+    ];
+    expect(matchesJevSuggestion(cards, [...cards].reverse())).toBe(true);
+    expect(matchesJevSuggestion(cards, [cards[0]])).toBe(false);
+    expect(matchesJevSuggestion(null, null)).toBe(true);
+    expect(matchesJevSuggestion(null, cards)).toBe(false);
+  });
+
+  it("analyses the human turn and records whether the accepted move followed Jev", async () => {
+    vi.useFakeTimers();
+    requestJevBotMoveMock.mockImplementation(async (state, playerId) => ({
+      cards: chooseBotMove({
+        hand: state.context.players.find((player) => player.id === playerId)!.hand,
+        roundMode: state.context.roundMode,
+        cardsToBeat: getCardsToBeat(state),
+        requiredCard: getRequiredCard(state),
+      }),
+      source: "jev",
+    }));
+    const { result } = renderHook(() => useOfflineGame());
+    act(() => result.current.start());
+
+    for (let turn = 0; turn < 4; turn++) {
+      const state = result.current.gameState!;
+      if (state.context.players[state.context.currentPlayerIndex].id === "solo-player") break;
+      await act(async () => vi.advanceTimersByTimeAsync(650));
+    }
+
+    const state = result.current.gameState!;
+    expect(state.context.players[state.context.currentPlayerIndex].id).toBe("solo-player");
+    await act(async () => {});
+    const suggested = result.current.jevDecisionLog[0];
+    expect(requestJevBotMoveMock).toHaveBeenCalledWith(state, "solo-player");
+    expect(suggested.decision?.source).toBe("jev");
+    expect(result.current.requestHint()).toEqual(suggested.decision?.cards);
+
+    const play = suggested.decision!.cards?.length
+      ? createPlayEvent(state, "solo-player", suggested.decision!.cards)!
+      : ({ type: "PASS_TURN", playerId: "solo-player" } as const);
+    act(() => result.current.send(play));
+    expect(result.current.jevDecisionLog[0]).toMatchObject({
+      sequence: suggested.sequence,
+      followed: true,
+      actualCards: suggested.decision!.cards,
+    });
+  });
+
+  it("records a different move even if Jev answers after the player acts", async () => {
+    let resolveDecision!: (decision: Awaited<ReturnType<typeof requestJevBotMove>>) => void;
+    requestJevBotMoveMock.mockImplementation(
+      () => new Promise((resolve) => (resolveDecision = resolve)),
+    );
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useOfflineGame());
+    act(() => result.current.start());
+
+    for (let turn = 0; turn < 4; turn++) {
+      const state = result.current.gameState!;
+      if (state.context.players[state.context.currentPlayerIndex].id === "solo-player") break;
+      await act(async () => vi.advanceTimersByTimeAsync(650));
+    }
+
+    const state = result.current.gameState!;
+    const actual = chooseBotMove({
+      hand: state.context.players.find((player) => player.id === "solo-player")!.hand,
+      roundMode: state.context.roundMode,
+      cardsToBeat: getCardsToBeat(state),
+      requiredCard: getRequiredCard(state),
+    });
+    const sequence = result.current.jevDecisionLog[0].sequence;
+    act(() =>
+      result.current.send(
+        actual?.length
+          ? createPlayEvent(state, "solo-player", actual)!
+          : { type: "PASS_TURN", playerId: "solo-player" },
+      ),
+    );
+    await act(async () =>
+      resolveDecision({
+        cards: actual?.length ? null : [state.context.players[0].hand[0]],
+        source: "jev",
+      }),
+    );
+    expect(
+      result.current.jevDecisionLog.find((entry) => entry.sequence === sequence),
+    ).toMatchObject({
+      followed: false,
+      actualCards: actual,
+    });
+  });
+
+  it("ignores an old game's pending analysis after a reset", async () => {
+    let resolveDecision!: (decision: Awaited<ReturnType<typeof requestJevBotMove>>) => void;
+    requestJevBotMoveMock.mockImplementation(
+      () => new Promise((resolve) => (resolveDecision = resolve)),
+    );
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useOfflineGame());
+    act(() => result.current.start());
+
+    for (let turn = 0; turn < 4; turn++) {
+      const state = result.current.gameState!;
+      if (state.context.players[state.context.currentPlayerIndex].id === "solo-player") break;
+      await act(async () => vi.advanceTimersByTimeAsync(650));
+    }
+
+    const resolveOldDecision = resolveDecision;
+    act(() => result.current.send({ type: "RESET_GAME" }));
+    await act(async () => resolveOldDecision({ cards: null, source: "jev" }));
+    expect(result.current.jevDecisionLog.every((entry) => entry.decision?.source !== "jev")).toBe(
+      true,
+    );
   });
 });

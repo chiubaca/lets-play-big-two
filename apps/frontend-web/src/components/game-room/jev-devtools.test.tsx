@@ -94,3 +94,18 @@ it("selects earlier decisions from the event buffer", () => {
   fireEvent.click(screen.getByRole("button", { name: "#02AlicePASS" }));
   expect(screen.getByText("Only one legal action was available.")).toBeTruthy();
 });
+
+it("shows the human suggestion, actual move, and whether it was followed", () => {
+  renderDevtools([
+    {
+      ...decisions[0],
+      playerId: "solo-player",
+      playerName: "You",
+      actualCards: null,
+      followed: true,
+    },
+  ]);
+  expect(screen.getByText("SUGGEST")).toBeTruthy();
+  expect(screen.getByText("YOU PLAYED PASS")).toBeTruthy();
+  expect(screen.getByText("Followed suggestion")).toBeTruthy();
+});

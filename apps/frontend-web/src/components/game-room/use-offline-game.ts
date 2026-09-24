@@ -30,8 +30,20 @@ export type JevDecisionLogEntry = {
   sequence: number;
   playerId: string;
   playerName: string;
-  decision: JevBotMoveDecision;
+  decision?: JevBotMoveDecision;
+  actualCards?: Card[] | null;
+  followed?: boolean;
 };
+
+export function matchesJevSuggestion(suggested: Card[] | null, actual: Card[] | null): boolean {
+  if (!suggested?.length || !actual?.length) return !suggested?.length && !actual?.length;
+  return (
+    suggested.length === actual.length &&
+    suggested.every((card) =>
+      actual.some((played) => played.suit === card.suit && played.value === card.value),
+    )
+  );
+}
 
 const OFFLINE_PLAYERS: OfflinePlayer[] = [
   OFFLINE_HUMAN,
@@ -56,6 +68,8 @@ export function useOfflineGame() {
   const subscriptionRef = useRef<Subscription | null>(null);
   const botTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const decisionSequenceRef = useRef(0);
+  const gameGenerationRef = useRef(0);
+  const humanTurnRef = useRef<number | null>(null);
   const [gameState, setGameState] = useState<BigTwoGameMachineSnapshot>();
   const [jevDecisionLog, setJevDecisionLog] = useState<JevDecisionLogEntry[]>([]);
   const [jevFallbackPlayerIds, setJevFallbackPlayerIds] = useState<Set<string>>(new Set());
@@ -68,6 +82,8 @@ export function useOfflineGame() {
     if (actorRef.current) return;
     const gamePlayers = (players ?? OFFLINE_PLAYERS).map((player) => ({ ...player }));
     decisionSequenceRef.current = 0;
+    gameGenerationRef.current += 1;
+    humanTurnRef.current = null;
     setJevDecisionLog([]);
     setJevFallbackPlayerIds(new Set());
     playersRef.current = gamePlayers;
@@ -123,13 +139,40 @@ export function useOfflineGame() {
     const actor = actorRef.current;
     if (!actor) return;
 
+    const before = actor.getSnapshot();
     actor.send(event);
 
     if (event.type === "RESET_GAME") {
       decisionSequenceRef.current = 0;
+      gameGenerationRef.current += 1;
+      humanTurnRef.current = null;
       setJevDecisionLog([]);
       setJevFallbackPlayerIds(new Set());
       actor.send({ type: "START_GAME" });
+    } else if (
+      humanTurnRef.current !== null &&
+      (event.type === "PLAY_FIRST_MOVE" ||
+        event.type === "PLAY_CARDS" ||
+        event.type === "PLAY_NEW_ROUND_FIRST_MOVE" ||
+        event.type === "PASS_TURN") &&
+      event.playerId === OFFLINE_HUMAN.id &&
+      before.context.currentPlayerIndex !== actor.getSnapshot().context.currentPlayerIndex
+    ) {
+      const sequence = humanTurnRef.current;
+      const actualCards = event.type === "PASS_TURN" ? null : event.cards;
+      setJevDecisionLog((previous) =>
+        previous.map((entry) =>
+          entry.sequence === sequence
+            ? {
+                ...entry,
+                actualCards,
+                followed: entry.decision
+                  ? matchesJevSuggestion(entry.decision.cards, actualCards)
+                  : undefined,
+              }
+            : entry,
+        ),
+      );
     }
   }, []);
 
@@ -140,8 +183,13 @@ export function useOfflineGame() {
     const human = snapshot.context.players.find((player) => player.id === OFFLINE_HUMAN.id);
     if (!human) return null;
 
-    return chooseMove(snapshot, human.hand) ?? null;
-  }, []);
+    const suggestion = jevDecisionLog.find(
+      (entry) => entry.sequence === humanTurnRef.current && entry.decision,
+    );
+    return suggestion?.decision
+      ? suggestion.decision.cards
+      : (chooseMove(snapshot, human.hand) ?? null);
+  }, [jevDecisionLog]);
 
   useEffect(() => {
     return () => {
@@ -151,6 +199,53 @@ export function useOfflineGame() {
       actorRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const actor = actorRef.current;
+    if (!actor || !gameState || !isGameTurnState(gameState.value)) {
+      humanTurnRef.current = null;
+      return;
+    }
+    const player = gameState.context.players[gameState.context.currentPlayerIndex];
+    if (player?.id !== OFFLINE_HUMAN.id) {
+      humanTurnRef.current = null;
+      return;
+    }
+    if (humanTurnRef.current !== null) return;
+
+    decisionSequenceRef.current += 1;
+    const sequence = decisionSequenceRef.current;
+    const generation = gameGenerationRef.current;
+    humanTurnRef.current = sequence;
+    setJevDecisionLog((previous) =>
+      [{ sequence, playerId: player.id, playerName: player.name }, ...previous].slice(0, 12),
+    );
+
+    void requestJevBotMove(gameState, player.id)
+      .catch(
+        (): JevBotMoveDecision => ({
+          cards: chooseMove(gameState, player.hand) ?? null,
+          source: "fallback",
+        }),
+      )
+      .then((decision) => {
+        if (actorRef.current !== actor || gameGenerationRef.current !== generation) return;
+        setJevDecisionLog((previous) =>
+          previous.map((entry) =>
+            entry.sequence === sequence
+              ? {
+                  ...entry,
+                  decision,
+                  followed:
+                    entry.actualCards !== undefined
+                      ? matchesJevSuggestion(decision.cards, entry.actualCards)
+                      : undefined,
+                }
+              : entry,
+          ),
+        );
+      });
+  }, [gameState]);
 
   useEffect(() => {
     if (botTimerRef.current) {

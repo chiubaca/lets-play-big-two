@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Activity, ChevronRight } from "lucide-react";
+import type { Card } from "@big-two/game-state-machine";
 
 import { useJevDevtools } from "./jev-devtools-context";
-import type { JevDecisionLogEntry } from "./use-offline-game";
 import "./jev-devtools.css";
 
 const suitSymbols = {
@@ -12,8 +12,7 @@ const suitSymbols = {
   SPADE: "♠",
 } as const;
 
-function formatAction(entry: JevDecisionLogEntry): string {
-  const { cards } = entry.decision;
+function formatAction(cards: Card[] | null): string {
   if (!cards?.length) return "PASS";
   return cards.map((card) => `${card.value}${suitSymbols[card.suit]}`).join(" · ");
 }
@@ -39,7 +38,7 @@ export function JevDevtools() {
   }, [newestSequence]);
 
   const selected = decisions.find((entry) => entry.sequence === selectedSequence) ?? decisions[0];
-  const trace = selected?.decision.trace;
+  const trace = selected?.decision?.trace;
 
   return (
     <section className="jev-devtools" aria-label="Jev decision devtools">
@@ -57,7 +56,7 @@ export function JevDevtools() {
         <div className="jev-devtools-empty">
           <Activity aria-hidden="true" />
           <strong>Awaiting inference</strong>
-          <span>Set an opponent to Jev. Its next decision will stream here.</span>
+          <span>Start a solo game or set an opponent to Jev to see decisions here.</span>
         </div>
       ) : (
         <div className="jev-devtools-body">
@@ -65,17 +64,31 @@ export function JevDevtools() {
             <div className="jev-verdict-meta">
               <span>TURN {String(selected.sequence).padStart(2, "0")}</span>
               <span>{selected.playerName.toUpperCase()}</span>
-              <span className={`jev-source jev-source-${selected.decision.source}`}>
-                {selected.decision.source}
+              <span className={`jev-source jev-source-${selected.decision?.source ?? "pending"}`}>
+                {selected.decision?.source ?? "thinking"}
               </span>
             </div>
             <div className="jev-verdict-action">
-              <small>EXECUTE</small>
-              <strong>{formatAction(selected)}</strong>
-              {selected.decision.confidence !== undefined && (
+              <small>{selected.playerId === "solo-player" ? "SUGGEST" : "EXECUTE"}</small>
+              <strong>
+                {selected.decision ? formatAction(selected.decision.cards) : "Analysing…"}
+              </strong>
+              {selected.decision?.confidence !== undefined && (
                 <span>{formatPercent(selected.decision.confidence)} CONF</span>
               )}
             </div>
+            {selected.playerId === "solo-player" && selected.actualCards !== undefined && (
+              <div className="jev-comparison" role="status">
+                <span>YOU PLAYED {formatAction(selected.actualCards)}</span>
+                <strong>
+                  {selected.followed === undefined
+                    ? "Awaiting suggestion"
+                    : selected.followed
+                      ? "Followed suggestion"
+                      : "Went against suggestion"}
+                </strong>
+              </div>
+            )}
           </section>
 
           {trace ? (
@@ -129,7 +142,7 @@ export function JevDevtools() {
                 );
               })}
             </div>
-          ) : (
+          ) : selected.decision ? (
             <div className="jev-no-trace">
               <strong>No model trace</strong>
               <span>
@@ -138,6 +151,8 @@ export function JevDevtools() {
                   : "The deterministic fallback made this move."}
               </span>
             </div>
+          ) : (
+            <div className="jev-no-trace">Jev is analysing this hand…</div>
           )}
 
           {decisions.length > 1 && (
@@ -153,7 +168,7 @@ export function JevDevtools() {
                   >
                     <span>#{String(entry.sequence).padStart(2, "0")}</span>
                     <strong>{entry.playerName}</strong>
-                    <i>{formatAction(entry)}</i>
+                    <i>{entry.decision ? formatAction(entry.decision.cards) : "Analysing…"}</i>
                     <ChevronRight aria-hidden="true" />
                   </button>
                 ))}
@@ -162,8 +177,8 @@ export function JevDevtools() {
           )}
 
           <footer className="jev-devtools-footer">
-            <span>{selected.decision.model ?? "deterministic"}</span>
-            <span>{trace ? trace.selectedAction : selected.decision.source}</span>
+            <span>{selected.decision?.model ?? "deterministic"}</span>
+            <span>{trace ? trace.selectedAction : (selected.decision?.source ?? "pending")}</span>
           </footer>
         </div>
       )}

@@ -201,9 +201,7 @@ export const GameRoom = ({
     const cards = requestHint?.();
     setSelectedCards(cards ?? []);
     setMessage(
-      cards?.length
-        ? "A little nudge. Your move is selected."
-        : "No legal play available. Pass this turn.",
+      cards?.length ? "A little nudge. Your move is selected." : "Consider passing this turn.",
     );
     playSound("select");
   };

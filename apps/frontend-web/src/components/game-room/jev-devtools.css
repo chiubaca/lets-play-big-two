@@ -115,6 +115,25 @@
   color: var(--jev-gold);
 }
 
+.jev-source-pending {
+  color: var(--jev-muted);
+}
+
+.jev-comparison {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin-top: 14px;
+  color: var(--jev-muted);
+  font-size: 9px;
+}
+
+.jev-comparison strong {
+  color: var(--jev-gold);
+  font-weight: 500;
+}
+
 .jev-verdict-action {
   display: grid;
   grid-template-columns: auto 1fr auto;
