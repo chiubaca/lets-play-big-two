@@ -9,6 +9,7 @@ import { makePlayerOrder } from "./helpers/make-player-order";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
 import { createPlayEvent, isGameTurnState } from "./game-room-session";
 import { useTableAudio } from "./use-table-audio";
+import { WinnerArtwork } from "./winner-artwork";
 import { CasinoBackdrop, CasinoTableMark } from "~/components/casino/casino";
 import "./game-room.css";
 
@@ -574,8 +575,10 @@ export const GameRoom = ({
         </DialogContent>
       </Dialog>
       <Dialog open={currentValue === "GAME_END"}>
-        <DialogContent showCloseButton={false} className="table-dialog">
+        <DialogContent showCloseButton={false} className="table-dialog winner-dialog">
           {(sharedDevice || winner?.id === user.id) && <Confetti />}
+          <p className="winner-eyebrow">Table complete</p>
+          <WinnerArtwork isWinner={sharedDevice || winner?.id === user.id} />
           <DialogTitle>
             {!sharedDevice && winner?.id === user.id
               ? "Beautifully played."

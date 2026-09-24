@@ -77,15 +77,48 @@
 }
 
 .home-logo-title {
-  width: min(100%, clamp(220px, 32svh, 300px));
+  position: relative;
+  width: min(100%, clamp(242px, 35.2svh, 330px));
   margin: 0 auto;
+  aspect-ratio: 1039 / 1043;
   filter: drop-shadow(0 18px 24px #0009);
 }
 
-.home-logo {
-  display: block;
+.home-logo-emblem {
+  position: absolute;
+  top: -10%;
+  left: 15%;
+  z-index: 0;
+  width: 70%;
+  height: 65%;
+}
+
+.home-logo-emblem img {
   width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.home-logo-text,
+.home-logo-crew {
+  position: absolute;
+  display: block;
   height: auto;
+  pointer-events: none;
+}
+
+.home-logo-text {
+  top: 26%;
+  left: 0;
+  z-index: 1;
+  width: 100%;
+}
+
+.home-logo-crew {
+  top: 59%;
+  left: 18%;
+  z-index: 2;
+  width: 64%;
 }
 
 .home-mode-grid {

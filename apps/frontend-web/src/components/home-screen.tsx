@@ -16,6 +16,7 @@ import {
 import { useState } from "react";
 import { AuthPanel } from "~/components/auth-panel";
 import { CasinoBackdrop, CasinoKicker, CasinoPanel } from "~/components/casino/casino";
+import { HomeLogo } from "~/components/home-logo";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
@@ -100,15 +101,7 @@ export function HomeScreen({
       <div className="home-content">
         <section className="home-hero">
           <div className="home-copy">
-            <h1 className="home-logo-title">
-              <img
-                className="home-logo"
-                src="/big-two-crew-logo.png"
-                alt="Big Two Crew"
-                width="1039"
-                height="1043"
-              />
-            </h1>
+            <HomeLogo />
             <div className="home-mode-grid" aria-label="Choose a way to play">
               <Link
                 to="/offline"

@@ -585,6 +585,91 @@
   color: #b9b99f;
   line-height: 1.8;
 }
+.table-dialog.winner-dialog {
+  width: min(440px, calc(100% - 2rem));
+  max-width: 440px;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  gap: 12px;
+  padding: 28px 28px 30px;
+  text-align: center;
+  border-color: #c5a461a6;
+  background:
+    radial-gradient(ellipse at 50% 35%, #80592133, transparent 58%),
+    radial-gradient(ellipse at 50% 65%, #a6004526, transparent 65%), #091b12;
+  box-shadow:
+    0 28px 100px #000a,
+    inset 0 0 0 5px #c5a4610d;
+}
+.winner-eyebrow {
+  margin: 0;
+  color: #cfb77e;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+.winner-artwork {
+  min-width: 0;
+  pointer-events: none;
+}
+.winner-artwork-loss img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 auto;
+  filter: drop-shadow(0 8px 16px #e9005933);
+}
+.winner-emblem {
+  width: min(100%, 290px);
+  height: clamp(180px, 32dvh, 270px);
+  margin: 0 auto;
+  filter: drop-shadow(0 12px 18px #0007);
+}
+.winner-emblem-fallback {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.winner-wordmark {
+  position: relative;
+  aspect-ratio: 2.8;
+  margin-top: -32px;
+  overflow: hidden;
+  filter: drop-shadow(0 6px 10px #e9005933);
+}
+.winner-wordmark img {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: auto;
+  transform: translateY(-54%);
+}
+.winner-dialog [data-slot="dialog-title"] {
+  margin-top: 4px;
+  font-family: Georgia, serif;
+  font-size: clamp(24px, 6vw, 30px);
+  color: #fff0c8;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.winner-dialog [data-slot="dialog-description"] {
+  text-wrap: balance;
+}
+.winner-dialog .table-small-button {
+  margin-top: 8px;
+  padding: 13px 20px;
+  border-color: #ffe2a0;
+  color: #231708;
+  background: linear-gradient(135deg, #ffe2a0, #c99843);
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 4px 16px #0004;
+}
+.winner-dialog .table-small-button:hover {
+  background: #ffe2a0;
+}
 .table-small-button {
   display: inline-block;
   border: 1px solid #c5a461;
