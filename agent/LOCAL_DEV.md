@@ -75,3 +75,10 @@ other projects.
   the two `/etc/hosts` entries.
 - If the backend cannot access D1, authenticate Wrangler with the Cloudflare
   account that owns the configured database.
+- If Wrangler fails to start with `Failed to start the remote proxy session` or
+  `Authentication error [code: 10000]`, run `vp exec wrangler whoami` from
+  `apps/backend`. If it reports `Invalid access token [code: 9109]`, run
+  `vp exec wrangler login` there and complete the browser sign-in, then rerun
+  `vp exec wrangler whoami` before restarting `vp run dev:local`. The remote D1
+  and Workers AI bindings require a valid Cloudflare login even though the
+  Worker and Durable Object run locally.

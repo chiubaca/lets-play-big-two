@@ -372,6 +372,97 @@
   font-size: 12px;
 }
 
+.home-online-error button {
+  color: var(--casino-gold-bright);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.home-my-rooms {
+  border-top: 1px solid #eccb7e55;
+  padding-top: 18px;
+}
+
+.home-my-rooms-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.home-my-rooms-heading h3 {
+  margin: 0;
+  color: var(--casino-gold-bright);
+  font-family: var(--font-heading);
+  font-size: 19px;
+}
+
+.home-my-rooms-heading > span {
+  border: 1px solid #eccb7e66;
+  border-radius: 100px;
+  padding: 2px 7px;
+  color: var(--casino-gold);
+  font: 11px var(--font-mono);
+}
+
+.home-my-rooms-note {
+  margin: 0;
+  color: var(--casino-cream-muted);
+  font-size: 12px;
+}
+
+.home-my-rooms-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-my-room {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #eccb7e44;
+  border-radius: 11px;
+  padding: 12px 14px;
+  color: var(--casino-cream);
+  background: #020b0788;
+  text-decoration: none;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease;
+}
+
+.home-my-room:hover {
+  border-color: var(--casino-gold);
+  background: #183425;
+}
+
+.home-my-room:focus-visible {
+  outline: 2px solid var(--casino-focus);
+  outline-offset: 2px;
+}
+
+.home-my-room-code {
+  color: var(--casino-gold-bright);
+  font: 14px var(--font-mono);
+  letter-spacing: 0.07em;
+}
+
+.home-my-room-detail {
+  color: var(--casino-cream-muted);
+  text-align: right;
+  font-size: 11px;
+}
+
+.home-my-room > svg {
+  width: 17px;
+  height: 17px;
+  color: var(--casino-gold);
+}
+
 .home-legal {
   position: relative;
   z-index: 2;
@@ -588,6 +679,17 @@
   }
   .home-room-code > div {
     grid-template-columns: 1fr;
+  }
+  .home-my-room {
+    grid-template-columns: 1fr auto;
+  }
+  .home-my-room-detail {
+    grid-row: 2;
+    text-align: left;
+  }
+  .home-my-room > svg {
+    grid-column: 2;
+    grid-row: 1 / 3;
   }
   .home-auth-dialog {
     width: calc(100% - 24px);

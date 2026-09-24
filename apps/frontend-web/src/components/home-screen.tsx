@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowRight,
@@ -61,6 +61,16 @@ export function HomeScreen({
       return response.json();
     },
     onSuccess: (room) => navigate({ to: "/room/$roomId", params: { roomId: room.roomId } }),
+  });
+
+  const rooms = useQuery({
+    queryKey: ["myRooms", session?.user.id],
+    enabled: !!session,
+    queryFn: async () => {
+      const response = await honoClient.api.rooms.$get();
+      if (!response.ok) throw new Error("Couldn’t load your rooms.");
+      return (await response.json()).rooms;
+    },
   });
 
   const displayName = session?.user.username ?? session?.user.name?.split(" ")[0];
@@ -171,7 +181,7 @@ export function HomeScreen({
                           id="home-room-code"
                           value={roomCode}
                           maxLength={8}
-                          placeholder="ABCD23"
+                          placeholder="ABCDE"
                           onChange={(event) => {
                             setRoomCode(event.target.value.toUpperCase());
                             setJoinError(null);
@@ -194,6 +204,50 @@ export function HomeScreen({
                         {joinError ?? createRoom.error?.message}
                       </p>
                     )}
+                    <section className="home-my-rooms" aria-labelledby="home-my-rooms-title">
+                      <div className="home-my-rooms-heading">
+                        <h3 id="home-my-rooms-title">Your tables</h3>
+                        {rooms.data && <span>{rooms.data.length}</span>}
+                      </div>
+                      {rooms.isPending ? (
+                        <p className="home-my-rooms-note">Loading your tables…</p>
+                      ) : rooms.isError ? (
+                        <p className="home-online-error" role="alert">
+                          {rooms.error.message}{" "}
+                          <button type="button" onClick={() => void rooms.refetch()}>
+                            Try again
+                          </button>
+                        </p>
+                      ) : rooms.data.length === 0 ? (
+                        <p className="home-my-rooms-note">
+                          No tables yet. Create one or join with a code.
+                        </p>
+                      ) : (
+                        <ul className="home-my-rooms-list">
+                          {rooms.data.map((room) => (
+                            <li key={room.roomId}>
+                              <Link
+                                to="/room/$roomId"
+                                params={{ roomId: room.roomId }}
+                                className="home-my-room"
+                              >
+                                <span className="home-my-room-code">{room.roomId}</span>
+                                <span className="home-my-room-detail">
+                                  {room.status === "waiting"
+                                    ? "Waiting for players"
+                                    : room.status === "finished"
+                                      ? "Game finished"
+                                      : "Game in progress"}
+                                  <span aria-hidden="true"> · </span>
+                                  {room.playerCount} / 4 players
+                                </span>
+                                <ArrowRight aria-hidden="true" />
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </section>
                   </div>
                 ) : (
                   <div className="home-online-signin">

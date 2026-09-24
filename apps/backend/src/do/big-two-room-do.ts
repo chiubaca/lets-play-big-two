@@ -55,6 +55,12 @@ export class BigTwoRoomObject extends DurableObject<Env> {
 
     const gameStateSnapshot =
       gameStateMachineActor.getPersistedSnapshot() as BigTwoGameMachineSnapshot;
+    if (
+      event.type === "JOIN_GAME" &&
+      !gameStateSnapshot.context.players.some((player) => player.id === requesterId)
+    ) {
+      return { success: false, error: "This room is no longer accepting players" };
+    }
     const serialisedGameState = JSON.stringify(gameStateSnapshot);
     this.sql.exec(`UPDATE game_room SET game_state = ? WHERE id = 1`, serialisedGameState);
 

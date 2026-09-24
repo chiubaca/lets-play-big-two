@@ -2,16 +2,20 @@ import { Hono } from "hono";
 import { sValidator } from "@hono/standard-validator";
 import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
-import { nanoid } from "nanoid";
 import { eq } from "drizzle-orm";
 
 import { getDb } from "@big-two/data-ops/database";
-import { accountDeletionTable, roomTable } from "@big-two/data-ops/drizzle/schema";
-import { gameEventSchema } from "@big-two/game-state-machine";
+import {
+  accountDeletionTable,
+  roomTable,
+  usersToRoomsTable,
+} from "@big-two/data-ops/drizzle/schema";
+import { gameEventSchema, type BigTwoGameMachineSnapshot } from "@big-two/game-state-machine";
 
 import { auth } from "../lib/auth";
 import { chooseJevBotMoveWithFallback } from "../lib/jev-bot";
 import { jevBotMoveRequestSchema } from "../lib/jev-bot.schema";
+import { createRoomCode } from "../lib/room-code";
 
 async function accountDeletionIsPending(userId: string) {
   const db = getDb();
@@ -38,6 +42,40 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
   })
   .get("/", async (c) => {
     return c.text("sup");
+  })
+  .get("/api/rooms", async (c) => {
+    const session = await auth.api.getSession({ headers: c.req.raw.headers });
+    if (!session) return c.json({ error: "Unauthorized" }, 401);
+
+    const db = getDb();
+    const memberships = await db
+      .select({ roomId: roomTable.id })
+      .from(usersToRoomsTable)
+      .innerJoin(roomTable, eq(usersToRoomsTable.roomId, roomTable.id))
+      .where(eq(usersToRoomsTable.userId, session.user.id));
+
+    const rooms = await Promise.all(
+      memberships.map(async ({ roomId }) => {
+        const stub = c.env.BIG_TWO_ROOM_DURABLE_OBJECT.getByName(roomId);
+        const storedState = await stub.getGameState();
+        if (!storedState) return null;
+        const state = JSON.parse(storedState) as BigTwoGameMachineSnapshot;
+        if (!state.context.players.some((player) => player.id === session.user.id)) return null;
+        return {
+          roomId,
+          status:
+            state.value === "WAITING_FOR_PLAYERS"
+              ? "waiting"
+              : state.value === "GAME_END"
+                ? "finished"
+                : "playing",
+          playerCount: state.context.players.length,
+        };
+      }),
+    );
+    return c.json({ rooms: rooms.filter((room) => room !== null) }, 200, {
+      "Cache-Control": "no-store",
+    });
   })
   .post(
     "/api/bot/jev/move",
@@ -118,16 +156,25 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
       return c.json({ error: "Account deletion is in progress" }, 409);
     }
 
-    const roomId = nanoid(8);
+    const db = getDb();
+    let roomId: string | undefined;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const candidate = createRoomCode();
+      const inserted = await db
+        .insert(roomTable)
+        .values({ id: candidate, status: "waiting" })
+        .onConflictDoNothing()
+        .returning({ id: roomTable.id });
+      if (inserted.length > 0) {
+        roomId = candidate;
+        break;
+      }
+    }
+    if (!roomId) return c.json({ error: "Couldn’t find an available room code" }, 503);
 
     const durableObjectId = c.env.BIG_TWO_ROOM_DURABLE_OBJECT.idFromName(roomId);
     const roomStub = c.env.BIG_TWO_ROOM_DURABLE_OBJECT.get(durableObjectId);
 
-    const db = getDb();
-    await db.insert(roomTable).values({
-      id: roomId,
-      status: "waiting",
-    });
     await roomStub.createRoom({
       id: session.user.id,
       name: session.user.name,
@@ -137,6 +184,8 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
       await roomStub.redactPlayer(session.user.id);
       return c.json({ error: "Account deletion is in progress" }, 409);
     }
+
+    await db.insert(usersToRoomsTable).values({ userId: session.user.id, roomId });
 
     return c.json({
       roomId,
@@ -192,6 +241,10 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
           await stub.redactPlayer(session.user.id);
           return c.json({ error: "Account deletion is in progress" }, 409);
         }
+        await getDb()
+          .insert(usersToRoomsTable)
+          .values({ userId: session.user.id, roomId })
+          .onConflictDoNothing();
       }
 
       return c.json({ success: true });
