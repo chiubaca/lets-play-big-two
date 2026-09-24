@@ -6,10 +6,33 @@ import { PassAndPlay } from "./pass-and-play";
 
 afterEach(cleanup);
 
+it("configures the number of seats and optional bot players", () => {
+  render(<PassAndPlay onBack={() => {}} />);
+  expect(screen.getByRole("button", { name: "4" }).getAttribute("aria-pressed")).toBe("true");
+  expect(
+    screen
+      .getByRole("combobox", { name: "Player 3 type" })
+      .querySelector("option:checked")
+      ?.getAttribute("value"),
+  ).toBe("bot");
+
+  fireEvent.click(screen.getByRole("button", { name: "3" }));
+  expect(screen.queryByRole("combobox", { name: "Player 4 type" })).toBeNull();
+  fireEvent.change(screen.getByRole("combobox", { name: "Player 2 type" }), {
+    target: { value: "bot" },
+  });
+  expect(screen.queryByRole("textbox", { name: "Player 2" })).toBeNull();
+
+  fireEvent.change(screen.getByRole("textbox", { name: "Player 1" }), {
+    target: { value: "" },
+  });
+  expect(screen.getByRole("button", { name: "Start game" }).hasAttribute("disabled")).toBe(true);
+});
+
 it("keeps hands out of the DOM until Ready, then hides them after playing and passing", async () => {
   const { container } = render(<PassAndPlay onBack={() => {}} />);
-  const deal = screen.getByRole("button", { name: "Deal cards" });
-  expect(deal.hasAttribute("disabled")).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "2" }));
+  const deal = screen.getByRole("button", { name: "Start game" });
   fireEvent.change(screen.getByLabelText("Player 1"), { target: { value: "Alex" } });
   fireEvent.change(screen.getByLabelText("Player 2"), { target: { value: "Blair" } });
   fireEvent.click(deal);

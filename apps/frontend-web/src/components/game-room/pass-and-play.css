@@ -1,0 +1,349 @@
+.pass-setup {
+  position: relative;
+  isolation: isolate;
+  min-height: 100svh;
+  overflow-x: clip;
+  color: var(--casino-cream);
+  background: var(--casino-night);
+}
+
+.pass-setup > .casino-backdrop {
+  position: fixed;
+  inset: -20px;
+  filter: blur(calc(var(--logo-overlap, 0) * 12px));
+}
+
+.pass-setup-nav {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  width: min(100% - 32px, 960px);
+  margin: 0 auto;
+  padding-top: 26px;
+}
+
+.pass-setup-back {
+  display: grid;
+  width: 60px;
+  height: 60px;
+  place-items: center;
+  border: 2px solid #e9bd69;
+  border-radius: 50%;
+  color: #ffdb88;
+  background: #03170ff2;
+  box-shadow:
+    inset 0 0 0 3px #04140d,
+    0 6px 18px #0009;
+  cursor: pointer;
+}
+
+.pass-setup-back svg {
+  width: 32px;
+  height: 32px;
+}
+
+.pass-setup-back:hover,
+.pass-setup-count-options button:hover,
+.pass-setup-select:hover {
+  filter: brightness(1.15);
+}
+
+.pass-setup-back:focus-visible,
+.pass-setup-count-options button:focus-visible,
+.pass-setup-select:focus-within,
+.pass-setup-seat-name input:focus-visible,
+.pass-setup-start:focus-visible {
+  outline: 3px solid var(--casino-focus);
+  outline-offset: 3px;
+}
+
+.pass-setup-content {
+  width: min(100% - 32px, 620px);
+  margin: -16px auto 0;
+  padding-bottom: 70px;
+}
+
+.pass-setup-heading {
+  position: sticky;
+  top: clamp(60px, 6svh, 80px);
+  z-index: 0;
+  display: grid;
+  justify-items: center;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.pass-setup-heading h1 {
+  width: 100%;
+  margin: 0;
+}
+
+.pass-setup-heading img {
+  display: block;
+  width: 100%;
+  height: auto;
+  opacity: calc(1 - var(--logo-overlap, 0) * 0.5);
+  filter: blur(calc(var(--logo-overlap, 0) * 12px)) drop-shadow(0 12px 18px #0009);
+  transform: scale(calc(1 - var(--logo-overlap, 0) * 0.06));
+}
+
+.casino-panel.pass-setup-panel {
+  z-index: 1;
+  border: 2px solid #e9bd69;
+  border-radius: 36px;
+  background: linear-gradient(160deg, #0d3020f5, #03170ff7 75%);
+  box-shadow:
+    inset 0 0 0 3px #04140d,
+    inset 0 0 0 4px #e9bd696b,
+    0 8px 0 #422708,
+    0 16px 24px #0009;
+  backdrop-filter: none;
+}
+
+.pass-setup-form {
+  display: grid;
+  gap: 30px;
+  padding: clamp(20px, 5vw, 38px);
+}
+
+.pass-setup-count {
+  min-width: 0;
+}
+
+.pass-setup-count legend,
+.pass-setup-seats h2 {
+  margin-bottom: 14px;
+  color: #e9d0a0;
+  font-family: var(--font-sans);
+  font-size: clamp(14px, 2vw, 18px);
+  font-weight: 700;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.pass-setup-seats h2 span {
+  font-weight: 500;
+}
+
+.pass-setup-count-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.pass-setup-count-options button {
+  min-height: 70px;
+  border: 1px solid #c8a96b;
+  border-radius: 24px;
+  color: #ffe3ad;
+  background: linear-gradient(150deg, #0a3021, #021b13);
+  box-shadow:
+    inset 0 0 0 2px #12291e,
+    0 5px 12px #0009;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.pass-setup-count-options button[aria-pressed="true"] {
+  border-color: #ffe2a0;
+  color: #2d1b0a;
+  background: var(--casino-gold-gradient);
+  box-shadow:
+    inset 0 2px #fff7,
+    inset 0 -3px #b46a19,
+    0 6px 14px #0009;
+}
+
+.pass-setup-seats {
+  display: grid;
+  gap: 10px;
+}
+
+.pass-setup-seat {
+  display: grid;
+  min-width: 0;
+  min-height: 74px;
+  grid-template-columns: 52px minmax(0, 1fr) 140px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid #b99b5a78;
+  border-radius: 24px;
+  background: linear-gradient(135deg, #082c1d, #031a13);
+  box-shadow:
+    inset 0 1px #fff1,
+    0 5px 12px #0008;
+}
+
+.pass-setup-avatar {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: 50%;
+  color: #ffdb88;
+  background: #02130d;
+}
+
+.pass-setup-avatar svg {
+  width: 32px;
+  height: 32px;
+  fill: #c9913155;
+  stroke-width: 1.8;
+}
+
+.pass-setup-seat-name {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.pass-setup-seat-name label {
+  color: #ffebbf;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.pass-setup-seat-name input,
+.pass-setup-seat-name > span {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  color: #cbbfa6;
+  background: transparent;
+  font-size: 13px;
+}
+
+.pass-setup-seat-name input::placeholder {
+  color: #8d9684;
+}
+
+.pass-setup-select {
+  position: relative;
+  border: 1px solid #e9bd69;
+  border-radius: 17px;
+  background: linear-gradient(145deg, #0b3323, #041c13);
+  box-shadow:
+    inset 0 0 0 2px #132a1d,
+    0 5px 10px #0008;
+}
+
+.pass-setup-select select {
+  width: 100%;
+  height: 50px;
+  appearance: none;
+  padding: 0 38px 0 16px;
+  border: 0;
+  color: #fff0d0;
+  background: transparent;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.pass-setup-select svg {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: 20px;
+  height: 20px;
+  color: #ffdb88;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.pass-setup-error {
+  color: #ff9c91;
+  font-size: 13px;
+}
+
+.pass-setup-start {
+  position: relative;
+  width: 100%;
+  height: 72px;
+  border-radius: 26px;
+  font-family: var(--font-sans);
+  font-size: clamp(20px, 4vw, 28px);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pass-setup-start svg {
+  position: absolute;
+  right: 24px;
+  width: 24px;
+  height: 24px;
+}
+
+@media (max-width: 440px) {
+  .pass-setup-nav {
+    padding-top: 20px;
+  }
+
+  .pass-setup-back {
+    width: 50px;
+    height: 50px;
+  }
+
+  .pass-setup-content {
+    margin-top: -4px;
+  }
+
+  .pass-setup-heading {
+    margin-bottom: 26px;
+  }
+
+  .pass-setup-form {
+    gap: 24px;
+  }
+
+  .pass-setup-count-options button {
+    min-height: 58px;
+  }
+
+  .pass-setup-seat {
+    grid-template-columns: 42px minmax(0, 1fr) 106px;
+    gap: 8px;
+    padding: 7px 8px;
+    border-radius: 20px;
+  }
+
+  .pass-setup-avatar {
+    width: 42px;
+    height: 42px;
+  }
+
+  .pass-setup-avatar svg {
+    width: 28px;
+    height: 28px;
+  }
+
+  .pass-setup-select select {
+    height: 44px;
+    padding: 0 26px 0 10px;
+    font-size: 13px;
+  }
+
+  .pass-setup-select svg {
+    right: 6px;
+    width: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pass-setup > .casino-backdrop {
+    filter: none;
+  }
+
+  .pass-setup-heading {
+    position: relative;
+  }
+
+  .pass-setup-heading img {
+    opacity: 1;
+    filter: drop-shadow(0 12px 18px #0009);
+    transform: none;
+  }
+}

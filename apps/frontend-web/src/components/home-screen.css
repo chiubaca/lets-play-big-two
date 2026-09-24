@@ -2,13 +2,20 @@
   position: relative;
   isolation: isolate;
   min-height: 100svh;
-  overflow-x: hidden;
+  overflow-x: clip;
   color: var(--casino-cream);
   background: var(--casino-night);
 }
 
+.home-page > .casino-backdrop {
+  position: fixed;
+  inset: -20px;
+  filter: blur(calc(var(--logo-overlap, 0) * 12px));
+}
+
 .home-nav {
-  position: relative;
+  position: sticky;
+  top: 0;
   z-index: 5;
   display: flex;
   width: min(100% - 40px, 1240px);
@@ -76,21 +83,30 @@
   margin: 0 auto;
 }
 
+.home-logo-stage {
+  position: sticky;
+  top: clamp(32px, 6svh, 80px);
+  z-index: 0;
+  pointer-events: none;
+}
+
 .home-logo-title {
   position: relative;
-  width: min(100%, clamp(242px, 35.2svh, 330px));
+  width: min(100%, clamp(300px, 52svh, 500px));
   margin: 0 auto;
-  aspect-ratio: 1039 / 1043;
-  filter: drop-shadow(0 18px 24px #0009);
+  aspect-ratio: 500 / 530;
+  opacity: calc(1 - var(--logo-overlap, 0) * 0.5);
+  filter: blur(calc(var(--logo-overlap, 0) * 12px)) drop-shadow(0 18px 24px #0009);
+  transform: scale(calc(1 - var(--logo-overlap, 0) * 0.06));
 }
 
 .home-logo-emblem {
   position: absolute;
-  top: -10%;
-  left: 15%;
+  top: 0;
+  left: 20%;
   z-index: 0;
-  width: 70%;
-  height: 65%;
+  width: 60%;
+  height: 57%;
 }
 
 .home-logo-emblem img {
@@ -108,57 +124,67 @@
 }
 
 .home-logo-text {
-  top: 26%;
+  top: 29%;
   left: 0;
   z-index: 1;
   width: 100%;
 }
 
 .home-logo-crew {
-  top: 59%;
-  left: 18%;
+  top: 61%;
+  left: 20%;
   z-index: 2;
-  width: 64%;
+  width: 60%;
 }
 
 .home-mode-grid {
+  position: relative;
+  z-index: 1;
   display: grid;
-  margin-top: clamp(14px, 2.5svh, 24px);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  width: min(100%, 620px);
+  margin: clamp(12px, 2.5svh, 24px) auto 0;
+  gap: clamp(12px, 2svh, 20px);
 }
 
 .home-mode-card {
   position: relative;
   display: grid;
-  min-height: clamp(132px, 18svh, 168px);
+  min-height: clamp(92px, 12svh, 120px);
   overflow: hidden;
-  grid-template-columns: auto 1fr;
-  grid-template-rows: auto 1fr auto;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid #eccb7e99;
-  border-radius: 20px;
-  color: var(--casino-cream);
+  grid-template-columns: 88px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 28px;
   text-decoration: none;
-  background: linear-gradient(150deg, #1c281aef, #020b06f5 72%);
-  box-shadow:
-    inset 0 -3px var(--casino-gold-deep),
-    inset 0 1px #fff2,
-    0 12px 25px #0007;
   transition:
     transform 180ms ease,
     border-color 180ms ease,
     filter 180ms ease;
 }
 
-.home-mode-card::after {
+.home-mode-card,
+.casino-panel.home-online {
+  border: 2px solid #e9bd69;
+  border-radius: 38px;
+  color: var(--casino-cream);
+  background: linear-gradient(160deg, #0d3020f5, #03170ff7 75%);
+  box-shadow:
+    inset 0 0 0 3px #04140d,
+    inset 0 0 0 4px #e9bd696b,
+    inset 0 1px 18px #ffd4841a,
+    0 8px 0 #422708,
+    0 16px 24px #0009;
+}
+
+.home-mode-card::after,
+.home-online::after {
   content: "";
   position: absolute;
-  inset: auto -20% -70% 25%;
+  inset: auto -20% -180% 25%;
   aspect-ratio: 1;
   border-radius: 50%;
-  background: #e4b75012;
+  background: #e4b7500a;
+  pointer-events: none;
   transition: transform 300ms ease;
 }
 
@@ -177,63 +203,48 @@
   outline-offset: 4px;
 }
 
-.home-mode-pass {
-  background: linear-gradient(145deg, #402311, #180c07 74%);
-}
-
 .home-mode-icon {
   display: grid;
-  width: 38px;
-  height: 38px;
+  width: 68px;
+  height: 68px;
   place-items: center;
-  border: 1px solid #eccb7e88;
-  border-radius: 50%;
-  color: var(--casino-gold);
-  background: #06170d;
+  color: #ffdb88;
+  filter: drop-shadow(0 3px 5px #0009);
 }
 
-.home-mode-pass .home-mode-icon {
-  background: #2b130a;
+.home-mode-icon svg {
+  width: 42px;
+  height: 42px;
+  stroke-width: 1.8;
 }
 
 .home-mode-copy {
   position: relative;
   z-index: 1;
   display: grid;
-  align-content: end;
-  grid-column: 1 / -1;
-  gap: 4px;
-}
-
-.home-mode-copy small {
-  color: var(--casino-cream-muted);
-  font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
+  gap: 5px;
 }
 
 .home-mode-copy strong {
-  color: var(--casino-gold-bright);
-  font-family: var(--font-heading);
-  font-size: clamp(21px, 2.5vw, 28px);
-  font-weight: 500;
+  color: #ffebbf;
+  font-family: var(--font-sans);
+  font-size: clamp(17px, 2vw, 24px);
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  line-height: 1.1;
+  text-transform: uppercase;
 }
 
 .home-mode-copy > span {
-  max-width: 230px;
-  color: #c3bda2;
-  font-size: 12px;
+  color: #d1bfa2;
+  font-size: clamp(12px, 1.5vw, 16px);
   line-height: 1.45;
 }
 
 .home-mode-arrow {
-  position: absolute;
-  right: 16px;
-  bottom: 16px;
-  z-index: 2;
-  width: 19px;
-  color: var(--casino-gold);
+  width: 27px;
+  height: 27px;
+  color: #ffdb88;
   transition: transform 180ms ease;
 }
 
@@ -243,45 +254,50 @@
 
 .home-online {
   display: grid;
-  max-width: 920px;
-  margin: clamp(16px, 2.5svh, 24px) auto 0;
-  grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.9fr);
-  gap: clamp(35px, 6vw, 90px);
-  padding: clamp(18px, 3svh, 32px);
+  overflow: hidden;
+  gap: 20px;
+  padding: 24px 28px 28px;
+  backdrop-filter: none;
 }
 
 .home-online-heading {
   display: flex;
-  align-items: flex-start;
-  gap: 20px;
+  align-items: center;
+  gap: 18px;
 }
 
 .home-online-icon {
   display: grid;
-  width: 56px;
-  height: 56px;
+  width: 88px;
+  height: 68px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid var(--casino-gold);
-  border-radius: 50%;
-  color: var(--casino-gold);
-  background: var(--casino-panel-gradient);
-  box-shadow: inset 0 -2px var(--casino-gold-deep);
+  color: #ffdb88;
+  filter: drop-shadow(0 3px 5px #0009);
+}
+
+.home-online-icon svg {
+  width: 42px;
+  height: 42px;
+  stroke-width: 1.8;
 }
 
 .home-online-heading h2 {
-  max-width: 590px;
-  margin: 9px 0 8px;
-  color: var(--casino-gold-bright);
-  font-size: clamp(28px, 3vw, 42px);
-  line-height: 1.05;
+  margin: 4px 0;
+  color: #ffebbf;
+  font-family: var(--font-sans);
+  font-size: clamp(17px, 2vw, 24px);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: uppercase;
 }
 
 .home-online-heading p:last-child {
   margin: 0;
-  color: #b9b99f;
-  font-size: 13px;
-  line-height: 1.6;
+  color: #d1bfa2;
+  font-size: clamp(12px, 1.5vw, 16px);
+  line-height: 1.45;
 }
 
 .home-online-signin,
@@ -290,6 +306,7 @@
   flex-direction: column;
   justify-content: center;
   gap: 17px;
+  padding-left: 106px;
 }
 
 .home-online-signin > div {
@@ -519,21 +536,6 @@
   .home-content {
     padding-top: clamp(18px, 3svh, 28px);
   }
-  .home-mode-grid {
-    grid-template-columns: 1fr;
-  }
-  .home-online {
-    grid-template-columns: 1fr;
-    gap: 22px;
-  }
-  .home-online-heading {
-    display: grid;
-    gap: 14px;
-  }
-  .home-online-icon {
-    width: 48px;
-    height: 48px;
-  }
 }
 
 @media (max-width: 440px) {
@@ -542,6 +544,44 @@
   }
   .home-sign-in {
     padding-inline: 12px;
+  }
+  .home-mode-card {
+    min-height: 94px;
+    grid-template-columns: 48px minmax(0, 1fr) 20px;
+    gap: 10px;
+    padding: 12px 18px;
+    border-radius: 28px;
+  }
+  .home-mode-icon {
+    width: 44px;
+    height: 44px;
+  }
+  .home-mode-icon svg {
+    width: 34px;
+    height: 34px;
+  }
+  .home-mode-arrow {
+    width: 20px;
+    height: 20px;
+  }
+  .home-online {
+    gap: 16px;
+    padding: 18px;
+  }
+  .home-online-heading {
+    gap: 10px;
+  }
+  .home-online-icon {
+    width: 48px;
+    height: 44px;
+  }
+  .home-online-icon svg {
+    width: 34px;
+    height: 34px;
+  }
+  .home-online-signin,
+  .home-online-actions {
+    padding-left: 0;
   }
   .home-online {
     padding: 18px 16px;
@@ -556,6 +596,17 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .home-page > .casino-backdrop {
+    filter: none;
+  }
+  .home-logo-stage {
+    position: relative;
+  }
+  .home-logo-title {
+    opacity: 1;
+    filter: drop-shadow(0 18px 24px #0009);
+    transform: none;
+  }
   .home-page *,
   .home-page *::before,
   .home-page *::after {

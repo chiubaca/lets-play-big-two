@@ -13,10 +13,11 @@ import {
   Wifi,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AuthPanel } from "~/components/auth-panel";
 import { CasinoBackdrop, CasinoKicker, CasinoPanel } from "~/components/casino/casino";
 import { HomeLogo } from "~/components/home-logo";
+import { useScrollOverlap } from "~/components/use-scroll-overlap";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
@@ -47,6 +48,12 @@ export function HomeScreen({
   const [authOpen, setAuthOpen] = useState(false);
   const [roomCode, setRoomCode] = useState("");
   const [joinError, setJoinError] = useState<string | null>(null);
+  const pageRef = useRef<HTMLElement>(null);
+  const logoStageRef = useRef<HTMLDivElement>(null);
+  const modeGridRef = useRef<HTMLDivElement>(null);
+
+  useScrollOverlap(pageRef, logoStageRef, modeGridRef);
+
   const createRoom = useMutation({
     mutationFn: async () => {
       const response = await honoClient.api.room.$post();
@@ -67,7 +74,7 @@ export function HomeScreen({
   };
 
   return (
-    <main className="home-page">
+    <main className="home-page" ref={pageRef}>
       <CasinoBackdrop />
       <header className="home-nav">
         {session ? (
@@ -101,8 +108,10 @@ export function HomeScreen({
       <div className="home-content">
         <section className="home-hero">
           <div className="home-copy">
-            <HomeLogo />
-            <div className="home-mode-grid" aria-label="Choose a way to play">
+            <div className="home-logo-stage" ref={logoStageRef}>
+              <HomeLogo />
+            </div>
+            <div className="home-mode-grid" ref={modeGridRef} aria-label="Choose a way to play">
               <Link
                 to="/offline"
                 search={{ mode: undefined }}
@@ -112,9 +121,8 @@ export function HomeScreen({
                   <Bot aria-hidden="true" />
                 </span>
                 <span className="home-mode-copy">
-                  <small>Instant game</small>
-                  <strong>Solo vs bots</strong>
-                  <span>Sharpen your hand against three opponents.</span>
+                  <strong>Solo play</strong>
+                  <span>Play offline against three opponents</span>
                 </span>
                 <ArrowRight className="home-mode-arrow" aria-hidden="true" />
               </Link>
@@ -128,86 +136,88 @@ export function HomeScreen({
                   <UsersRound aria-hidden="true" />
                 </span>
                 <span className="home-mode-copy">
-                  <small>One device</small>
                   <strong>Pass &amp; Play</strong>
-                  <span>Deal in two to four friends around one screen.</span>
+                  <span>Play together on one device</span>
                 </span>
                 <ArrowRight className="home-mode-arrow" aria-hidden="true" />
               </Link>
+              <CasinoPanel className="home-online" id="multiplayer" aria-labelledby="online-title">
+                <div className="home-online-heading">
+                  <span className="home-online-icon">
+                    <Wifi aria-hidden="true" />
+                  </span>
+                  <div>
+                    <CasinoKicker>03 · Online multiplayer</CasinoKicker>
+                    <h2 id="online-title">A private table, wherever they are.</h2>
+                    <p>Create a room, share the code, and play together in real time.</p>
+                  </div>
+                </div>
+
+                {session ? (
+                  <div className="home-online-actions">
+                    <Button
+                      variant="gold"
+                      className="h-12 px-5 text-base"
+                      disabled={createRoom.isPending}
+                      onClick={() => createRoom.mutate()}
+                    >
+                      {createRoom.isPending ? <Loader2 className="animate-spin" /> : <Plus />}
+                      Create room
+                    </Button>
+                    <div className="home-room-code">
+                      <label htmlFor="home-room-code">Have a code?</label>
+                      <div>
+                        <Input
+                          id="home-room-code"
+                          value={roomCode}
+                          maxLength={8}
+                          placeholder="ABCD23"
+                          onChange={(event) => {
+                            setRoomCode(event.target.value.toUpperCase());
+                            setJoinError(null);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") void joinRoom();
+                          }}
+                        />
+                        <Button
+                          variant="lacquer"
+                          className="h-12 px-5"
+                          onClick={() => void joinRoom()}
+                        >
+                          Join <ArrowRight />
+                        </Button>
+                      </div>
+                    </div>
+                    {(joinError || createRoom.error) && (
+                      <p className="home-online-error" role="alert">
+                        {joinError ?? createRoom.error?.message}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="home-online-signin">
+                    <div>
+                      <LockKeyhole aria-hidden="true" />
+                      <span>
+                        <strong>Account optional</strong>Only online rooms need a sign-in.
+                      </span>
+                    </div>
+                    <Button
+                      variant="gold"
+                      className="h-12 px-6 text-base"
+                      disabled={sessionPending}
+                      onClick={() => setAuthOpen(true)}
+                    >
+                      {sessionPending ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                      Sign in for multiplayer
+                    </Button>
+                  </div>
+                )}
+              </CasinoPanel>
             </div>
           </div>
         </section>
-
-        <CasinoPanel className="home-online" id="multiplayer" aria-labelledby="online-title">
-          <div className="home-online-heading">
-            <span className="home-online-icon">
-              <Wifi aria-hidden="true" />
-            </span>
-            <div>
-              <CasinoKicker>03 · Online multiplayer</CasinoKicker>
-              <h2 id="online-title">A private table, wherever they are.</h2>
-              <p>Create a room, share the code, and play together in real time.</p>
-            </div>
-          </div>
-
-          {session ? (
-            <div className="home-online-actions">
-              <Button
-                variant="gold"
-                className="h-12 px-5 text-base"
-                disabled={createRoom.isPending}
-                onClick={() => createRoom.mutate()}
-              >
-                {createRoom.isPending ? <Loader2 className="animate-spin" /> : <Plus />}
-                Create room
-              </Button>
-              <div className="home-room-code">
-                <label htmlFor="home-room-code">Have a code?</label>
-                <div>
-                  <Input
-                    id="home-room-code"
-                    value={roomCode}
-                    maxLength={8}
-                    placeholder="ABCD23"
-                    onChange={(event) => {
-                      setRoomCode(event.target.value.toUpperCase());
-                      setJoinError(null);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") void joinRoom();
-                    }}
-                  />
-                  <Button variant="lacquer" className="h-12 px-5" onClick={() => void joinRoom()}>
-                    Join <ArrowRight />
-                  </Button>
-                </div>
-              </div>
-              {(joinError || createRoom.error) && (
-                <p className="home-online-error" role="alert">
-                  {joinError ?? createRoom.error?.message}
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="home-online-signin">
-              <div>
-                <LockKeyhole aria-hidden="true" />
-                <span>
-                  <strong>Account optional</strong>Only online rooms need a sign-in.
-                </span>
-              </div>
-              <Button
-                variant="gold"
-                className="h-12 px-6 text-base"
-                disabled={sessionPending}
-                onClick={() => setAuthOpen(true)}
-              >
-                {sessionPending ? <Loader2 className="animate-spin" /> : <Sparkles />}
-                Sign in for multiplayer
-              </Button>
-            </div>
-          )}
-        </CasinoPanel>
       </div>
 
       <footer className="home-legal">
