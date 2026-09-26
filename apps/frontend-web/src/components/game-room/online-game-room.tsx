@@ -6,12 +6,24 @@ import { honoClient } from "~/libs/hono-client";
 import { GameRoom, type GameRoomUser } from "./game-room";
 
 export function OnlineGameRoom({ roomId, user }: { roomId: string; user: GameRoomUser }) {
-  const { data: gameState } = useQuery<RoomGameState>({
-    queryKey: ["gameState", roomId],
-    queryFn: () => {
-      throw new Error("Game state is supplied by the room WebSocket");
+  const {
+    data: gameState,
+    error,
+    refetch,
+  } = useQuery<RoomGameState>({
+    queryKey: ["gameState", roomId, user.id],
+    queryFn: async () => {
+      const response = await honoClient.api.room[":roomId"].$get({ param: { roomId } });
+      if (!response.ok) {
+        throw new Error(
+          response.status === 404
+            ? "This room could not be found."
+            : "Could not connect to the table. Please try again.",
+        );
+      }
+      return (await response.json()) as RoomGameState;
     },
-    enabled: false,
+    retry: false,
   });
 
   const send = useCallback(
@@ -27,6 +39,14 @@ export function OnlineGameRoom({ roomId, user }: { roomId: string; user: GameRoo
     },
     [roomId],
   );
+
+  if (!gameState && error) {
+    return (
+      <main className="game-room room-loading" role="alert">
+        {error.message} <button onClick={() => void refetch()}>Retry</button>
+      </main>
+    );
+  }
 
   return (
     <GameRoom

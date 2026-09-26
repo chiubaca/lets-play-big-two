@@ -1,16 +1,12 @@
-import { useEffect } from "react";
-
 import { createFileRoute } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
 
 import { AuthPanel } from "../../components/auth-panel";
 import { CasinoBackdrop } from "../../components/casino/casino";
 import { HomeLogo } from "../../components/home-logo";
 import { OnlineGameRoom } from "../../components/game-room";
 import { authClient } from "../../libs/auth-client";
+import { useSubscribeToGameState } from "./-subscribe-to-game-state";
 import "./room-auth.css";
-
-import type { RoomGameState } from "@big-two/game-state-machine";
 
 export const Route = createFileRoute("/room/$roomId")({
   component: RoomPage,
@@ -19,7 +15,7 @@ export const Route = createFileRoute("/room/$roomId")({
 function RoomPage() {
   const { roomId } = Route.useParams();
   const { data: session, isPending } = authClient.useSession();
-  useSubscribeToGameState({ roomId, signedIn: Boolean(session?.user) });
+  useSubscribeToGameState({ roomId, viewerId: session?.user.id });
 
   const user = session?.user;
 
@@ -50,38 +46,3 @@ export function RoomSignIn({ roomId }: { roomId: string }) {
     </main>
   );
 }
-
-export const useSubscribeToGameState = ({
-  roomId,
-  signedIn,
-}: {
-  roomId: string;
-  signedIn: boolean;
-}) => {
-  const queryClient = useQueryClient();
-
-  useEffect(() => {
-    queryClient.removeQueries({ queryKey: ["gameState", roomId] });
-    if (!signedIn) return;
-    const host = import.meta.env.VITE_BACKEND_URL.replace(/^https?/, "wss");
-    let websocket: WebSocket;
-    let retry: ReturnType<typeof setTimeout>;
-    let disposed = false;
-    const connect = () => {
-      websocket = new WebSocket(`${host}/api/room/ws/${roomId}`);
-      websocket.onmessage = (event) => {
-        queryClient.setQueryData<RoomGameState>(["gameState", roomId], JSON.parse(event.data));
-      };
-      websocket.onclose = () => {
-        if (!disposed) retry = setTimeout(connect, 2000);
-      };
-    };
-    connect();
-
-    return () => {
-      disposed = true;
-      clearTimeout(retry);
-      websocket.close();
-    };
-  }, [queryClient, roomId, signedIn]);
-};
