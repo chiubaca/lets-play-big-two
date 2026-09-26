@@ -347,32 +347,32 @@
 }
 .table-prompt {
   position: absolute;
-  top: 59%;
+  top: 63%;
   left: 50%;
   transform: translate(-50%, -50%);
   width: 44%;
   max-width: 340px;
-  min-height: 64px;
-  padding: 12px 16px;
-  border: 2px solid #91a14c48;
-  border-radius: 14px;
-  background: #00251235;
+  min-height: 54px;
+  padding: 8px 14px;
+  border: 1px solid #a9bd7c1f;
+  border-radius: 12px;
+  background: #001c0e18;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   text-align: center;
-  color: #d1c487;
-  font-size: 15px;
+  color: #c1cba8;
+  font-size: 14px;
   z-index: 2;
 }
 .table-prompt small {
   font-size: 10px;
-  color: #a4b391;
+  color: #a4b897;
 }
 .table-prompt .your-turn-text {
-  color: var(--casino-gold);
+  color: #d5c38b;
   text-transform: uppercase;
   letter-spacing: 0.13em;
   font-weight: 650;
@@ -818,7 +818,7 @@
     padding-top: 28px;
   }
   .table-prompt {
-    top: 54%;
+    top: 58%;
   }
   .your-hand {
     bottom: 65px;
@@ -967,10 +967,10 @@
     width: 29px;
   }
   .table-prompt {
-    top: 61%;
+    top: 66%;
     width: 58%;
-    min-height: 65px;
-    padding: 10px;
+    min-height: 55px;
+    padding: 8px;
     font-size: 13px;
     border-radius: 11px;
   }
@@ -1290,7 +1290,7 @@
     margin-top: 4px;
   }
   .table-prompt {
-    top: 55%;
+    top: 60%;
     min-height: 42px;
     padding: 5px;
     font-size: 12px;
@@ -1372,7 +1372,7 @@
     height: 15cqw;
   }
   .table-prompt {
-    top: 53%;
+    top: 59%;
     min-height: 43px;
     padding: 5px;
     font-size: 11px;
@@ -1469,7 +1469,7 @@
     display: none;
   }
   .table-prompt {
-    top: 81%;
+    top: 83%;
     left: 23%;
     width: 33%;
     min-height: 33px;

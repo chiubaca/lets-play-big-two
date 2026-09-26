@@ -20,7 +20,10 @@ export function OnlineGameRoom({ roomId, user }: { roomId: string; user: GameRoo
         json: event,
         param: { roomId },
       });
-      if (!response.ok) throw new Error("Game action failed");
+      if (!response.ok) {
+        const body = await response.json();
+        throw new Error(body.error);
+      }
     },
     [roomId],
   );

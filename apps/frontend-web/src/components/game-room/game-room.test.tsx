@@ -120,3 +120,25 @@ it("does not offer a seat when the waiting room is full", () => {
   expect(screen.queryByRole("button", { name: "Join Table" })).toBeNull();
   expect(screen.getByText("All seats are taken · watching the table")).toBeTruthy();
 });
+
+it("does not show a stale not-your-turn warning when the online table says it is your turn", () => {
+  const onlineState = {
+    ...gameState,
+    handCounts: { "solo-player": 13, ada: 13, jev: 13, alan: 13 },
+    spectatorCount: 0,
+    context: { ...gameState.context, guardMessage: "It is not your turn" },
+  } as RoomGameState;
+
+  render(
+    <GameRoom
+      gameState={onlineState}
+      send={() => {}}
+      tableLabel="Room ABCDE"
+      user={{ id: "solo-player", name: "You" }}
+    />,
+  );
+
+  const prompt = screen.getByRole("status");
+  expect(prompt.textContent).toContain("Your turn");
+  expect(prompt.textContent).not.toContain("It is not your turn");
+});

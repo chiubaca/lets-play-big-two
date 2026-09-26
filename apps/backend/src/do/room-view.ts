@@ -9,6 +9,7 @@ export function roomView(
     ...state,
     context: {
       ...state.context,
+      guardMessage: undefined,
       players: state.context.players.map((player) => ({
         ...player,
         hand: player.id === viewerId ? player.hand : [],

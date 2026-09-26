@@ -56,6 +56,9 @@ export class BigTwoRoomObject extends DurableObject<Env> {
 
     const gameStateSnapshot =
       gameStateMachineActor.getPersistedSnapshot() as BigTwoGameMachineSnapshot;
+    if (gameStateSnapshot.context.guardMessage) {
+      return { success: false, error: gameStateSnapshot.context.guardMessage };
+    }
     if (
       event.type === "JOIN_GAME" &&
       !gameStateSnapshot.context.players.some((player) => player.id === requesterId)

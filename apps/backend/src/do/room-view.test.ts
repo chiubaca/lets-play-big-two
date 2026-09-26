@@ -37,3 +37,19 @@ test("a winner's hand is also private", () => {
   const finished = { ...state, context: { ...state.context, winner } };
   expect(roomView(finished, "spectator", 0).context.winner?.hand).toEqual([]);
 });
+
+test("a rejected action's warning is not broadcast to other room viewers", () => {
+  const game = createActor(bigTwoGameMachine).start();
+  game.send({ type: "JOIN_GAME", playerId: "a", playerName: "Alice" });
+  game.send({ type: "JOIN_GAME", playerId: "b", playerName: "Bob" });
+  game.send({ type: "START_GAME" });
+  const state = game.getPersistedSnapshot() as BigTwoGameMachineSnapshot;
+  const currentPlayer = state.context.players[state.context.currentPlayerIndex];
+  const otherPlayer = state.context.players.find((player) => player.id !== currentPlayer.id)!;
+  game.send({ type: "PLAY_FIRST_MOVE", playerId: otherPlayer.id, cards: [] });
+  const rejected = game.getPersistedSnapshot() as BigTwoGameMachineSnapshot;
+
+  expect(rejected.context.guardMessage).toBe("It is not your turn");
+  expect(roomView(rejected, currentPlayer.id, 0).context.guardMessage).toBeUndefined();
+  expect(roomView(rejected, otherPlayer.id, 0).context.guardMessage).toBeUndefined();
+});

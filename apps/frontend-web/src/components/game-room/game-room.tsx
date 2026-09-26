@@ -229,8 +229,10 @@ export const GameRoom = ({
       await send(event);
       setSelectedCards([]);
       setMessage(undefined);
-    } catch {
-      setMessage("That move could not be sent. Please try again.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "That move could not be sent. Please try again.",
+      );
       playSound("notice");
     }
   };
@@ -402,7 +404,9 @@ export const GameRoom = ({
                 <span>
                   {spectator
                     ? "Watching live · cards in hand are private"
-                    : guardMessage ||
+                    : (isMyTurn && guardMessage === "It is not your turn"
+                        ? undefined
+                        : guardMessage) ||
                       message ||
                       (selectedCards.length
                         ? handType
