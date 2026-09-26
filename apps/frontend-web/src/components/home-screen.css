@@ -90,53 +90,6 @@
   pointer-events: none;
 }
 
-.home-logo-title {
-  position: relative;
-  width: min(100%, clamp(300px, 52svh, 500px));
-  margin: 0 auto;
-  aspect-ratio: 500 / 530;
-  opacity: calc(1 - var(--logo-overlap, 0) * 0.5);
-  filter: blur(calc(var(--logo-overlap, 0) * 12px)) drop-shadow(0 18px 24px #0009);
-  transform: scale(calc(1 - var(--logo-overlap, 0) * 0.06));
-}
-
-.home-logo-emblem {
-  position: absolute;
-  top: 0;
-  left: 20%;
-  z-index: 0;
-  width: 60%;
-  height: 57%;
-}
-
-.home-logo-emblem img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.home-logo-text,
-.home-logo-crew {
-  position: absolute;
-  display: block;
-  height: auto;
-  pointer-events: none;
-}
-
-.home-logo-text {
-  top: 29%;
-  left: 0;
-  z-index: 1;
-  width: 100%;
-}
-
-.home-logo-crew {
-  top: 61%;
-  left: 20%;
-  z-index: 2;
-  width: 60%;
-}
-
 .home-mode-grid {
   position: relative;
   z-index: 1;
@@ -486,18 +439,6 @@
   color: var(--casino-gold-bright);
 }
 
-.home-auth-dialog {
-  max-width: 480px;
-  overflow: hidden;
-  border: 1px solid var(--casino-gold);
-  border-radius: 22px;
-  color: var(--casino-cream);
-  background: linear-gradient(150deg, #102619, var(--casino-panel) 70%);
-  box-shadow:
-    0 30px 90px #000d,
-    inset 0 -3px var(--casino-gold-deep);
-}
-
 .home-auth-close {
   position: absolute;
   top: 14px;
@@ -517,94 +458,6 @@
 .home-auth-close:hover {
   color: var(--casino-gold-bright);
   border-color: var(--casino-gold);
-}
-
-.auth-panel {
-  padding: 10px 4px 4px;
-}
-.auth-panel-heading {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-.auth-panel-heading h2 {
-  margin: 3px 0 4px;
-  color: var(--casino-gold-bright);
-  font-size: 30px;
-}
-.auth-panel-heading p:last-child {
-  margin: 0;
-  color: #b9b99f;
-  font-size: 12px;
-  line-height: 1.5;
-}
-.auth-panel-chip {
-  display: grid;
-  width: 48px;
-  height: 48px;
-  flex: 0 0 auto;
-  place-items: center;
-  border: 1px solid var(--casino-gold);
-  border-radius: 50%;
-  color: var(--casino-gold);
-  background: var(--casino-panel-gradient);
-  box-shadow: inset 0 -2px var(--casino-gold-deep);
-  font:
-    23px Georgia,
-    serif;
-}
-.auth-panel-form {
-  display: grid;
-  gap: 15px;
-}
-.auth-field {
-  display: grid;
-  gap: 6px;
-}
-.auth-field label {
-  color: var(--casino-cream-muted);
-  font-size: 11px;
-}
-.auth-input-wrap {
-  position: relative;
-}
-.auth-input-wrap > svg {
-  position: absolute;
-  z-index: 2;
-  top: 50%;
-  left: 13px;
-  width: 15px;
-  color: #a99d6e;
-  transform: translateY(-50%);
-}
-.auth-input-wrap input {
-  padding-left: 39px;
-}
-.auth-divider {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 19px 0;
-  color: #897f60;
-  font: 8px var(--font-mono);
-  text-transform: uppercase;
-}
-.auth-divider::before,
-.auth-divider::after {
-  content: "";
-  height: 1px;
-  flex: 1;
-  background: #e6bc6833;
-}
-.auth-switch {
-  margin: 18px 0 0;
-  color: #99977f;
-  text-align: center;
-  font-size: 11px;
-}
-.auth-switch button {
-  color: var(--casino-gold);
-  cursor: pointer;
 }
 
 @media (max-width: 1000px) {

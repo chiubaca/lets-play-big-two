@@ -3,8 +3,12 @@ import { useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 
+import { AuthPanel } from "../../components/auth-panel";
+import { CasinoBackdrop } from "../../components/casino/casino";
+import { HomeLogo } from "../../components/home-logo";
 import { OnlineGameRoom } from "../../components/game-room";
 import { authClient } from "../../libs/auth-client";
+import "./room-auth.css";
 
 import type { RoomGameState } from "@big-two/game-state-machine";
 
@@ -14,18 +18,37 @@ export const Route = createFileRoute("/room/$roomId")({
 
 function RoomPage() {
   const { roomId } = Route.useParams();
-  const { data: session } = authClient.useSession();
+  const { data: session, isPending } = authClient.useSession();
   useSubscribeToGameState({ roomId, signedIn: Boolean(session?.user) });
 
   const user = session?.user;
 
+  if (isPending) {
+    return <main className="room-auth-loading">Checking your membership…</main>;
+  }
+
   if (!user) {
-    return (
-      <div className="flex h-screen items-center justify-center">Please sign in to join a game</div>
-    );
+    return <RoomSignIn roomId={roomId} />;
   }
 
   return <OnlineGameRoom roomId={roomId} user={{ id: user.id, name: user.name }} />;
+}
+
+export function RoomSignIn({ roomId }: { roomId: string }) {
+  return (
+    <main className="room-auth-page">
+      <CasinoBackdrop />
+      <div className="room-auth-content">
+        <div className="room-auth-art">
+          <HomeLogo />
+        </div>
+        <div className="auth-panel-surface room-auth-card">
+          <p className="room-auth-code">Room {roomId}</p>
+          <AuthPanel returnToCurrentPage />
+        </div>
+      </div>
+    </main>
+  );
 }
 
 export const useSubscribeToGameState = ({

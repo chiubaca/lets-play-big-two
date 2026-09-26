@@ -5,6 +5,7 @@ import { useId, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { authClient } from "~/libs/auth-client";
+import "./auth-panel.css";
 
 type AuthView = "signIn" | "signUp";
 
@@ -19,7 +20,7 @@ function FieldError({ field }: { field: AnyFieldApi }) {
   );
 }
 
-export function AuthPanel() {
+export function AuthPanel({ returnToCurrentPage = false }: { returnToCurrentPage?: boolean }) {
   const formId = useId();
   const [view, setView] = useState<AuthView>("signIn");
   const [authError, setAuthError] = useState<string | null>(null);
@@ -205,7 +206,10 @@ export function AuthPanel() {
         variant="lacquer"
         className="h-11 w-full"
         onClick={() =>
-          authClient.signIn.social({ provider: "google", callbackURL: window.location.origin })
+          authClient.signIn.social({
+            provider: "google",
+            callbackURL: returnToCurrentPage ? window.location.href : window.location.origin,
+          })
         }
       >
         <svg aria-hidden="true" viewBox="0 0 24 24">

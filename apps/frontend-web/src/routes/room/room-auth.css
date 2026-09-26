@@ -1,0 +1,97 @@
+.room-auth-page {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  height: 100svh;
+  grid-template-rows: minmax(0, 1fr);
+  overflow-y: auto;
+  padding: clamp(16px, 3svh, 28px) clamp(20px, 5vw, 72px);
+  color: var(--casino-cream);
+  background: var(--casino-night);
+}
+
+.room-auth-content {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 1100px);
+  margin-inline: auto;
+}
+
+.room-auth-content {
+  display: grid;
+  grid-template-columns: minmax(0, 480px);
+  grid-template-rows: max-content max-content;
+  align-content: safe center;
+  justify-content: center;
+  gap: clamp(2px, 1svh, 12px);
+  padding-block: 8px;
+}
+
+.room-auth-art {
+  min-width: 0;
+}
+
+.room-auth-art .home-logo-title {
+  width: min(32svh, 240px);
+}
+
+.room-auth-code {
+  margin: 0 0 14px;
+  color: var(--casino-cream-muted);
+  font: 10px var(--font-mono);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.room-auth-card {
+  width: 100%;
+  padding: clamp(14px, 2svh, 24px);
+}
+
+.room-auth-loading {
+  display: grid;
+  min-height: 100svh;
+  place-items: center;
+  color: var(--casino-cream);
+  background: var(--casino-night);
+}
+
+@media (max-width: 760px) {
+  .room-auth-art .home-logo-title {
+    width: min(28svh, 200px);
+  }
+
+  .room-auth-page:has(input[name="username"]) .room-auth-art .home-logo-title {
+    width: min(15svh, 130px);
+  }
+}
+
+@media (max-height: 700px) {
+  .room-auth-art .home-logo-title {
+    width: min(16svh, 110px);
+  }
+
+  .room-auth-card {
+    padding: 14px 18px;
+  }
+
+  .room-auth-code {
+    margin-bottom: 6px;
+  }
+
+  .room-auth-card .auth-panel-heading {
+    margin-bottom: 10px;
+  }
+
+  .room-auth-card .auth-panel-form {
+    gap: 8px;
+  }
+
+  .room-auth-card .auth-divider {
+    margin-block: 10px;
+  }
+
+  .room-auth-card .auth-switch {
+    margin-top: 10px;
+  }
+}

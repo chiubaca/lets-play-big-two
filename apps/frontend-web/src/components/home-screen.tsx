@@ -281,7 +281,7 @@ export function HomeScreen({
       </footer>
 
       <Dialog open={authOpen} onOpenChange={setAuthOpen}>
-        <DialogContent className="home-auth-dialog" showCloseButton={false}>
+        <DialogContent className="home-auth-dialog auth-panel-surface" showCloseButton={false}>
           <button
             type="button"
             className="home-auth-close"

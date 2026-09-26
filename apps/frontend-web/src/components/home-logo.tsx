@@ -1,3 +1,5 @@
+import "./home-logo.css";
+
 export function HomeLogo() {
   return (
     <h1 className="home-logo-title" aria-label="Big Two Crew">

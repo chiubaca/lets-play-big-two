@@ -1,0 +1,46 @@
+.home-logo-title {
+  position: relative;
+  width: min(100%, clamp(300px, 52svh, 500px));
+  margin: 0 auto;
+  aspect-ratio: 500 / 530;
+  opacity: calc(1 - var(--logo-overlap, 0) * 0.5);
+  filter: blur(calc(var(--logo-overlap, 0) * 12px)) drop-shadow(0 18px 24px #0009);
+  transform: scale(calc(1 - var(--logo-overlap, 0) * 0.06));
+}
+
+.home-logo-emblem {
+  position: absolute;
+  top: 0;
+  left: 20%;
+  z-index: 0;
+  width: 60%;
+  height: 57%;
+}
+
+.home-logo-emblem img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.home-logo-text,
+.home-logo-crew {
+  position: absolute;
+  display: block;
+  height: auto;
+  pointer-events: none;
+}
+
+.home-logo-text {
+  top: 29%;
+  left: 0;
+  z-index: 1;
+  width: 100%;
+}
+
+.home-logo-crew {
+  top: 61%;
+  left: 20%;
+  z-index: 2;
+  width: 60%;
+}
