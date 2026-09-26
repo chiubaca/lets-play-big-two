@@ -6,7 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { OnlineGameRoom } from "../../components/game-room";
 import { authClient } from "../../libs/auth-client";
 
-import type { BigTwoGameMachineSnapshot } from "@big-two/game-state-machine";
+import type { RoomGameState } from "@big-two/game-state-machine";
 
 export const Route = createFileRoute("/room/$roomId")({
   component: RoomPage,
@@ -14,8 +14,8 @@ export const Route = createFileRoute("/room/$roomId")({
 
 function RoomPage() {
   const { roomId } = Route.useParams();
-  useSubscribeToGameState({ roomId });
   const { data: session } = authClient.useSession();
+  useSubscribeToGameState({ roomId, signedIn: Boolean(session?.user) });
 
   const user = session?.user;
 
@@ -28,34 +28,37 @@ function RoomPage() {
   return <OnlineGameRoom roomId={roomId} user={{ id: user.id, name: user.name }} />;
 }
 
-export const useSubscribeToGameState = ({ roomId }: { roomId: string }) => {
+export const useSubscribeToGameState = ({
+  roomId,
+  signedIn,
+}: {
+  roomId: string;
+  signedIn: boolean;
+}) => {
   const queryClient = useQueryClient();
 
   useEffect(() => {
+    queryClient.removeQueries({ queryKey: ["gameState", roomId] });
+    if (!signedIn) return;
     const host = import.meta.env.VITE_BACKEND_URL.replace(/^https?/, "wss");
-    const WEBSOCKET_ENDPOINT = `${host}/api/room/ws/${roomId}`;
-
-    const websocket = new WebSocket(WEBSOCKET_ENDPOINT);
-
-    websocket.onopen = () => {
-      console.log("connected!");
+    let websocket: WebSocket;
+    let retry: ReturnType<typeof setTimeout>;
+    let disposed = false;
+    const connect = () => {
+      websocket = new WebSocket(`${host}/api/room/ws/${roomId}`);
+      websocket.onmessage = (event) => {
+        queryClient.setQueryData<RoomGameState>(["gameState", roomId], JSON.parse(event.data));
+      };
+      websocket.onclose = () => {
+        if (!disposed) retry = setTimeout(connect, 2000);
+      };
     };
-
-    websocket.onmessage = (event) => {
-      console.log("🔍 ~ onmesage!!", event);
-      const gameState = JSON.parse(event.data);
-
-      queryClient.setQueryData<BigTwoGameMachineSnapshot>(["gameState", roomId], gameState);
-    };
-
-    websocket.onerror = (error) => {
-      console.error("WebSocket error:", error);
-    };
+    connect();
 
     return () => {
+      disposed = true;
+      clearTimeout(retry);
       websocket.close();
     };
-  }, [queryClient, roomId]);
-
-  // return { gameState };
+  }, [queryClient, roomId, signedIn]);
 };

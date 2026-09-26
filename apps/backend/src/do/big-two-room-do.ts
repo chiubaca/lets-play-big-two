@@ -9,6 +9,7 @@ import {
 } from "@big-two/game-state-machine";
 import { getGameActionAuthorizationError } from "./authorize-game-action";
 import { redactPlayerIdentity } from "./redact-player-identity";
+import { roomView } from "./room-view";
 
 export class BigTwoRoomObject extends DurableObject<Env> {
   sql: SqlStorage;
@@ -63,11 +64,7 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     }
     const serialisedGameState = JSON.stringify(gameStateSnapshot);
     this.sql.exec(`UPDATE game_room SET game_state = ? WHERE id = 1`, serialisedGameState);
-
-    const sockets = this.ctx.getWebSockets();
-    for (const socket of sockets) {
-      socket.send(serialisedGameState);
-    }
+    this.broadcast(gameStateSnapshot);
 
     return { success: true };
   }
@@ -81,6 +78,33 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     }
 
     return record.game_state as string;
+  }
+
+  async getRoomView(viewerId: string) {
+    const stored = await this.getGameState();
+    if (!stored) return null;
+    const state = JSON.parse(stored) as BigTwoGameMachineSnapshot;
+    return roomView(state, viewerId, this.spectatorCount(state));
+  }
+
+  private spectatorCount(state: BigTwoGameMachineSnapshot, excluding?: WebSocket) {
+    const playerIds = new Set(state.context.players.map((player) => player.id));
+    return new Set(
+      this.ctx
+        .getWebSockets()
+        .filter((socket) => socket !== excluding)
+        .map((socket) => socket.deserializeAttachment() as string | null)
+        .filter((id): id is string => !!id && !playerIds.has(id)),
+    ).size;
+  }
+
+  private broadcast(state: BigTwoGameMachineSnapshot, excluding?: WebSocket) {
+    const count = this.spectatorCount(state, excluding);
+    for (const socket of this.ctx.getWebSockets()) {
+      if (socket === excluding) continue;
+      const viewerId = socket.deserializeAttachment() as string | null;
+      if (viewerId) socket.send(JSON.stringify(roomView(state, viewerId, count)));
+    }
   }
 
   async createRoom(player: Pick<Player, "id" | "name">) {
@@ -119,20 +143,18 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     const serialisedGameState = JSON.stringify(redactedState);
     this.sql.exec(`UPDATE game_room SET game_state = ? WHERE id = 1`, serialisedGameState);
 
-    for (const socket of this.ctx.getWebSockets()) {
-      socket.send(serialisedGameState);
-    }
+    this.broadcast(redactedState);
   }
 
-  async fetch(_: Request) {
+  async fetch(request: Request) {
+    const viewerId = request.headers.get("X-Room-Viewer-ID");
+    const stored = await this.getGameState();
+    if (!viewerId || !stored) return new Response("Room not found", { status: 404 });
     const webSocketPair = new WebSocketPair();
     const [client, server] = Object.values(webSocketPair);
+    server.serializeAttachment(viewerId);
     this.ctx.acceptWebSocket(server);
-
-    const gameState = await this.getGameState();
-    if (gameState) {
-      server.send(gameState);
-    }
+    this.broadcast(JSON.parse(stored) as BigTwoGameMachineSnapshot);
 
     return new Response(null, {
       status: 101,
@@ -149,12 +171,14 @@ export class BigTwoRoomObject extends DurableObject<Env> {
   }
 
   webSocketClose(
-    _ws: WebSocket,
+    ws: WebSocket,
     _code: number,
     _reason: string,
     _wasClean: boolean,
   ): void | Promise<void> {
-    console.log("client closed");
+    const stored = this.sql.exec(`SELECT game_state FROM game_room WHERE id = 1`).toArray()[0];
+    if (stored)
+      this.broadcast(JSON.parse(stored.game_state as string) as BigTwoGameMachineSnapshot, ws);
   }
 
   webSocketError(_ws: WebSocket, error: unknown) {

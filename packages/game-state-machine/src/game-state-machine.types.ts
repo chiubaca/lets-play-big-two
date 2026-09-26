@@ -8,6 +8,11 @@ export type BigTwoGameMachine = typeof bigTwoGameMachine;
 
 export type BigTwoGameMachineSnapshot = SnapshotFrom<BigTwoGameMachine>;
 
+export type RoomGameState = BigTwoGameMachineSnapshot & {
+  handCounts: Record<string, number>;
+  spectatorCount: number;
+};
+
 export type GameEvent = z.infer<typeof gameEventSchema>;
 
 export type Player = {

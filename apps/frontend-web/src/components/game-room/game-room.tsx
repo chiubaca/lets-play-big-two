@@ -1,6 +1,11 @@
 import { lazy, Suspense, useEffect, useState, type CSSProperties } from "react";
 import { Check, Copy, HelpCircle, Menu, Settings, Volume2, VolumeX, WifiOff } from "lucide-react";
-import type { BigTwoGameMachineSnapshot, Card, GameEvent } from "@big-two/game-state-machine";
+import type {
+  BigTwoGameMachineSnapshot,
+  Card,
+  GameEvent,
+  RoomGameState,
+} from "@big-two/game-state-machine";
 import { detectHandType } from "@big-two/game-core";
 import { Confetti } from "../Confetti";
 import { Card as PlayingCard, getCardAccessibleName } from "./card";
@@ -30,7 +35,7 @@ export type BotSettings = {
 };
 type GameRoomProps = {
   botSettings?: BotSettings;
-  gameState?: BigTwoGameMachineSnapshot;
+  gameState?: BigTwoGameMachineSnapshot | RoomGameState;
   jevFallbackPlayerIds?: ReadonlySet<string>;
   requestHint?: () => Card[] | null;
   send: (event: GameEvent) => Promise<void> | void;
@@ -49,6 +54,8 @@ function PlayerSeat({
   thinking,
   jevFallback,
   position,
+  showBacks = position !== "you",
+  turnLabel = "Your turn",
 }: {
   name: string;
   count: number;
@@ -57,6 +64,8 @@ function PlayerSeat({
   thinking?: boolean;
   jevFallback?: boolean;
   position: string;
+  showBacks?: boolean;
+  turnLabel?: string;
 }) {
   return (
     <div
@@ -82,9 +91,9 @@ function PlayerSeat({
             {count}
           </span>
         </div>
-        {active && <span className="turn-indicator">{thinking ? "Thinking…" : "Your turn"}</span>}
+        {active && <span className="turn-indicator">{thinking ? "Thinking…" : turnLabel}</span>}
       </div>
-      {position !== "you" && (
+      {showBacks && (
         <div className="opponent-hand" aria-hidden="true">
           {Array.from({ length: Math.min(count, 10) }, (_, i) => (
             <span className="table-card-back" key={i}>
@@ -158,15 +167,20 @@ export const GameRoom = ({
     );
   }, []);
 
-  if (!gameState) return <main className="game-room room-loading">Taking your seat…</main>;
+  if (!gameState) return <main className="game-room room-loading">Connecting to the table…</main>;
   const { players, guardMessage, winner } = gameState.context;
   const playerName = (player: GameRoomUser) => {
     const bot = botSettings?.players.find((entry) => entry.id === player.id);
     return bot?.botStrategy === "jev" ? `${player.name} ✨[jev]` : player.name;
   };
   const myIndex = players.findIndex((p) => p.id === user.id);
-  const [, left, top, right] = makePlayerOrder(myIndex);
+  const spectator = !sharedDevice && myIndex === -1;
+  const [bottom, left, top, right] = makePlayerOrder(spectator ? 0 : myIndex);
   const me = players[myIndex];
+  const handCounts = "handCounts" in gameState ? gameState.handCounts : undefined;
+  const cardCount = (index: number) =>
+    players[index] ? (handCounts?.[players[index].id] ?? players[index].hand.length) : 0;
+  const spectatorCount = "spectatorCount" in gameState ? gameState.spectatorCount : undefined;
   const host = sharedDevice || players[0]?.id === user.id;
   const waiting = currentValue === "WAITING_FOR_PLAYERS";
   const handType = detectHandType(selectedCards);
@@ -182,11 +196,13 @@ export const GameRoom = ({
   );
   const status = waiting
     ? `Waiting for players · ${players.length} of 4 seats filled`
-    : isMyTurn
-      ? currentValue === "ROUND_FIRST_MOVE"
-        ? "Your turn · start with 3 ♦"
-        : "Your turn"
-      : `${players[gameState.context.currentPlayerIndex] ? playerName(players[gameState.context.currentPlayerIndex]) : "Next player"} is thinking…`;
+    : spectator
+      ? `${players[gameState.context.currentPlayerIndex] ? playerName(players[gameState.context.currentPlayerIndex]) : "Next player"} is playing…`
+      : isMyTurn
+        ? currentValue === "ROUND_FIRST_MOVE"
+          ? "Your turn · start with 3 ♦"
+          : "Your turn"
+        : `${players[gameState.context.currentPlayerIndex] ? playerName(players[gameState.context.currentPlayerIndex]) : "Next player"} is thinking…`;
   const act = async (event: GameEvent) => {
     try {
       await send(event);
@@ -257,6 +273,9 @@ export const GameRoom = ({
           {copied ? <Check /> : <Copy />}
         </button>
         <div className="room-header-actions">
+          {spectatorCount !== undefined && (
+            <span className="room-spectators">{spectatorCount} watching</span>
+          )}
           <button
             className="room-icon help-icon"
             aria-label="How to play"
@@ -284,7 +303,7 @@ export const GameRoom = ({
             <PlayerSeat
               key={position}
               name={players[index] ? playerName(players[index]) : "Open seat"}
-              count={players[index]?.hand.length ?? 0}
+              count={cardCount(index)}
               avatar={players[index] ? avatar : "♠"}
               active={
                 isGameTurnState(currentValue) && index === gameState.context.currentPlayerIndex
@@ -292,6 +311,7 @@ export const GameRoom = ({
               thinking={thinkingPlayerId === players[index]?.id}
               jevFallback={jevFallbackPlayerIds?.has(players[index]?.id)}
               position={position}
+              turnLabel={spectator ? "Playing…" : "Your turn"}
             />
           ))}
           <div
@@ -327,7 +347,7 @@ export const GameRoom = ({
             {waiting ? (
               <>
                 <span>{status}</span>
-                {!me ? (
+                {!me && players.length < 4 ? (
                   <button
                     className="table-small-button"
                     onClick={() =>
@@ -336,6 +356,8 @@ export const GameRoom = ({
                   >
                     Join Table
                   </button>
+                ) : !me ? (
+                  <small>All seats are taken · watching the table</small>
                 ) : host ? (
                   <button
                     className="table-small-button"
@@ -351,62 +373,79 @@ export const GameRoom = ({
               <>
                 <small className={isMyTurn ? "your-turn-text" : ""}>{status}</small>
                 <span>
-                  {guardMessage ||
-                    message ||
-                    (selectedCards.length
-                      ? handType
-                        ? `${handType} selected`
-                        : "Choose a valid combination"
-                      : isMyTurn
-                        ? "Play a card or a valid combination"
-                        : "A good hand is worth the wait.")}
+                  {spectator
+                    ? "Watching live · cards in hand are private"
+                    : guardMessage ||
+                      message ||
+                      (selectedCards.length
+                        ? handType
+                          ? `${handType} selected`
+                          : "Choose a valid combination"
+                        : isMyTurn
+                          ? "Play a card or a valid combination"
+                          : "A good hand is worth the wait.")}
                 </span>
               </>
             )}
           </div>
-          <div
-            className="your-hand"
-            role="group"
-            aria-label={`${user.name}'s hand, ${hand.length} cards`}
-          >
-            {hand.map((card, i) => {
-              const offset = i - (hand.length - 1) / 2;
-              const selected = selectedCards.some(
-                (c) => c.suit === card.suit && c.value === card.value,
-              );
-              return (
-                <PlayingCard
-                  key={card.suit + card.value}
-                  card={card}
-                  className="table-card hand-card"
-                  style={
-                    {
-                      "--card-x": `${offset * Math.min(8.2, 69 / Math.max(hand.length - 1, 1)) * (fanOut / 100)}cqw`,
-                      "--card-angle": `${offset * Math.min(3.5, 32 / Math.max(hand.length - 1, 1)) * (fanOut / 100)}deg`,
-                      "--card-y": `${Math.pow(offset / Math.max((hand.length - 1) / 2, 1), 2) * cardArc * (fanOut / 100)}cqw`,
-                      "--card-order": i,
-                    } as CSSProperties
-                  }
-                  selected={selected}
-                  disabled={!isMyTurn}
-                  onClick={() => {
-                    setSelectedCards((previous) =>
-                      selected
-                        ? previous.filter((c) => c.suit !== card.suit || c.value !== card.value)
-                        : [...previous, card],
-                    );
-                    setMessage(undefined);
-                    playSound(selected ? "deselect" : "select");
-                    navigator.vibrate?.(8);
-                  }}
-                />
-              );
-            })}
-          </div>
+          {!spectator && (
+            <div
+              className="your-hand"
+              role="group"
+              aria-label={`${user.name}'s hand, ${hand.length} cards`}
+            >
+              {hand.map((card, i) => {
+                const offset = i - (hand.length - 1) / 2;
+                const selected = selectedCards.some(
+                  (c) => c.suit === card.suit && c.value === card.value,
+                );
+                return (
+                  <PlayingCard
+                    key={card.suit + card.value}
+                    card={card}
+                    className="table-card hand-card"
+                    style={
+                      {
+                        "--card-x": `${offset * Math.min(8.2, 69 / Math.max(hand.length - 1, 1)) * (fanOut / 100)}cqw`,
+                        "--card-angle": `${offset * Math.min(3.5, 32 / Math.max(hand.length - 1, 1)) * (fanOut / 100)}deg`,
+                        "--card-y": `${Math.pow(offset / Math.max((hand.length - 1) / 2, 1), 2) * cardArc * (fanOut / 100)}cqw`,
+                        "--card-order": i,
+                      } as CSSProperties
+                    }
+                    selected={selected}
+                    disabled={!isMyTurn}
+                    onClick={() => {
+                      setSelectedCards((previous) =>
+                        selected
+                          ? previous.filter((c) => c.suit !== card.suit || c.value !== card.value)
+                          : [...previous, card],
+                      );
+                      setMessage(undefined);
+                      playSound(selected ? "deselect" : "select");
+                      navigator.vibrate?.(8);
+                    }}
+                  />
+                );
+              })}
+            </div>
+          )}
+          {spectator && players[bottom] && (
+            <PlayerSeat
+              name={playerName(players[bottom])}
+              count={cardCount(bottom)}
+              avatar="👨🏻"
+              active={
+                isGameTurnState(currentValue) && bottom === gameState.context.currentPlayerIndex
+              }
+              position="you"
+              showBacks
+              turnLabel="Playing…"
+            />
+          )}
           {me && (
             <PlayerSeat
               name={sharedDevice ? user.name : "You"}
-              count={me.hand.length}
+              count={cardCount(myIndex)}
               avatar="👨🏻"
               active={isMyTurn}
               jevFallback={jevFallbackPlayerIds?.has(me.id)}
@@ -415,53 +454,55 @@ export const GameRoom = ({
           )}
         </div>
       </section>
-      <footer className="table-controls">
-        <button
-          className="table-action"
-          aria-label="Pass turn"
-          disabled={
-            !isMyTurn || currentValue === "ROUND_FIRST_MOVE" || currentValue === "PLAY_NEW_ROUND"
-          }
-          onClick={() => {
-            playSound("deselect");
-            void act({ type: "PASS_TURN", playerId: user.id });
-          }}
-        >
-          Pass
-        </button>
-        <button
-          className="table-action"
-          aria-label={`Sort cards by ${sortBySuit ? "rank" : "suit"}`}
-          onClick={() => {
-            setSortBySuit(!sortBySuit);
-            playSound("select");
-          }}
-        >
-          Sort
-        </button>
-        <button
-          className="table-action action-play"
-          aria-label="Play selected cards"
-          disabled={!isMyTurn || !handType}
-          onClick={() => {
-            const event = createPlayEvent(gameState, user.id, selectedCards);
-            if (event) void act(event);
-          }}
-        >
-          Play
-        </button>
-        <div className="table-footnote">
-          <span>♠ &nbsp; BIG TWO</span>
-          {requestHint && (
-            <button disabled={!isMyTurn} onClick={hint} aria-label="Suggest a move">
-              Need a hint?
-            </button>
-          )}
-          <button onClick={toggleMuted} aria-label={muted ? "Unmute sounds" : "Mute sounds"}>
-            {muted ? <VolumeX /> : <Volume2 />}
+      {!spectator && (
+        <footer className="table-controls">
+          <button
+            className="table-action"
+            aria-label="Pass turn"
+            disabled={
+              !isMyTurn || currentValue === "ROUND_FIRST_MOVE" || currentValue === "PLAY_NEW_ROUND"
+            }
+            onClick={() => {
+              playSound("deselect");
+              void act({ type: "PASS_TURN", playerId: user.id });
+            }}
+          >
+            Pass
           </button>
-        </div>
-      </footer>
+          <button
+            className="table-action"
+            aria-label={`Sort cards by ${sortBySuit ? "rank" : "suit"}`}
+            onClick={() => {
+              setSortBySuit(!sortBySuit);
+              playSound("select");
+            }}
+          >
+            Sort
+          </button>
+          <button
+            className="table-action action-play"
+            aria-label="Play selected cards"
+            disabled={!isMyTurn || !handType}
+            onClick={() => {
+              const event = createPlayEvent(gameState, user.id, selectedCards);
+              if (event) void act(event);
+            }}
+          >
+            Play
+          </button>
+          <div className="table-footnote">
+            <span>♠ &nbsp; BIG TWO</span>
+            {requestHint && (
+              <button disabled={!isMyTurn} onClick={hint} aria-label="Suggest a move">
+                Need a hint?
+              </button>
+            )}
+            <button onClick={toggleMuted} aria-label={muted ? "Unmute sounds" : "Mute sounds"}>
+              {muted ? <VolumeX /> : <Volume2 />}
+            </button>
+          </div>
+        </footer>
+      )}
       {import.meta.env.DEV && localDevTools && LazyGameRoomDevTools ? (
         <Suspense fallback={null}>
           <LazyGameRoomDevTools
@@ -583,9 +624,11 @@ export const GameRoom = ({
               : `${winner ? playerName(winner) : "An opponent"} wins!`}
           </DialogTitle>
           <DialogDescription>
-            {!sharedDevice && winner?.id === user.id
-              ? "Every card played. The table is yours."
-              : "Good cards. Great company. Ready for another?"}
+            {spectator
+              ? "Stay to watch the next game, or head back home."
+              : !sharedDevice && winner?.id === user.id
+                ? "Every card played. The table is yours."
+                : "Good cards. Great company. Ready for another?"}
           </DialogDescription>
           {host ? (
             <button
@@ -595,6 +638,13 @@ export const GameRoom = ({
             >
               Play again
             </button>
+          ) : spectator ? (
+            <>
+              <p>Waiting for the host to start another game…</p>
+              <a className="table-small-button" href="/">
+                Return home
+              </a>
+            </>
           ) : (
             <a className="table-small-button" href="/">
               Return home

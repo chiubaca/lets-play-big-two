@@ -101,6 +101,11 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
     },
   )
   .get("/api/room/:roomId", async (c) => {
+    const session = await auth.api.getSession({ headers: c.req.raw.headers });
+    if (!session) return c.json({ error: "Unauthorized" }, 401);
+    if (await accountDeletionIsPending(session.user.id)) {
+      return c.json({ error: "Account deletion is in progress" }, 409);
+    }
     const roomId = c.req.param().roomId;
     if (!roomId) {
       return new Response("no room id provided", { status: 404 });
@@ -116,8 +121,9 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
     const durableObjectId = c.env.BIG_TWO_ROOM_DURABLE_OBJECT.idFromName(roomIdFromDb);
     const roomStub = c.env.BIG_TWO_ROOM_DURABLE_OBJECT.get(durableObjectId);
 
-    const gameState = await roomStub.getGameState();
-    return c.json(gameState);
+    const gameState = await roomStub.getRoomView(session.user.id);
+    if (!gameState) return c.notFound();
+    return c.json(gameState, 200, { "Cache-Control": "no-store" });
   })
   .get("/api/room/ws/:roomid", async (c) => {
     const upgradeHeader = c.req.header("Upgrade");
@@ -139,9 +145,18 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
     const roomId = c.req.param().roomid;
     if (!roomId) return c.notFound();
 
+    const rooms = await getDb()
+      .select({ id: roomTable.id })
+      .from(roomTable)
+      .where(eq(roomTable.id, roomId))
+      .limit(1);
+    if (!rooms.length) return c.notFound();
+
     const doId = c.env.BIG_TWO_ROOM_DURABLE_OBJECT.idFromName(roomId);
     const stub = c.env.BIG_TWO_ROOM_DURABLE_OBJECT.get(doId);
-    return await stub.fetch(c.req.raw);
+    const headers = new Headers(c.req.raw.headers);
+    headers.set("X-Room-Viewer-ID", session.user.id);
+    return await stub.fetch(new Request(c.req.raw, { headers }));
   })
 
   .post("/api/room", async (c) => {

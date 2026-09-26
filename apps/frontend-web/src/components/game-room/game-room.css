@@ -43,6 +43,12 @@
 .room-header-actions {
   display: flex;
   gap: 16px;
+  align-items: center;
+}
+.room-spectators {
+  color: var(--casino-cream);
+  font-size: 0.75rem;
+  white-space: nowrap;
 }
 .room-code {
   position: absolute;
@@ -272,6 +278,11 @@
   margin-top: 5px;
   padding-left: 19px;
   filter: drop-shadow(0 6px 3px #0007);
+}
+.seat-you .opponent-hand {
+  order: -1;
+  margin-top: 0;
+  margin-bottom: 5px;
 }
 .table-card-back {
   width: 35px;
