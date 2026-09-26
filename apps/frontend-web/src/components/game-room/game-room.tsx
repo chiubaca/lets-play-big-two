@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState, type CSSProperties } from "react";
 import {
   Check,
   Copy,
+  Eye,
   HelpCircle,
   LoaderCircle,
   Menu,
@@ -273,9 +274,24 @@ export const GameRoom = ({
     <main className={`game-room ${devClassName}`} style={devStyle}>
       <CasinoBackdrop />
       <header className="room-header">
-        <button className="room-icon" aria-label="Open table menu" onClick={() => setPanel("menu")}>
-          <Menu />
-        </button>
+        <div className="room-header-left">
+          <button
+            className="room-icon"
+            aria-label="Open table menu"
+            onClick={() => setPanel("menu")}
+          >
+            <Menu />
+          </button>
+          {spectatorCount !== undefined && (
+            <span className="room-spectators" aria-label={`${spectatorCount} watching`}>
+              <Eye aria-hidden="true" />
+              <span className="room-spectators-count">{spectatorCount}</span>
+              <span className="room-spectators-label" aria-hidden="true">
+                watching
+              </span>
+            </span>
+          )}
+        </div>
         {roomCode && (
           <button
             className="room-code"
@@ -298,9 +314,6 @@ export const GameRoom = ({
           </button>
         )}
         <div className="room-header-actions">
-          {spectatorCount !== undefined && (
-            <span className="room-spectators">{spectatorCount} watching</span>
-          )}
           <button
             className="room-icon help-icon"
             aria-label="How to play"

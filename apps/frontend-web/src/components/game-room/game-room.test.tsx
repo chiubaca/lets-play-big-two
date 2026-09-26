@@ -107,12 +107,25 @@ it("shows a read-only four-seat table and unique viewer count to spectators", ()
     />,
   );
 
-  expect(screen.getByText("2 watching")).toBeTruthy();
+  expect(screen.getByLabelText("2 watching")).toBeTruthy();
   expect(screen.getByRole("group", { name: /You, 13 cards remaining/ })).toBeTruthy();
   expect(screen.getByRole("group", { name: /Ada, 12 cards remaining/ })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Play selected cards" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Pass turn" })).toBeNull();
   expect(screen.queryByRole("group", { name: /Visitor's hand/ })).toBeNull();
+});
+
+it("shows the viewer count for a seated player, including zero", () => {
+  render(
+    <GameRoom
+      gameState={{ ...gameState, spectatorCount: 0 } as RoomGameState}
+      send={() => {}}
+      tableLabel="Room ABCDE"
+      user={{ id: "solo-player", name: "You" }}
+    />,
+  );
+
+  expect(screen.getByLabelText("0 watching")).toBeTruthy();
 });
 
 it("lets a spectator take an open seat before dealing", () => {
