@@ -272,6 +272,21 @@
   letter-spacing: 0.06em;
   padding: 1px 8px;
 }
+.turn-indicator:has(.turn-thinking-icon) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.turn-thinking-icon {
+  width: 11px;
+  height: 11px;
+  animation: turn-thinking-spin 1.2s linear infinite;
+}
+@keyframes turn-thinking-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .opponent-hand {
   display: flex;
   justify-content: center;

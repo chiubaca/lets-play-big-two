@@ -46,11 +46,6 @@ export function CasinoTableMark({
   return (
     <div className={cn("table-brand", subtle && "brand-subtle", className)} aria-hidden="true">
       <span className="brand-spade">♠</span>
-      <span>
-        BIG CARDS
-        <br />
-        BIGGER FRIENDSHIPS
-      </span>
       <div className="brand-rule">◆</div>
     </div>
   );

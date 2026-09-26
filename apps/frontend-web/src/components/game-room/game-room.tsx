@@ -1,5 +1,15 @@
 import { lazy, Suspense, useEffect, useState, type CSSProperties } from "react";
-import { Check, Copy, HelpCircle, Menu, Settings, Volume2, VolumeX, WifiOff } from "lucide-react";
+import {
+  Check,
+  Copy,
+  HelpCircle,
+  LoaderCircle,
+  Menu,
+  Settings,
+  Volume2,
+  VolumeX,
+  WifiOff,
+} from "lucide-react";
 import type {
   BigTwoGameMachineSnapshot,
   Card,
@@ -91,7 +101,18 @@ function PlayerSeat({
             {count}
           </span>
         </div>
-        {active && <span className="turn-indicator">{thinking ? "Thinking…" : turnLabel}</span>}
+        {active && (
+          <span className="turn-indicator">
+            {thinking || turnLabel === "Thinking…" ? (
+              <>
+                <LoaderCircle className="turn-thinking-icon" aria-hidden="true" />
+                <span>Thinking…</span>
+              </>
+            ) : (
+              turnLabel
+            )}
+          </span>
+        )}
       </div>
       {showBacks && (
         <div className="opponent-hand" aria-hidden="true">
@@ -311,7 +332,13 @@ export const GameRoom = ({
               thinking={thinkingPlayerId === players[index]?.id}
               jevFallback={jevFallbackPlayerIds?.has(players[index]?.id)}
               position={position}
-              turnLabel={spectator ? "Playing…" : "Your turn"}
+              turnLabel={
+                spectator
+                  ? "Playing…"
+                  : !sharedDevice && index !== myIndex
+                    ? "Thinking…"
+                    : "Your turn"
+              }
             />
           ))}
           <div
