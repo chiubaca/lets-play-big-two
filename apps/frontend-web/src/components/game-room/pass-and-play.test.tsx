@@ -41,6 +41,7 @@ it("keeps hands out of the DOM until Ready, then hides them after playing and pa
   fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
   expect(screen.getByRole("button", { name: "Ready" })).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Ready" }));
+  expect(screen.queryByRole("button", { name: /Copy room code/ })).toBeNull();
   expect(container.querySelectorAll(".hand-card")).toHaveLength(26);
   fireEvent.click(screen.getByRole("button", { name: "3 of diamonds" }));
   fireEvent.click(screen.getByRole("button", { name: "Play selected cards" }));

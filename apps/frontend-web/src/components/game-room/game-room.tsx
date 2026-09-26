@@ -50,6 +50,7 @@ type GameRoomProps = {
   requestHint?: () => Card[] | null;
   send: (event: GameEvent) => Promise<void> | void;
   tableLabel: string;
+  roomCode?: string;
   thinkingPlayerId?: string;
   user: GameRoomUser;
   sharedDevice?: boolean;
@@ -134,6 +135,7 @@ export const GameRoom = ({
   requestHint,
   send,
   tableLabel,
+  roomCode,
   thinkingPlayerId,
   user,
   sharedDevice = false,
@@ -274,27 +276,27 @@ export const GameRoom = ({
         <button className="room-icon" aria-label="Open table menu" onClick={() => setPanel("menu")}>
           <Menu />
         </button>
-        <button
-          className="room-code"
-          aria-label={`Copy room code ${tableLabel}`}
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(tableLabel);
-              setCopied(true);
-              playSound("select");
-            } catch {
-              setMessage(`Room: ${tableLabel}`);
-            }
-          }}
-        >
-          <span>
-            <small>
-              {sharedDevice ? "Shared device" : requestHint ? "Practice table" : "Room Code"}
-            </small>
-            <strong>{tableLabel}</strong>
-          </span>
-          {copied ? <Check /> : <Copy />}
-        </button>
+        {roomCode && (
+          <button
+            className="room-code"
+            aria-label={`Copy room code ${roomCode}`}
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(roomCode);
+                setCopied(true);
+                playSound("select");
+              } catch {
+                setMessage(`Room: ${roomCode}`);
+              }
+            }}
+          >
+            <span>
+              <small>Room Code</small>
+              <strong>{tableLabel}</strong>
+            </span>
+            {copied ? <Check /> : <Copy />}
+          </button>
+        )}
         <div className="room-header-actions">
           {spectatorCount !== undefined && (
             <span className="room-spectators">{spectatorCount} watching</span>

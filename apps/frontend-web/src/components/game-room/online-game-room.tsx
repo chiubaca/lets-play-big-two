@@ -28,5 +28,13 @@ export function OnlineGameRoom({ roomId, user }: { roomId: string; user: GameRoo
     [roomId],
   );
 
-  return <GameRoom gameState={gameState} send={send} tableLabel={`Room ${roomId}`} user={user} />;
+  return (
+    <GameRoom
+      gameState={gameState}
+      send={send}
+      tableLabel={`Room ${roomId}`}
+      roomCode={roomId}
+      user={user}
+    />
+  );
 }

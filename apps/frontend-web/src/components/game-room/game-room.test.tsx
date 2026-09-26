@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { BigTwoGameMachineSnapshot, RoomGameState } from "@big-two/game-state-machine";
-import { afterEach, expect, it } from "vite-plus/test";
+import { afterEach, expect, it, vi } from "vite-plus/test";
 import { useState } from "react";
 
 import { GameRoom, type BotSettings } from "./game-room";
@@ -55,6 +55,7 @@ function SoloTable() {
 it("changes a solo opponent between Basic and Jev and marks Jev at the table", () => {
   render(<SoloTable />);
 
+  expect(screen.queryByRole("button", { name: /Copy room code/ })).toBeNull();
   expect(screen.getByText("Jev ✨[jev]")).toBeTruthy();
   expect(screen.getByTitle("Jev unavailable — using Basic AI")).toBeTruthy();
   expect(screen.queryByText("Ada ✨[jev]")).toBeNull();
@@ -65,6 +66,30 @@ it("changes a solo opponent between Basic and Jev and marks Jev at the table", (
 
   expect(screen.getAllByText("Ada ✨[jev]")).toHaveLength(2);
   expect(adaMode.querySelectorAll("button")[1].getAttribute("aria-pressed")).toBe("true");
+});
+
+it("copies only the online room code", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  const originalClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+
+  try {
+    render(
+      <GameRoom
+        gameState={gameState}
+        send={() => {}}
+        tableLabel="Room ABCDE"
+        roomCode="ABCDE"
+        user={{ id: "solo-player", name: "You" }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy room code ABCDE" }));
+    expect(writeText).toHaveBeenCalledWith("ABCDE");
+  } finally {
+    if (originalClipboard) Object.defineProperty(navigator, "clipboard", originalClipboard);
+    else Reflect.deleteProperty(navigator, "clipboard");
+  }
 });
 
 it("shows a read-only four-seat table and unique viewer count to spectators", () => {
