@@ -3,6 +3,20 @@
 See [agent/LOCAL_DEV.md](agent/LOCAL_DEV.md) for the macOS prerequisites,
 environment setup, local domains, service lifecycle, and troubleshooting.
 
+## Agent skills
+
+### Issue tracker
+
+Issues are local Markdown files under `.scratch/`; external PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the five default triage statuses. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context domain language lives in root `CONTEXT.md`; ADRs live in `docs/adr/`. See `docs/agents/domain.md`.
+
 <!--VITE PLUS START-->
 
 # Using Vite+, the Unified Toolchain for the Web

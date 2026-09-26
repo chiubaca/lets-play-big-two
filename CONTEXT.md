@@ -11,3 +11,7 @@ _Avoid_: Observer, viewer
 **Player**:
 A room participant occupying a seat who may receive a hand and take turns.
 _Avoid_: Spectator
+
+**Room chat**:
+Conversation within an online Big Two room. Seated Players may contribute; signed-in Spectators may read but not contribute.
+_Avoid_: Table talk

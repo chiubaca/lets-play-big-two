@@ -25,6 +25,7 @@ import { makePlayerOrder } from "./helpers/make-player-order";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
 import { createPlayEvent, isGameTurnState } from "./game-room-session";
 import { useTableAudio } from "./use-table-audio";
+import { RoomChatPrototype } from "./room-chat-prototype";
 import { WinnerArtwork } from "./winner-artwork";
 import { CasinoBackdrop, CasinoTableMark } from "~/components/casino/casino";
 import "./game-room.css";
@@ -155,6 +156,7 @@ export const GameRoom = ({
   const [motion, setMotion] = useState<boolean>(DEFAULT_DEV_LAYOUT.motion);
   const { playSound, muted, toggleMuted } = useTableAudio();
   const [localDevTools, setLocalDevTools] = useState(false);
+  const [chatPrototype, setChatPrototype] = useState(false);
   const currentId = gameState?.context.players[gameState.context.currentPlayerIndex]?.id;
   const currentValue = gameState?.value;
   const isMyTurn = !hideHand && currentId === user.id && isGameTurnState(currentValue);
@@ -189,6 +191,7 @@ export const GameRoom = ({
         LOCAL_DEV_HOSTS.has(window.location.hostname) &&
         query.get("dev-tools") === "true",
     );
+    setChatPrototype(import.meta.env.DEV && query.has("chat-prototype") && Boolean(roomCode));
   }, []);
 
   if (!gameState) return <main className="game-room room-loading">Connecting to the table…</main>;
@@ -271,10 +274,13 @@ export const GameRoom = ({
       : ({ "--dev-selected-lift": `${selectedLiftOverride}px` } as CSSProperties);
 
   return (
-    <main className={`game-room ${devClassName}`} style={devStyle}>
+    <main
+      className={`game-room ${chatPrototype ? "chat-prototype-active" : ""} ${devClassName}`}
+      style={devStyle}
+    >
       <CasinoBackdrop />
       <header className="room-header">
-        <div className="room-header-left">
+        <div className={`room-header-left ${chatPrototype ? "chat-preview-enabled" : ""}`}>
           <button
             className="room-icon"
             aria-label="Open table menu"
@@ -282,6 +288,7 @@ export const GameRoom = ({
           >
             <Menu />
           </button>
+          {chatPrototype && <RoomChatPrototype spectator={spectator} />}
           {spectatorCount !== undefined && (
             <span className="room-spectators" aria-label={`${spectatorCount} watching`}>
               <Eye aria-hidden="true" />
