@@ -85,7 +85,10 @@ const env = {
     }),
   },
   BIG_TWO_ROOM_DURABLE_OBJECT: {
-    getByName: () => ({ getChatSeat: async () => (roomExists ? { seatName } : null) }),
+    getByName: () => ({
+      getChatSeat: async () => (roomExists ? { seatName } : null),
+      markConnected: async () => roomExists && sessionValid,
+    }),
   },
 } as unknown as Env;
 const visitor = { roomId: "ABCDE", userId: "ada", sessionId: "session" };
@@ -192,7 +195,7 @@ it("does not deliver to a tab whose account or session has become ineligible", a
     ...env,
     BIG_TWO_DB: {
       prepare: () => ({
-        bind: (_room: string, _session: string, user: string) => ({
+        bind: (_room: string, _deadline: number, _session: string, user: string) => ({
           first: async () => (user === "revoked" ? null : { id: "session" }),
         }),
       }),

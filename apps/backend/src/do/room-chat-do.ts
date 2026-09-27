@@ -46,11 +46,12 @@ export class RoomChatObject extends DurableObject<Env> {
     }
     const result = await this.env.BIG_TWO_DB.prepare(`
       SELECT u.name FROM session s JOIN user u ON u.id = s.user_id
-      JOIN room r ON r.id = ?
+       JOIN room r ON r.id = ? AND r.status <> 'expiring'
+         AND (r.expires_at IS NULL OR r.expires_at > ?)
       WHERE s.id = ? AND s.user_id = ? AND s.expires_at > ?
       AND NOT EXISTS (SELECT 1 FROM accountDeletion d WHERE d.user_id = s.user_id)
     `)
-      .bind(visitor.roomId, visitor.sessionId, visitor.userId, Date.now())
+      .bind(visitor.roomId, Date.now(), visitor.sessionId, visitor.userId, Date.now())
       .first();
     if (!result) return null;
     const seat = await this.env.BIG_TWO_ROOM_DURABLE_OBJECT.getByName(visitor.roomId).getChatSeat(
@@ -142,6 +143,15 @@ export class RoomChatObject extends DurableObject<Env> {
     const sessionId = request.headers.get("X-Chat-Session-ID");
     const roomId = request.headers.get("X-Chat-Room-ID");
     if (!userId || !sessionId || !roomId || !(await this.eligible({ roomId, userId, sessionId }))) {
+      return new Response("Room chat is unavailable", { status: 403 });
+    }
+    if (
+      !(await this.env.BIG_TWO_ROOM_DURABLE_OBJECT.getByName(roomId).markConnected(
+        roomId,
+        userId,
+        sessionId,
+      ))
+    ) {
       return new Response("Room chat is unavailable", { status: 403 });
     }
     const [client, server] = Object.values(new WebSocketPair());
@@ -243,6 +253,29 @@ export class RoomChatObject extends DurableObject<Env> {
       if (!visitor || !(await this.eligible(visitor))) socket.close(1008, "Room chat access ended");
     }
     if (this.ctx.getWebSockets().length) await this.ctx.storage.setAlarm(Date.now() + 10_000);
+  }
+
+  async hasEligibleVisitors(): Promise<boolean> {
+    for (const socket of this.ctx.getWebSockets()) {
+      const visitor = socket.deserializeAttachment() as Visitor | null;
+      if (visitor && (await this.eligible(visitor))) return true;
+    }
+    return false;
+  }
+
+  async removeRoom(): Promise<void> {
+    for (const socket of this.ctx.getWebSockets()) socket.close(1008, "Room expired");
+    await this.ctx.storage.deleteAlarm();
+    await this.ctx.storage.deleteAll();
+  }
+
+  async webSocketClose(socket: WebSocket): Promise<void> {
+    const visitor = socket.deserializeAttachment() as Visitor | null;
+    socket.serializeAttachment(null);
+    if (visitor)
+      await this.env.BIG_TWO_ROOM_DURABLE_OBJECT.getByName(visitor.roomId).visitorDeparted(
+        visitor.roomId,
+      );
   }
 
   webSocketMessage(socket: WebSocket) {

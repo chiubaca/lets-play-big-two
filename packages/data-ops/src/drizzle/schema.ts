@@ -9,6 +9,10 @@ export * from "./auth-schema.ts";
 export const roomTable = sqliteTable("room", {
   id: text().primaryKey(),
   status: text(),
+  createdAt: integer("created_at"),
+  expiresAt: integer("expires_at"),
+  emptySince: integer("empty_since"),
+  visited: integer("visited").default(0).notNull(),
 });
 
 export const accountDeletionTable = sqliteTable("accountDeletion", {

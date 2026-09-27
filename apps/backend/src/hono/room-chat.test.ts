@@ -20,6 +20,7 @@ const send = vi.fn();
 const fetchSocket = vi.fn();
 const history = vi.fn();
 let roomExists = true;
+let roomExpired = false;
 let deleting = false;
 
 vi.mock("../lib/auth", () => ({
@@ -33,7 +34,13 @@ vi.mock("@big-two/data-ops/database", () => ({
           limit: async () =>
             table === roomTable
               ? roomExists
-                ? [{ id: "ABCDE" }]
+                ? [
+                    {
+                      id: "ABCDE",
+                      status: "waiting",
+                      expiresAt: roomExpired ? Date.now() - 1 : null,
+                    },
+                  ]
                 : []
               : deleting
                 ? [{ userId: "ada" }]
@@ -65,6 +72,7 @@ afterEach(() => {
   fetchSocket.mockReset();
   history.mockReset();
   roomExists = true;
+  roomExpired = false;
   deleting = false;
   vi.unstubAllGlobals();
 });
@@ -81,6 +89,9 @@ it("guards paged history and never caches it publicly", async () => {
   expect((await get()).status).toBe(404);
   roomExists = true;
   expect((await get("?before=0")).status).toBe(400);
+  roomExpired = true;
+  expect((await get()).status).toBe(404);
+  roomExpired = false;
   expect((await get("?before=10&after=11")).status).toBe(400);
   history.mockResolvedValue({ messages: [{ id: "ABCDE:2", order: 2 }], hasMore: false });
   const response = await get("?before=3");
@@ -252,7 +263,19 @@ it("routes authenticated upgrades and sends through the live chat object across 
         },
       },
     } as unknown as DurableObjectState,
-    {} as Env,
+    {
+      BIG_TWO_DB: {
+        prepare: (sql: string) => ({
+          bind: () => ({
+            first: async () =>
+              sql.includes("SELECT created_at")
+                ? { created_at: Date.now(), expires_at: Date.now() + 48 * 60 * 60 * 1000 }
+                : { id: "session-1" },
+            run: async () => ({}),
+          }),
+        }),
+      },
+    } as unknown as Env,
   );
   const liveEnv = {
     ROOM_CHAT_DURABLE_OBJECT: { idFromName: (roomId: string) => roomId },

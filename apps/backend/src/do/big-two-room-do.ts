@@ -11,8 +11,160 @@ import { getGameActionAuthorizationError } from "./authorize-game-action";
 import { redactPlayerIdentity } from "./redact-player-identity";
 import { roomView } from "./room-view";
 
+type RoomVisitor = { roomId: string; userId: string; sessionId: string };
+const TWO_DAYS = 48 * 60 * 60 * 1000;
+const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+
 export class BigTwoRoomObject extends DurableObject<Env> {
   sql: SqlStorage;
+  private lifecycle: Promise<void> = Promise.resolve();
+
+  private serial<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.lifecycle.then(operation);
+    this.lifecycle = result.then(
+      () => {},
+      () => {},
+    );
+    return result;
+  }
+
+  private visitor(socket: WebSocket): RoomVisitor | null {
+    const attachment = socket.deserializeAttachment() as RoomVisitor | string | null;
+    return attachment && typeof attachment === "object" ? attachment : null;
+  }
+
+  private viewerId(socket: WebSocket): string | null {
+    const attachment = socket.deserializeAttachment() as RoomVisitor | string | null;
+    return typeof attachment === "string" ? attachment : (attachment?.userId ?? null);
+  }
+
+  private async valid(visitor: RoomVisitor): Promise<boolean> {
+    const result = await this.env.BIG_TWO_DB.prepare(`
+      SELECT s.id FROM session s JOIN user u ON u.id = s.user_id
+      JOIN room r ON r.id = ? AND r.status <> 'expiring'
+        AND (r.expires_at IS NULL OR r.expires_at > ?)
+      WHERE s.id = ? AND s.user_id = ? AND s.expires_at > ?
+      AND NOT EXISTS (SELECT 1 FROM accountDeletion d WHERE d.user_id = s.user_id)
+    `)
+      .bind(visitor.roomId, Date.now(), visitor.sessionId, visitor.userId, Date.now())
+      .first();
+    return !!result;
+  }
+
+  async markConnected(roomId: string, userId: string, sessionId: string): Promise<boolean> {
+    return this.serial(async () => {
+      if (!(await this.valid({ roomId, userId, sessionId }))) return false;
+      const row = await this.env.BIG_TWO_DB.prepare(
+        "SELECT created_at, expires_at FROM room WHERE id = ? AND status <> 'expiring'",
+      )
+        .bind(roomId)
+        .first<{ created_at: number | null; expires_at: number | null }>();
+      if (!row || (row.expires_at !== null && row.expires_at <= Date.now())) return false;
+      await this.env.BIG_TWO_DB.prepare(
+        "UPDATE room SET expires_at = NULL, empty_since = NULL, visited = 1 WHERE id = ? AND status <> 'expiring'",
+      )
+        .bind(roomId)
+        .run();
+      return true;
+    });
+  }
+
+  private async hasVisitors(roomId: string): Promise<boolean> {
+    for (const socket of this.ctx.getWebSockets()) {
+      const visitor = this.visitor(socket);
+      if (visitor && (await this.valid(visitor))) return true;
+      if (visitor) socket.close(1008, "Room access ended");
+    }
+    return this.env.ROOM_CHAT_DURABLE_OBJECT.getByName(roomId).hasEligibleVisitors();
+  }
+
+  async visitorDeparted(roomId: string): Promise<void> {
+    await this.serial(() => this.updateDeadline(roomId));
+  }
+
+  private async updateDeadline(roomId: string): Promise<void> {
+    const room = await this.env.BIG_TWO_DB.prepare(
+      "SELECT status, created_at, expires_at, empty_since, visited FROM room WHERE id = ?",
+    )
+      .bind(roomId)
+      .first<{
+        status: string;
+        created_at: number | null;
+        expires_at: number | null;
+        empty_since: number | null;
+        visited: number;
+      }>();
+    if (!room || room.status === "expiring" || room.created_at === null) return;
+    if (await this.hasVisitors(roomId)) return;
+    if (!room.visited) return; // Never opened: 48 hours from creation, not a new window.
+    const stored = await this.getGameState();
+    const state = stored ? (JSON.parse(stored) as BigTwoGameMachineSnapshot) : null;
+    const paused = state && state.value !== "WAITING_FOR_PLAYERS" && state.value !== "GAME_END";
+    const emptySince = room.empty_since ?? Date.now();
+    const expiresAt = emptySince + (paused ? SEVEN_DAYS : TWO_DAYS);
+    if (room.expires_at === expiresAt) return;
+    await this.env.BIG_TWO_DB.prepare(
+      "UPDATE room SET empty_since = ?, expires_at = ? WHERE id = ? AND status <> 'expiring'",
+    )
+      .bind(emptySince, expiresAt, roomId)
+      .run();
+  }
+
+  private async removeRoom(roomId: string): Promise<void> {
+    // The expiring marker denies all new access while cleanup is retried after any failure.
+    await this.env.BIG_TWO_DB.prepare("INSERT OR IGNORE INTO retiredRoomCode (id) VALUES (?)")
+      .bind(roomId)
+      .run();
+    await this.env.BIG_TWO_DB.prepare("DELETE FROM usersToRooms WHERE room_id = ?")
+      .bind(roomId)
+      .run();
+    await this.env.ROOM_CHAT_DURABLE_OBJECT.getByName(roomId).removeRoom();
+    for (const socket of this.ctx.getWebSockets()) socket.close(1008, "Room expired");
+    await this.ctx.storage.deleteAll();
+    await this.env.BIG_TWO_DB.prepare("DELETE FROM room WHERE id = ? AND status = 'expiring'")
+      .bind(roomId)
+      .run();
+  }
+
+  async reconcileExpiry(roomId: string): Promise<void> {
+    await this.serial(async () => {
+      const room = await this.env.BIG_TWO_DB.prepare(
+        "SELECT status, created_at, expires_at FROM room WHERE id = ?",
+      )
+        .bind(roomId)
+        .first<{ status: string; created_at: number | null; expires_at: number | null }>();
+      if (!room) return;
+      if (room.status === "expiring") return this.removeRoom(roomId);
+      // Legacy data has no trustworthy last-departure timestamp. Rollout removes it immediately.
+      // This deployment is explicitly for an installation with no existing visitors.
+      if (room.created_at === null) {
+        await this.env.BIG_TWO_DB.prepare("UPDATE room SET status = 'expiring' WHERE id = ?")
+          .bind(roomId)
+          .run();
+        return this.removeRoom(roomId);
+      }
+      if (await this.hasVisitors(roomId)) {
+        if (room.expires_at !== null)
+          await this.env.BIG_TWO_DB.prepare(
+            "UPDATE room SET expires_at = NULL, empty_since = NULL, visited = 1 WHERE id = ?",
+          )
+            .bind(roomId)
+            .run();
+        return;
+      }
+      if (room.expires_at === null) {
+        await this.updateDeadline(roomId);
+        return;
+      }
+      if (room.expires_at > Date.now()) return;
+      await this.env.BIG_TWO_DB.prepare(
+        "UPDATE room SET status = 'expiring' WHERE id = ? AND expires_at <= ?",
+      )
+        .bind(roomId, Date.now())
+        .run();
+      await this.removeRoom(roomId);
+    });
+  }
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -29,6 +181,7 @@ export class BigTwoRoomObject extends DurableObject<Env> {
   async gameAction(
     event: GameEvent,
     requesterId: string,
+    roomId?: string,
   ): Promise<{ success: true } | { success: false; error: string }> {
     const query = this.sql.exec(`SELECT game_state FROM game_room WHERE id = 1`);
 
@@ -89,6 +242,15 @@ export class BigTwoRoomObject extends DurableObject<Env> {
       },
     );
 
+    if (roomId && gameState.value !== gameStateSnapshot.value) {
+      try {
+        await this.visitorDeparted(roomId);
+      } catch (error) {
+        // A persisted game action must not be reported as failed by room housekeeping.
+        console.error("Could not update room inactivity deadline", error);
+      }
+    }
+
     return { success: true };
   }
 
@@ -125,7 +287,7 @@ export class BigTwoRoomObject extends DurableObject<Env> {
       this.ctx
         .getWebSockets()
         .filter((socket) => socket !== excluding)
-        .map((socket) => socket.deserializeAttachment() as string | null)
+        .map((socket) => this.viewerId(socket))
         .filter((id): id is string => !!id && !playerIds.has(id)),
     ).size;
   }
@@ -138,7 +300,7 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     const count = this.spectatorCount(state, excluding);
     for (const socket of this.ctx.getWebSockets()) {
       if (socket === excluding) continue;
-      const viewerId = socket.deserializeAttachment() as string | null;
+      const viewerId = this.viewerId(socket);
       if (!viewerId) continue;
       try {
         socket.send(
@@ -194,11 +356,20 @@ export class BigTwoRoomObject extends DurableObject<Env> {
 
   async fetch(request: Request) {
     const viewerId = request.headers.get("X-Room-Viewer-ID");
+    const sessionId = request.headers.get("X-Room-Session-ID");
+    const roomId = request.headers.get("X-Room-ID");
     const stored = await this.getGameState();
-    if (!viewerId || !stored) return new Response("Room not found", { status: 404 });
+    if (
+      !viewerId ||
+      !sessionId ||
+      !roomId ||
+      !stored ||
+      !(await this.markConnected(roomId, viewerId, sessionId))
+    )
+      return new Response("Room not found", { status: 404 });
     const webSocketPair = new WebSocketPair();
     const [client, server] = Object.values(webSocketPair);
-    server.serializeAttachment(viewerId);
+    server.serializeAttachment({ roomId, userId: viewerId, sessionId } satisfies RoomVisitor);
     this.ctx.acceptWebSocket(server);
     this.broadcast(JSON.parse(stored) as BigTwoGameMachineSnapshot);
 
@@ -216,15 +387,18 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     );
   }
 
-  webSocketClose(
+  async webSocketClose(
     ws: WebSocket,
     _code: number,
     _reason: string,
     _wasClean: boolean,
-  ): void | Promise<void> {
+  ): Promise<void> {
+    const visitor = this.visitor(ws);
+    ws.serializeAttachment(null);
     const stored = this.sql.exec(`SELECT game_state FROM game_room WHERE id = 1`).toArray()[0];
     if (stored)
       this.broadcast(JSON.parse(stored.game_state as string) as BigTwoGameMachineSnapshot, ws);
+    if (visitor) await this.visitorDeparted(visitor.roomId);
   }
 
   webSocketError(_ws: WebSocket, error: unknown) {

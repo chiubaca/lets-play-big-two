@@ -1,6 +1,16 @@
 import { afterEach, expect, it, vi } from "vite-plus/test";
 import { App } from "./app";
 
+vi.mock("@big-two/data-ops/database", () => ({
+  getDb: () => ({
+    select: () => ({
+      from: () => ({
+        where: () => ({ limit: async () => [{ status: "waiting", expiresAt: null }] }),
+      }),
+    }),
+  }),
+}));
+
 const getSession = vi.fn();
 const gameAction = vi.fn();
 
@@ -38,7 +48,11 @@ it("accepts a seated Player's leave action but never forwards someone else's ide
   expect((await leave("bob")).status).toBe(403);
   expect(gameAction).not.toHaveBeenCalled();
   expect((await leave("alice")).status).toBe(200);
-  expect(gameAction).toHaveBeenCalledWith({ type: "LEAVE_GAME", playerId: "alice" }, "alice");
+  expect(gameAction).toHaveBeenCalledWith(
+    { type: "LEAVE_GAME", playerId: "alice" },
+    "alice",
+    "ABCDE",
+  );
 });
 
 it("rejects unauthenticated leave requests", async () => {

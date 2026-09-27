@@ -36,6 +36,12 @@ function chatOriginAllowed(request: Request) {
   return !origin || allowedOrigins.includes(origin);
 }
 
+function roomUnavailable(room: { status: string | null; expiresAt: number | null } | undefined) {
+  return (
+    !room || room.status === "expiring" || (room.expiresAt != null && room.expiresAt <= Date.now())
+  );
+}
+
 export const App = new Hono<{ Bindings: Cloudflare.Env }>()
   .use(
     "*",
@@ -58,29 +64,31 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
 
     const db = getDb();
     const memberships = await db
-      .select({ roomId: roomTable.id })
+      .select({ roomId: roomTable.id, status: roomTable.status, expiresAt: roomTable.expiresAt })
       .from(usersToRoomsTable)
       .innerJoin(roomTable, eq(usersToRoomsTable.roomId, roomTable.id))
       .where(eq(usersToRoomsTable.userId, session.user.id));
 
     const rooms = await Promise.all(
-      memberships.map(async ({ roomId }) => {
-        const stub = c.env.BIG_TWO_ROOM_DURABLE_OBJECT.getByName(roomId);
-        const storedState = await stub.getGameState();
-        if (!storedState) return null;
-        const state = JSON.parse(storedState) as BigTwoGameMachineSnapshot;
-        if (!state.context.players.some((player) => player.id === session.user.id)) return null;
-        return {
-          roomId,
-          status:
-            state.value === "WAITING_FOR_PLAYERS"
-              ? "waiting"
-              : state.value === "GAME_END"
-                ? "finished"
-                : "playing",
-          playerCount: state.context.players.length,
-        };
-      }),
+      memberships
+        .filter(({ status, expiresAt }) => !roomUnavailable({ status, expiresAt }))
+        .map(async ({ roomId }) => {
+          const stub = c.env.BIG_TWO_ROOM_DURABLE_OBJECT.getByName(roomId);
+          const storedState = await stub.getGameState();
+          if (!storedState) return null;
+          const state = JSON.parse(storedState) as BigTwoGameMachineSnapshot;
+          if (!state.context.players.some((player) => player.id === session.user.id)) return null;
+          return {
+            roomId,
+            status:
+              state.value === "WAITING_FOR_PLAYERS"
+                ? "waiting"
+                : state.value === "GAME_END"
+                  ? "finished"
+                  : "playing",
+            playerCount: state.context.players.length,
+          };
+        }),
     );
     return c.json({ rooms: rooms.filter((room) => room !== null) }, 200, {
       "Cache-Control": "no-store",
@@ -121,7 +129,7 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
     }
     const db = getDb();
     const rooms = await db.select().from(roomTable).where(eq(roomTable.id, roomId));
-    if (rooms.length === 0) {
+    if (roomUnavailable(rooms[0])) {
       return c.notFound();
     }
 
@@ -155,16 +163,18 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
     if (!roomId) return c.notFound();
 
     const rooms = await getDb()
-      .select({ id: roomTable.id })
+      .select({ id: roomTable.id, status: roomTable.status, expiresAt: roomTable.expiresAt })
       .from(roomTable)
       .where(eq(roomTable.id, roomId))
       .limit(1);
-    if (!rooms.length) return c.notFound();
+    if (roomUnavailable(rooms[0])) return c.notFound();
 
     const doId = c.env.BIG_TWO_ROOM_DURABLE_OBJECT.idFromName(roomId);
     const stub = c.env.BIG_TWO_ROOM_DURABLE_OBJECT.get(doId);
     const headers = new Headers(c.req.raw.headers);
     headers.set("X-Room-Viewer-ID", session.user.id);
+    headers.set("X-Room-Session-ID", session.session.id);
+    headers.set("X-Room-ID", roomId);
     return await stub.fetch(new Request(c.req.raw, { headers }));
   })
   .get("/api/room/chat/ws/:roomId", async (c) => {
@@ -179,11 +189,11 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
     }
     const roomId = c.req.param("roomId");
     const room = await getDb()
-      .select({ id: roomTable.id })
+      .select({ id: roomTable.id, status: roomTable.status, expiresAt: roomTable.expiresAt })
       .from(roomTable)
       .where(eq(roomTable.id, roomId))
       .limit(1);
-    if (!room.length) return c.notFound();
+    if (roomUnavailable(room[0])) return c.notFound();
     const headers = new Headers(c.req.raw.headers);
     headers.set("X-Chat-User-ID", session.user.id);
     headers.set("X-Chat-Session-ID", session.session.id);
@@ -200,11 +210,11 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
     }
     const roomId = c.req.param("roomId");
     const room = await getDb()
-      .select({ id: roomTable.id })
+      .select({ id: roomTable.id, status: roomTable.status, expiresAt: roomTable.expiresAt })
       .from(roomTable)
       .where(eq(roomTable.id, roomId))
       .limit(1);
-    if (!room.length) return c.notFound();
+    if (roomUnavailable(room[0])) return c.notFound();
     const before = c.req.query("before");
     const after = c.req.query("after");
     const validCursor = (value: string | undefined) =>
@@ -260,11 +270,11 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
       }
       const roomId = c.req.param("roomId");
       const room = await getDb()
-        .select({ id: roomTable.id })
+        .select({ id: roomTable.id, status: roomTable.status, expiresAt: roomTable.expiresAt })
         .from(roomTable)
         .where(eq(roomTable.id, roomId))
         .limit(1);
-      if (!room.length) return c.notFound();
+      if (roomUnavailable(room[0])) return c.notFound();
       const parsed = parseChatInput(c.req.valid("json"));
       if (!parsed.input) return c.json({ error: parsed.error }, 400);
       const result = await c.env.ROOM_CHAT_DURABLE_OBJECT.getByName(roomId).send(
@@ -296,9 +306,16 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
     let roomId: string | undefined;
     for (let attempt = 0; attempt < 10; attempt++) {
       const candidate = createRoomCode();
+      const createdAt = Date.now();
       const inserted = await db
         .insert(roomTable)
-        .values({ id: candidate, status: "waiting" })
+        .values({
+          id: candidate,
+          status: "waiting",
+          createdAt,
+          emptySince: createdAt,
+          expiresAt: createdAt + 48 * 60 * 60 * 1000,
+        })
         .onConflictDoNothing()
         .returning({ id: roomTable.id });
       if (inserted.length > 0) {
@@ -363,10 +380,17 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
 
       const roomId = c.req.param("roomId");
 
+      const room = await getDb()
+        .select({ status: roomTable.status, expiresAt: roomTable.expiresAt })
+        .from(roomTable)
+        .where(eq(roomTable.id, roomId))
+        .limit(1);
+      if (roomUnavailable(room[0])) return c.notFound();
+
       const doId = c.env.BIG_TWO_ROOM_DURABLE_OBJECT.idFromName(roomId);
       const stub = c.env.BIG_TWO_ROOM_DURABLE_OBJECT.get(doId);
 
-      const result = await stub.gameAction(authenticatedGameEvent, session.user.id);
+      const result = await stub.gameAction(authenticatedGameEvent, session.user.id, roomId);
 
       if (!result.success) {
         return c.json({ error: result.error }, 403);

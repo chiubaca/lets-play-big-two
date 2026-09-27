@@ -34,8 +34,12 @@ export function OnlineGameRoom({ roomId, user }: { roomId: string; user: GameRoo
         param: { roomId },
       });
       if (!response.ok) {
-        const body = await response.json();
-        throw new Error(body.error);
+        const body: unknown = await response.json();
+        throw new Error(
+          body && typeof body === "object" && "error" in body && typeof body.error === "string"
+            ? body.error
+            : "Could not complete the game action. Please try again.",
+        );
       }
     },
     [roomId],
