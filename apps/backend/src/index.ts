@@ -1,9 +1,10 @@
 import { initDatabase } from "@big-two/data-ops/database";
 import { BigTwoRoomObject } from "./do/big-two-room-do";
+import { RoomChatObject } from "./do/room-chat-do";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { App } from "./hono/app";
 
-export { BigTwoRoomObject };
+export { BigTwoRoomObject, RoomChatObject };
 
 export default class BigTwoBackend extends WorkerEntrypoint<Env> {
   constructor(ctx: ExecutionContext, env: Env) {

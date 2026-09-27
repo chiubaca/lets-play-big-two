@@ -4,6 +4,7 @@ import type { RoomGameState, GameEvent } from "@big-two/game-state-machine";
 
 import { honoClient } from "~/libs/hono-client";
 import { GameRoom, type GameRoomUser } from "./game-room";
+import type { ChatMessage } from "./room-chat";
 
 export function OnlineGameRoom({ roomId, user }: { roomId: string; user: GameRoomUser }) {
   const {
@@ -40,6 +41,42 @@ export function OnlineGameRoom({ roomId, user }: { roomId: string; user: GameRoo
     [roomId],
   );
 
+  const sendChat = useCallback(
+    async (input: { text: string; clientSendId: string }): Promise<ChatMessage> => {
+      const response = await honoClient.api.room.chat[":roomId"].$post({
+        param: { roomId },
+        json: input,
+      });
+      const body: unknown = await response.json();
+      if (!response.ok)
+        throw new Error(
+          body && typeof body === "object" && "error" in body && typeof body.error === "string"
+            ? body.error
+            : "Could not confirm this message. Please try again.",
+        );
+      if (
+        !body ||
+        typeof body !== "object" ||
+        !("type" in body) ||
+        body.type !== "message" ||
+        !("id" in body) ||
+        typeof body.id !== "string" ||
+        !("order" in body) ||
+        typeof body.order !== "number" ||
+        !("text" in body) ||
+        typeof body.text !== "string" ||
+        !("author" in body) ||
+        typeof body.author !== "string" ||
+        !("clientSendId" in body) ||
+        typeof body.clientSendId !== "string"
+      ) {
+        throw new Error("Could not confirm this message. Keep your draft and try again.");
+      }
+      return body as ChatMessage;
+    },
+    [roomId],
+  );
+
   if (!gameState && error) {
     return (
       <main className="game-room room-loading" role="alert">
@@ -52,6 +89,7 @@ export function OnlineGameRoom({ roomId, user }: { roomId: string; user: GameRoo
     <GameRoom
       gameState={gameState}
       send={send}
+      sendChat={sendChat}
       tableLabel={`Room ${roomId}`}
       roomCode={roomId}
       user={user}

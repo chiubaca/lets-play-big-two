@@ -326,3 +326,68 @@ it("shows a fresh celebration when another game ends in the same online room", a
   rerender(<GameRoom {...props} gameState={finishedState} />);
   expect(screen.getByRole("dialog")).toBeTruthy();
 });
+
+it("keeps the online chat log and draft across play, Results, and another game", async () => {
+  let receive!: (event: { data: string }) => void;
+  class ChatSocket {
+    onmessage: ((event: { data: string }) => void) | null = null;
+    constructor(_url: string) {
+      receive = (event) => this.onmessage?.(event);
+    }
+    close() {}
+  }
+  vi.stubGlobal("WebSocket", ChatSocket);
+  vi.stubEnv("VITE_BACKEND_URL", "https://api.example.com");
+  const props = {
+    send: () => {},
+    sendChat: vi.fn(),
+    tableLabel: "Room ABCDE",
+    roomCode: "ABCDE",
+    user: { id: "solo-player", name: "You" },
+  };
+  try {
+    const waiting = { ...gameState, value: "WAITING_FOR_PLAYERS" } as BigTwoGameMachineSnapshot;
+    const room = render(<GameRoom {...props} gameState={waiting} />);
+    const trigger = screen.getByRole("button", { name: "Room chat" });
+    receive({
+      data: JSON.stringify({
+        type: "message",
+        id: "ABCDE:1",
+        order: 1,
+        clientSendId: "one",
+        author: "Ada",
+        text: "first",
+      }),
+    });
+    await waitFor(() => expect(trigger.getAttribute("aria-label")).toContain("1 unread"));
+    fireEvent.click(trigger);
+    fireEvent.change(screen.getByRole("textbox", { name: "Room chat message" }), {
+      target: { value: "my draft" },
+    });
+    room.rerender(<GameRoom {...props} gameState={gameState} />);
+    expect(screen.getByRole("log").textContent).toContain("first");
+    room.rerender(<GameRoom {...props} gameState={finishedState} />);
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    receive({
+      data: JSON.stringify({
+        type: "message",
+        id: "ABCDE:2",
+        order: 2,
+        clientSendId: "two",
+        author: "Ada",
+        text: "second",
+      }),
+    });
+    await waitFor(() => expect(trigger.getAttribute("aria-label")).toContain("1 unread"));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    room.rerender(<GameRoom {...props} gameState={gameState} />);
+    expect(screen.getByRole("log").textContent).toContain("second");
+    expect(
+      (screen.getByRole("textbox", { name: "Room chat message" }) as HTMLTextAreaElement).value,
+    ).toBe("my draft");
+  } finally {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  }
+});

@@ -90,6 +90,15 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     return roomView(state, viewerId, this.spectatorCount(state));
   }
 
+  async getChatSeat(viewerId: string): Promise<{ seatName: string | null } | null> {
+    const stored = await this.getGameState();
+    if (!stored) return null;
+    const state = JSON.parse(stored) as BigTwoGameMachineSnapshot;
+    return {
+      seatName: state.context.players.find((player) => player.id === viewerId)?.name ?? null,
+    };
+  }
+
   private spectatorCount(state: BigTwoGameMachineSnapshot, excluding?: WebSocket) {
     const playerIds = new Set(state.context.players.map((player) => player.id));
     return new Set(

@@ -3,6 +3,7 @@ import { sValidator } from "@hono/standard-validator";
 import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
 import { eq } from "drizzle-orm";
+import { z } from "zod";
 
 import { getDb } from "@big-two/data-ops/database";
 import {
@@ -16,6 +17,7 @@ import { auth } from "../lib/auth";
 import { chooseJevBotMoveWithFallback } from "../lib/jev-bot";
 import { jevBotMoveRequestSchema } from "../lib/jev-bot.schema";
 import { createRoomCode } from "../lib/room-code";
+import { parseChatInput } from "../lib/chat-input";
 
 async function accountDeletionIsPending(userId: string) {
   const db = getDb();
@@ -25,6 +27,11 @@ async function accountDeletionIsPending(userId: string) {
     .where(eq(accountDeletionTable.userId, userId))
     .limit(1);
   return deletion.length > 0;
+}
+
+function chatOriginAllowed(request: Request) {
+  const origin = request.headers.get("Origin");
+  return !origin || ["https://local.bigtwo.com", "https://big-two.chiubaca.com"].includes(origin);
 }
 
 export const App = new Hono<{ Bindings: Cloudflare.Env }>()
@@ -158,6 +165,86 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
     headers.set("X-Room-Viewer-ID", session.user.id);
     return await stub.fetch(new Request(c.req.raw, { headers }));
   })
+  .get("/api/room/chat/ws/:roomId", async (c) => {
+    if (!chatOriginAllowed(c.req.raw)) return c.json({ error: "Origin is not allowed" }, 403);
+    if (c.req.header("Upgrade")?.toLowerCase() !== "websocket") {
+      return c.text("Expected Upgrade: websocket", 426);
+    }
+    const session = await auth.api.getSession({ headers: c.req.raw.headers });
+    if (!session) return c.json({ error: "Unauthorized" }, 401);
+    if (await accountDeletionIsPending(session.user.id)) {
+      return c.json({ error: "Account deletion is in progress" }, 409);
+    }
+    const roomId = c.req.param("roomId");
+    const room = await getDb()
+      .select({ id: roomTable.id })
+      .from(roomTable)
+      .where(eq(roomTable.id, roomId))
+      .limit(1);
+    if (!room.length) return c.notFound();
+    const headers = new Headers(c.req.raw.headers);
+    headers.set("X-Chat-User-ID", session.user.id);
+    headers.set("X-Chat-Session-ID", session.session.id);
+    return c.env.ROOM_CHAT_DURABLE_OBJECT.getByName(roomId).fetch(
+      new Request(c.req.raw, { headers }),
+    );
+  })
+  .post(
+    "/api/room/chat/:roomId",
+    async (c, next) => {
+      if (!chatOriginAllowed(c.req.raw)) return c.json({ error: "Origin is not allowed" }, 403);
+      const reader = c.req.raw.clone().body?.getReader();
+      if (reader) {
+        let size = 0;
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          size += value.byteLength;
+          if (size > 8 * 1024) {
+            void reader.cancel().catch(() => {});
+            return c.json({ error: "Keep the request body under 8 KiB." }, 413);
+          }
+        }
+      }
+      try {
+        await c.req.json();
+      } catch {
+        return c.json({ error: "Send a JSON message with text and a client send ID." }, 400);
+      }
+      await next();
+    },
+    sValidator(
+      "json",
+      z.object({ text: z.string(), clientSendId: z.string() }).strict(),
+      (result, c) => {
+        if (!result.success)
+          return c.json({ error: "Send plain text and a UUID client send ID only." }, 400);
+      },
+    ),
+    async (c) => {
+      const session = await auth.api.getSession({ headers: c.req.raw.headers });
+      if (!session) return c.json({ error: "Unauthorized" }, 401);
+      if (await accountDeletionIsPending(session.user.id)) {
+        return c.json({ error: "Account deletion is in progress" }, 409);
+      }
+      const roomId = c.req.param("roomId");
+      const room = await getDb()
+        .select({ id: roomTable.id })
+        .from(roomTable)
+        .where(eq(roomTable.id, roomId))
+        .limit(1);
+      if (!room.length) return c.notFound();
+      const parsed = parseChatInput(c.req.valid("json"));
+      if (!parsed.input) return c.json({ error: parsed.error }, 400);
+      const result = await c.env.ROOM_CHAT_DURABLE_OBJECT.getByName(roomId).send(
+        { userId: session.user.id, sessionId: session.session.id },
+        parsed.input,
+      );
+      if (!result.message)
+        return c.json({ error: result.error ?? "Room chat is unavailable" }, 403);
+      return c.json(result.message, 200, { "Cache-Control": "no-store" });
+    },
+  )
 
   .post("/api/room", async (c) => {
     const session = await auth.api.getSession({

@@ -13,12 +13,20 @@
       "new_sqlite_classes": ["BigTwoRoomObject"],
       "tag": "v1",
     },
+    {
+      "new_sqlite_classes": ["RoomChatObject"],
+      "tag": "v2",
+    },
   ],
   "durable_objects": {
     "bindings": [
       {
         "class_name": "BigTwoRoomObject",
         "name": "BIG_TWO_ROOM_DURABLE_OBJECT",
+      },
+      {
+        "class_name": "RoomChatObject",
+        "name": "ROOM_CHAT_DURABLE_OBJECT",
       },
     ],
   },
