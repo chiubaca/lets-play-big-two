@@ -18,3 +18,12 @@ Worker sweeps legacy rooms on its next minute-level cron trigger; the same sweep
 retries any partially removed rooms until game state, chat history, memberships,
 and the room record are gone. Retired codes remain reserved to prevent an old
 room URL from opening another room's conversation.
+
+## Rollout record — 2026-09-27
+
+Applied `0004_room_expiry.sql` to the remote D1 database and deployed Worker
+version `e4414e86-bf35-4571-b255-130d3fadd855`. The scheduled sweep removed
+all 48 legacy rooms. The final D1 query returned zero rooms, zero memberships,
+and 48 reserved room codes. Cloudflare logs showed successful chat and game
+object cleanup calls. No separate Player/Spectator manual UI verification was
+performed as part of this rollout.
