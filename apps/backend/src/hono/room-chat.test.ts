@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from "vite-plus/test";
 import { App } from "./app";
 import { RoomChatObject } from "../do/room-chat-do";
+import { BigTwoRoomObject } from "../do/big-two-room-do";
 import { roomTable } from "@big-two/data-ops/drizzle/schema";
 
 vi.mock("cloudflare:workers", () => ({
@@ -173,6 +174,7 @@ it("routes authenticated upgrades and sends through the live chat object across 
   session.mockResolvedValue({ user: { id: "ada" }, session: { id: "session-1" } });
   let seat: string | null = "Room seat <Ada>";
   let phase = "WAITING_FOR_PLAYERS";
+  let live = true;
   let sequence = 0;
   const sockets: Array<{
     attachment: { userId: string; sessionId: string };
@@ -193,6 +195,33 @@ it("routes authenticated upgrades and sends through the live chat object across 
       setAlarm: vi.fn(),
     },
   } as unknown as DurableObjectState;
+  const gameRoom = new BigTwoRoomObject(
+    {
+      storage: {
+        sql: {
+          exec: (query: string) =>
+            query.includes("SELECT game_state")
+              ? {
+                  toArray: () =>
+                    live
+                      ? [
+                          {
+                            game_state: JSON.stringify({
+                              value: phase,
+                              context: {
+                                players: seat ? [{ id: "ada", name: seat, hand: [] }] : [],
+                              },
+                            }),
+                          },
+                        ]
+                      : [],
+                }
+              : undefined,
+        },
+      },
+    } as unknown as DurableObjectState,
+    {} as Env,
+  );
   const liveEnv = {
     BIG_TWO_DB: {
       prepare: () => ({
@@ -200,7 +229,7 @@ it("routes authenticated upgrades and sends through the live chat object across 
       }),
     },
     BIG_TWO_ROOM_DURABLE_OBJECT: {
-      getByName: () => ({ getChatSeat: async () => (phase ? { seatName: seat } : null) }),
+      getByName: () => gameRoom,
     },
   } as unknown as Env;
   const chat = new RoomChatObject(state, liveEnv);
@@ -270,9 +299,13 @@ it("routes authenticated upgrades and sends through the live chat object across 
   seat = null;
   expect((await sendLive("not seated")).status).toBe(403);
   expect((await upgrade()).status).toBe(101); // Former Player remains a Spectator.
-  roomExists = false;
+  live = false;
+  expect((await upgrade()).status).toBe(403);
+  expect((await sendLive("no live room")).status).toBe(403);
   await chat.alarm();
   expect(sockets[0].close).toHaveBeenCalled();
+  live = true;
+  roomExists = false;
   expect((await upgrade()).status).toBe(404);
   expect((await sendLive("removed")).status).toBe(404);
 });
