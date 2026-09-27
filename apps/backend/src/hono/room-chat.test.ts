@@ -217,7 +217,11 @@ it("routes authenticated upgrades and sends through the live chat object across 
     storage: {
       sql: {
         exec: (sql: string) =>
-          sql.includes("RETURNING") ? { one: () => ({ value: ++sequence }) } : undefined,
+          sql.includes("RETURNING")
+            ? { one: () => ({ value: ++sequence }) }
+            : sql.includes("WHERE user_id = ? AND client_send_id = ?")
+              ? { toArray: () => [] }
+              : undefined,
       },
       setAlarm: vi.fn(),
       sync: vi.fn(),
@@ -311,7 +315,7 @@ it("routes authenticated upgrades and sends through the live chat object across 
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, clientSendId }),
+        body: JSON.stringify({ text, clientSendId: crypto.randomUUID() }),
       },
       routeEnv,
     );

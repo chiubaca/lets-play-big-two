@@ -107,6 +107,11 @@ it("merges socket echo and HTTP acknowledgement into one entry and preserves fai
   await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Please try again"));
   expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("keep this");
   expect(playSound).toHaveBeenCalledTimes(1);
+  const retryId = send.mock.calls[1][0].clientSendId;
+  send.mockResolvedValueOnce({ ...message, id: "ABCDE:2", clientSendId: retryId });
+  fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+  await waitFor(() => expect(send).toHaveBeenCalledTimes(3));
+  expect(send.mock.calls[2][0].clientSendId).toBe(retryId);
 });
 
 it("sends on Enter from the composer but keeps Shift+Enter for a newline", async () => {
@@ -219,4 +224,72 @@ it("redacts visible messages and does not restore stale text from an in-flight p
   expect(screen.getByRole("log").textContent).not.toContain(message.text);
   act(() => ChatSocket.connections[0].receive({ ...message, id: "ABCDE:2", order: 2 }));
   expect(screen.getByRole("log").querySelectorAll(".room-chat-entry")).toHaveLength(2);
+});
+
+it("holds the existing log during an outage and retries failed history without showing stale text", async () => {
+  vi.useFakeTimers();
+  try {
+    show();
+    await ready();
+    fireEvent.click(screen.getByRole("button", { name: /Room chat/ }));
+    act(() => ChatSocket.connections[0].receive(message));
+    act(() => ChatSocket.connections[0].onclose?.());
+    expect(screen.getByRole("log").textContent).toContain(message.text);
+    fetchHistory.mockRejectedValueOnce(new Error("offline"));
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+    await ready();
+    expect(screen.getByRole("log").textContent).not.toContain(message.text);
+    expect(screen.getByRole("button", { name: "Retry history" })).toBeTruthy();
+    fetchHistory.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        messages: [
+          { ...message, author: "Deleted participant", text: "Message removed", role: null },
+        ],
+        hasMore: false,
+      }),
+    });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Retry history" })));
+    expect(screen.getByRole("log").textContent).toContain("Message removed");
+    expect(screen.getByRole("log").textContent).not.toContain(message.text);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("recovers every missed page after a long disconnect without replay unread or sounds", async () => {
+  vi.useFakeTimers();
+  try {
+    show();
+    await ready();
+    act(() => ChatSocket.connections[0].receive(message));
+    act(() => ChatSocket.connections[0].onclose?.());
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+    const calls: string[] = [];
+    fetchHistory.mockImplementation(async (url: URL) => {
+      calls.push(url.toString());
+      const after = Number(url.searchParams.get("after"));
+      const orders = after ? (after === 1 ? [2, 3] : [4]) : [3, 4];
+      return {
+        ok: true,
+        json: async () => ({
+          messages: orders.map((order) => ({ ...message, id: `ABCDE:${order}`, order })),
+          hasMore: after === 1,
+        }),
+      };
+    });
+    playSound.mockClear();
+    await ready();
+    fireEvent.click(screen.getByRole("button", { name: /Room chat/ }));
+    expect(screen.getByRole("log").querySelectorAll(".room-chat-entry")).toHaveLength(3);
+    expect(calls.some((url) => url.includes("after=1"))).toBe(true);
+    expect(calls.some((url) => url.includes("after=3"))).toBe(true);
+    expect(playSound).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
 });

@@ -272,7 +272,10 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
         parsed.input,
       );
       if (!result.message)
-        return c.json({ error: result.error ?? "Room chat is unavailable" }, 403);
+        return c.json(
+          { error: result.error ?? "Room chat is unavailable" },
+          result.status === 409 ? 409 : 403,
+        );
       return c.json(result.message, 200, { "Cache-Control": "no-store" });
     },
   )

@@ -30,6 +30,9 @@ export class RoomChatObject extends DurableObject<Env> {
     ctx.storage.sql.exec(
       "CREATE INDEX IF NOT EXISTS chat_messages_user ON chat_messages (user_id)",
     );
+    ctx.storage.sql.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS chat_messages_retry ON chat_messages (user_id, client_send_id)",
+    );
   }
 
   private async eligible(
@@ -161,8 +164,36 @@ export class RoomChatObject extends DurableObject<Env> {
   }
 
   private async accept(visitor: Visitor, input: ChatInput) {
-    const seat = await this.eligible(visitor);
-    if (!seat) return { error: "Room chat is no longer available. Reopen the room.", status: 403 };
+    const sender = await this.eligible(visitor);
+    if (!sender)
+      return { error: "Room chat is no longer available. Reopen the room.", status: 403 };
+    const existing = this.ctx.storage.sql
+      .exec<{
+        order_id: number;
+        author: string;
+        role: "Player" | "Spectator" | null;
+        text: string;
+      }>(
+        "SELECT order_id, author, role, text FROM chat_messages WHERE user_id = ? AND client_send_id = ?",
+        visitor.userId,
+        input.clientSendId,
+      )
+      .toArray()[0];
+    if (existing) {
+      if (existing.text !== input.text)
+        return { error: "Retry the same message or start a new one.", status: 409 };
+      return {
+        message: {
+          type: "message" as const,
+          id: `${visitor.roomId}:${existing.order_id}`,
+          order: existing.order_id,
+          clientSendId: input.clientSendId,
+          author: existing.author,
+          role: existing.role,
+          text: existing.text,
+        },
+      };
+    }
     const row = this.ctx.storage.sql
       .exec<{ value: number }>(`
       INSERT INTO chat_sequence (id, value) VALUES (1, 1)
@@ -174,8 +205,8 @@ export class RoomChatObject extends DurableObject<Env> {
       id: `${visitor.roomId}:${row.value}`,
       order: row.value,
       clientSendId: input.clientSendId,
-      author: seat.name,
-      role: seat.seatName ? "Player" : "Spectator",
+      author: sender.name,
+      role: sender.seatName ? "Player" : "Spectator",
       text: input.text,
     };
     this.ctx.storage.sql.exec(

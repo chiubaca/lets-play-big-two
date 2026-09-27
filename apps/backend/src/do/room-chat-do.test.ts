@@ -53,6 +53,12 @@ const state = {
           );
           return { toArray: () => (after ? rows : rows.reverse()).slice(0, 51) };
         }
+        if (sql.includes("WHERE user_id = ? AND client_send_id = ?")) {
+          return {
+            toArray: () =>
+              stored.filter((row) => row.user_id === args[0] && row.client_send_id === args[1]),
+          };
+        }
         if (sql.includes("SELECT order_id, client_send_id FROM"))
           return { toArray: () => stored.filter((row) => row.user_id === args[0]) };
         if (sql.includes("UPDATE chat_messages"))
@@ -318,4 +324,16 @@ it("never confirms a send when durable storage fails", async () => {
     new RoomChatObject(brokenState as unknown as DurableObjectState, env).send(visitor, input),
   ).rejects.toThrow("storage unavailable");
   expect(socket.send).not.toHaveBeenCalled();
+});
+
+it("returns the original acknowledgement for an uncertain retry without another broadcast", async () => {
+  const socket = connect();
+  const chat = new RoomChatObject(state, env);
+  const first = await chat.send(visitor, input);
+  seatName = null;
+  const retry = await chat.send(visitor, input);
+  expect(retry).toEqual(first);
+  expect(socket.send).toHaveBeenCalledOnce();
+  expect((await chat.history(visitor))?.messages).toHaveLength(1);
+  expect((await chat.send(visitor, { ...input, text: "changed" })).status).toBe(409);
 });

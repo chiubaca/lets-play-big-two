@@ -27,6 +27,7 @@ export function RoomChat({
 }) {
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(0);
+  const [liveAnnouncement, setLiveAnnouncement] = useState("");
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState("");
@@ -35,11 +36,15 @@ export function RoomChat({
   const [hasOlder, setHasOlder] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [reconciling, setReconciling] = useState(false);
   const seen = useRef(new Set<string>());
   const messagesRef = useRef<ChatMessage[]>([]);
   const synced = useRef(false);
   const redacted = useRef(new Set<string>());
   const restoringScroll = useRef<number | null>(null);
+  const liveDuringSync = useRef(new Map<string, ChatMessage>());
+  const retryHistory = useRef<() => void>(() => {});
+  const retrySend = useRef<{ text: string; clientSendId: string } | null>(null);
   const ownSends = useRef(new Set<string>());
   const trigger = useRef<HTMLButtonElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
@@ -47,13 +52,19 @@ export function RoomChat({
   const visible = useRef(false);
   visible.current = open && !blocked;
 
+  const maskDeleted = (message: ChatMessage): ChatMessage =>
+    redacted.current.has(message.id)
+      ? { ...message, author: "Deleted participant", role: null, text: "Message removed" }
+      : message;
+
   const addMessage = (message: ChatMessage, incoming: boolean) => {
     if (seen.current.has(message.id)) return;
-    if (redacted.current.has(message.id)) {
-      message = { ...message, author: "Deleted participant", role: null, text: "Message removed" };
-    }
+    message = maskDeleted(message);
+    if (!synced.current) liveDuringSync.current.set(message.id, message);
     seen.current.add(message.id);
     if (incoming && !visible.current) setUnread((count) => count + 1);
+    if (incoming && visible.current && !ownSends.current.has(message.clientSendId))
+      setLiveAnnouncement(`${message.author}: ${message.text}`);
     if (incoming && !ownSends.current.has(message.clientSendId)) playSound("chat-receive");
     setMessages((previous) => {
       const next = [
@@ -69,12 +80,7 @@ export function RoomChat({
       // Server history wins over an old local copy, including messages redacted while offline.
       const merged = new Map(previous.map((message) => [message.id, message]));
       for (const message of page.messages) {
-        merged.set(
-          message.id,
-          redacted.current.has(message.id)
-            ? { ...message, author: "Deleted participant", role: null, text: "Message removed" }
-            : message,
-        );
+        merged.set(message.id, maskDeleted(message));
       }
       const next = [...merged.values()].sort((a, b) => a.order - b.order);
       messagesRef.current = next;
@@ -127,12 +133,35 @@ export function RoomChat({
     let disposed = false;
     let generation = 0;
     const synchronize = async (current: number) => {
+      setReconciling(true);
+      synced.current = false;
+      const previousHighest = messagesRef.current.at(-1)?.order;
       try {
         const page = await fetchHistory();
         if (disposed || current !== generation) return;
-        mergeHistory(page);
-        setHasOlder(page.hasMore);
+        const fresh = new Map(page.messages.map((message) => [message.id, message]));
+        if (previousHighest) {
+          let after = previousHighest;
+          let more = true;
+          while (more) {
+            const missed = await fetchHistory({ after });
+            if (disposed || current !== generation) return;
+            for (const message of missed.messages) fresh.set(message.id, message);
+            after = missed.messages.at(-1)?.order ?? after;
+            more = missed.hasMore && missed.messages.length > 0;
+          }
+        }
+        for (const message of liveDuringSync.current.values()) fresh.set(message.id, message);
+        const next = [...fresh.values()].map(maskDeleted).sort((a, b) => a.order - b.order);
+        messagesRef.current = next;
+        seen.current = new Set(next.map((message) => message.id));
+        setMessages(next);
+        setHasOlder(
+          next.length > 0 && (page.hasMore || (previousHighest !== undefined && next[0].order > 1)),
+        );
+        liveDuringSync.current.clear();
         synced.current = true;
+        setReconciling(false);
         setHistoryError("");
       } catch {
         if (!disposed && current === generation)
@@ -146,10 +175,8 @@ export function RoomChat({
       socket.onopen = () => {
         if (!disposed) {
           setConnected(true);
-          // Rebuild from the server rather than displaying stale pre-redaction content.
-          messagesRef.current = [];
-          seen.current.clear();
-          setMessages([]);
+          setLiveAnnouncement("");
+          retryHistory.current = () => void synchronize(current);
           void synchronize(current);
         }
       };
@@ -161,6 +188,7 @@ export function RoomChat({
             | (Omit<ChatMessage, "type"> & { type: "redaction" });
           if (message.type === "redaction" && typeof message.id === "string") {
             redacted.current.add(message.id);
+            setLiveAnnouncement("");
             setMessages((previous) => {
               const next = previous.map((entry) =>
                 entry.id === message.id ? { ...message, type: "message" as const } : entry,
@@ -185,6 +213,8 @@ export function RoomChat({
         if (!disposed) {
           setConnected(false);
           synced.current = false;
+          ++generation;
+          setReconciling(false);
           retry = setTimeout(connect, 2000);
         }
       };
@@ -213,12 +243,15 @@ export function RoomChat({
     event.preventDefault();
     if (!draft.trim() || sending) return;
     const attempted = draft;
-    const clientSendId = crypto.randomUUID();
+    const clientSendId =
+      retrySend.current?.text === attempted ? retrySend.current.clientSendId : crypto.randomUUID();
+    retrySend.current = { text: attempted, clientSendId };
     ownSends.current.add(clientSendId);
     setSending(true);
     setError("");
     try {
       const accepted = await send({ text: attempted, clientSendId });
+      retrySend.current = null;
       addMessage(accepted, false);
       playSound("chat-send");
       setDraft((current) => (current === attempted ? "" : current));
@@ -292,9 +325,14 @@ export function RoomChat({
           {historyError && (
             <p className="room-chat-status" role="alert">
               {historyError}
+              {reconciling && (
+                <button type="button" onClick={() => retryHistory.current()}>
+                  Retry history
+                </button>
+              )}
             </p>
           )}
-          {hasOlder && (
+          {hasOlder && !reconciling && (
             <button
               className="room-chat-older"
               type="button"
@@ -304,27 +342,35 @@ export function RoomChat({
               {loadingOlder ? "Loading older messages…" : "Load older messages"}
             </button>
           )}
+          <span className="sr-only" role="status" aria-live="polite">
+            {liveAnnouncement}
+          </span>
           <div
             ref={log}
             className="room-chat-messages"
             role="log"
             aria-label="Room messages"
-            aria-live={blocked ? "off" : "polite"}
+            aria-live="off"
             aria-hidden={blocked}
             tabIndex={0}
           >
-            {messages.length === 0 && (
-              <p className="room-chat-empty">No messages yet. Say hello!</p>
+            {reconciling ? (
+              <p className="room-chat-empty">Updating conversation…</p>
+            ) : (
+              messages.length === 0 && (
+                <p className="room-chat-empty">No messages yet. Say hello!</p>
+              )
             )}
-            {messages.map((message) => (
-              <p className="room-chat-entry" key={message.id}>
-                <strong>
-                  {message.author}
-                  {message.role && ` · ${message.role}`}
-                </strong>{" "}
-                <span>{message.text}</span>
-              </p>
-            ))}
+            {!reconciling &&
+              messages.map((message) => (
+                <p className="room-chat-entry" key={message.id}>
+                  <strong>
+                    {message.author}
+                    {message.role && ` · ${message.role}`}
+                  </strong>{" "}
+                  <span>{message.text}</span>
+                </p>
+              ))}
           </div>
           <form className="room-chat-compose" onSubmit={(event) => void submit(event)}>
             <label className="sr-only" htmlFor="room-chat-draft">
@@ -339,6 +385,7 @@ export function RoomChat({
               value={draft}
               onChange={(event) => {
                 setDraft(event.target.value);
+                if (retrySend.current?.text !== event.target.value) retrySend.current = null;
                 setError("");
               }}
               onKeyDown={(event) => {
