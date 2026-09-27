@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   Check,
   Copy,
@@ -157,6 +157,10 @@ export const GameRoom = ({
   const { playSound, muted, toggleMuted } = useTableAudio();
   const [localDevTools, setLocalDevTools] = useState(false);
   const [chatPrototype, setChatPrototype] = useState(false);
+  const [showResult, setShowResult] = useState(false);
+  const [restartError, setRestartError] = useState<string>();
+  const previousValue = useRef(gameState?.value);
+  const resultsButton = useRef<HTMLButtonElement>(null);
   const currentId = gameState?.context.players[gameState.context.currentPlayerIndex]?.id;
   const currentValue = gameState?.value;
   const isMyTurn = !hideHand && currentId === user.id && isGameTurnState(currentValue);
@@ -179,6 +183,21 @@ export const GameRoom = ({
   useEffect(() => {
     if (gameState?.context.guardMessage) playSound("notice");
   }, [gameState?.context.guardMessage, playSound]);
+  useEffect(() => {
+    if (
+      roomCode &&
+      previousValue.current &&
+      previousValue.current !== "GAME_END" &&
+      currentValue === "GAME_END"
+    ) {
+      setShowResult(true);
+    }
+    if (currentValue !== "GAME_END") {
+      setShowResult(false);
+      setRestartError(undefined);
+    }
+    if (currentValue) previousValue.current = currentValue;
+  }, [currentValue, roomCode]);
   useEffect(() => {
     if (!copied) return;
     const timer = setTimeout(() => setCopied(false), 2000);
@@ -210,6 +229,7 @@ export const GameRoom = ({
   const spectatorCount = "spectatorCount" in gameState ? gameState.spectatorCount : undefined;
   const host = sharedDevice || players[0]?.id === user.id;
   const waiting = currentValue === "WAITING_FOR_PLAYERS";
+  const finished = currentValue === "GAME_END";
   const handType = detectHandType(selectedCards);
   const lastHand = pile?.at(-1);
   const ranks = ["3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A", "2"];
@@ -223,13 +243,15 @@ export const GameRoom = ({
   );
   const status = waiting
     ? `Waiting for players · ${players.length} of 4 seats filled`
-    : spectator
-      ? `${players[gameState.context.currentPlayerIndex] ? playerName(players[gameState.context.currentPlayerIndex]) : "Next player"} is playing…`
-      : isMyTurn
-        ? currentValue === "ROUND_FIRST_MOVE"
-          ? "Your turn · start with 3 ♦"
-          : "Your turn"
-        : `${players[gameState.context.currentPlayerIndex] ? playerName(players[gameState.context.currentPlayerIndex]) : "Next player"} is thinking…`;
+    : finished
+      ? `${winner ? playerName(winner) : "An opponent"} wins · table complete`
+      : spectator
+        ? `${players[gameState.context.currentPlayerIndex] ? playerName(players[gameState.context.currentPlayerIndex]) : "Next player"} is playing…`
+        : isMyTurn
+          ? currentValue === "ROUND_FIRST_MOVE"
+            ? "Your turn · start with 3 ♦"
+            : "Your turn"
+          : `${players[gameState.context.currentPlayerIndex] ? playerName(players[gameState.context.currentPlayerIndex]) : "Next player"} is thinking…`;
   const act = async (event: GameEvent) => {
     try {
       await send(event);
@@ -238,6 +260,17 @@ export const GameRoom = ({
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "That move could not be sent. Please try again.",
+      );
+      playSound("notice");
+    }
+  };
+  const restart = async () => {
+    try {
+      await send({ type: "RESET_GAME" });
+      setRestartError(undefined);
+    } catch (error) {
+      setRestartError(
+        error instanceof Error ? error.message : "Could not start a new game. Please try again.",
       );
       playSound("notice");
     }
@@ -337,6 +370,40 @@ export const GameRoom = ({
           </button>
         </div>
       </header>
+      {roomCode && finished && (
+        <section className="finished-room-strip" aria-label="Finished room">
+          <div className="finished-room-summary">
+            <span className="finished-room-eyebrow">Table complete</span>
+            <strong>{winner ? playerName(winner) : "An opponent"} wins!</strong>
+            {spectator && <small>Waiting for the host to start another game…</small>}
+          </div>
+          <div className="finished-room-actions">
+            <button
+              ref={resultsButton}
+              className="table-small-button"
+              onClick={() => setShowResult(true)}
+            >
+              Results
+            </button>
+            {host && (
+              <button
+                className="table-small-button finished-room-restart"
+                onClick={() => void restart()}
+              >
+                Play again
+              </button>
+            )}
+            <a className="table-small-button" href="/">
+              Return home
+            </a>
+          </div>
+          {restartError && (
+            <p role="alert" className="finished-room-error">
+              {restartError}
+            </p>
+          )}
+        </section>
+      )}
       <section className="table-shell" aria-label="Big Two game table">
         <div className="table-felt">
           <CasinoTableMark subtle={Boolean(lastHand?.length)} />
@@ -424,19 +491,21 @@ export const GameRoom = ({
               <>
                 <small className={isMyTurn ? "your-turn-text" : ""}>{status}</small>
                 <span>
-                  {spectator
-                    ? "Watching live · cards in hand are private"
-                    : (isMyTurn && guardMessage === "It is not your turn"
-                        ? undefined
-                        : guardMessage) ||
-                      message ||
-                      (selectedCards.length
-                        ? handType
-                          ? `${handType} selected`
-                          : "Choose a valid combination"
-                        : isMyTurn
-                          ? "Play a card or a valid combination"
-                          : "A good hand is worth the wait.")}
+                  {finished && roomCode
+                    ? "Results are available above."
+                    : spectator
+                      ? "Watching live · cards in hand are private"
+                      : (isMyTurn && guardMessage === "It is not your turn"
+                          ? undefined
+                          : guardMessage) ||
+                        message ||
+                        (selectedCards.length
+                          ? handType
+                            ? `${handType} selected`
+                            : "Choose a valid combination"
+                          : isMyTurn
+                            ? "Play a card or a valid combination"
+                            : "A good hand is worth the wait.")}
                 </span>
               </>
             )}
@@ -507,7 +576,7 @@ export const GameRoom = ({
           )}
         </div>
       </section>
-      {!spectator && (
+      {!spectator && !(roomCode && finished) && (
         <footer className="table-controls">
           <button
             className="table-action"
@@ -666,8 +735,22 @@ export const GameRoom = ({
           )}
         </DialogContent>
       </Dialog>
-      <Dialog open={currentValue === "GAME_END"}>
-        <DialogContent showCloseButton={false} className="table-dialog winner-dialog">
+      <Dialog
+        open={finished && (!roomCode || showResult)}
+        onOpenChange={(open) => {
+          if (roomCode && !open) setShowResult(false);
+        }}
+      >
+        <DialogContent
+          showCloseButton={Boolean(roomCode)}
+          className="table-dialog winner-dialog"
+          onCloseAutoFocus={(event) => {
+            if (roomCode && resultsButton.current) {
+              event.preventDefault();
+              resultsButton.current.focus();
+            }
+          }}
+        >
           {(sharedDevice || winner?.id === user.id) && <Confetti />}
           <p className="winner-eyebrow">Table complete</p>
           <WinnerArtwork isWinner={sharedDevice || winner?.id === user.id} />
@@ -687,7 +770,7 @@ export const GameRoom = ({
             <button
               className="table-small-button"
               aria-label="Start a new game"
-              onClick={() => act({ type: "RESET_GAME" })}
+              onClick={() => (roomCode ? restart() : act({ type: "RESET_GAME" }))}
             >
               Play again
             </button>
@@ -703,6 +786,7 @@ export const GameRoom = ({
               Return home
             </a>
           )}
+          {roomCode && restartError && <p role="alert">{restartError}</p>}
         </DialogContent>
       </Dialog>
     </main>
