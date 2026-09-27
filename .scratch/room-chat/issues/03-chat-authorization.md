@@ -1,10 +1,20 @@
 Title: Decide who may send and receive room chat
-Status: open
+Status: closed
 Labels: wayfinder:grilling
 Parent: ../map.md
-Assignee: unassigned
+Assignee: alex
 Blocked by: none
 
 ## Question
 
 How should the server verify that the sender is a currently seated Player, attach the correct display name, and admit signed-in Spectators as readers for a valid room? Decide what happens when an account is deleted/redacted, a room or player state changes, and malformed or oversized text is submitted. Honor the first-release choice not to add mute, report, or moderation controls; settle only the baseline trust and input boundaries needed for a safe spec.
+
+## Comments
+
+### Resolution
+
+- **Room and identity:** A chat connection requires a current signed-in session, no pending account deletion, and both a valid online room record and live room state. Any such room visitor may read, including a Spectator; D1's `usersToRooms` reverse index is not a prerequisite for reading and is not the authority for seating. The same room validation applies to sends. Waiting, playing, and finished rooms have the same chat eligibility. If the room record or live state ceases to exist, reject further connections and sends and close existing chat sockets. Do not treat a chat connection as game spectator presence.
+- **Sending and names:** Only a Player whose authenticated account ID matches a _current seat in the authoritative room state_ may send. Resolve that seat on each attempted acceptance, including retries; do not trust a submitted author ID, role, display name, room state, or stale client UI. Attach the seat's stored display name at acceptance, rather than the latest account profile name. A Spectator who joins a seat gains send permission; someone losing a seat loses it immediately but may continue reading as a signed-in Spectator. The UI should reflect seat changes, while the server remains authoritative even before UI updates.
+- **Revocation and deletion:** Eligibility is not a one-time socket-upgrade check. Stop delivery and close sockets promptly when a session or room becomes invalid or deletion begins (by checking before delivery and/or explicit invalidation on change); reject new sends from a deletion-pending account, including a previously seated Player. On account deletion, emit a live redaction for that author's already-delivered entries in connected tabs, changing the author label to **Deleted player** without storing chat history. Use an opaque author correlation key in live events rather than exposing account IDs to other clients. If a tab misses the redaction while suspended/disconnected, reconcile the deletion status of its in-memory authors before displaying the old log on resume, or clear that old log; do not fetch message history. No promise of retroactively changing text a recipient already saw or copied.
+- **Text boundary:** Accept a structured plain-text message and the client send ID only; validate types, size, and content on the server. Trim outer whitespace; reject empty or whitespace-only text and text over **200 user-perceived Unicode characters (grapheme clusters)** after trimming, rather than truncating it. Allow up to three lines, preserve other text literally, and reject other control characters. Cap the UTF-8 text at 4 KiB and the entire request body at 8 KiB as well as enforcing the grapheme limit, so combining sequences cannot bypass resource limits; reject malformed or oversized submissions with an actionable validation error. Render text literally, with no HTML, Markdown, or clickable links; never interpret it as executable content. The sender retains the draft on rejection.
+- **Abuse boundary:** No first-release chat-specific send-rate limit, mute, report, or moderation controls. Normal authenticated endpoint protections and bounded input still apply. Preserve the agreed 10-minute deduplication behavior from [Decide live-only chat delivery and reconnect semantics](02-live-delivery.md); a repeated send ID must not permit a different payload or bypass the current authorization checks. Do not persist message bodies or turn redaction metadata into replayable chat history.
