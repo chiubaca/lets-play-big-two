@@ -15,11 +15,10 @@ An implementation-ready spec for opt-in push notifications when a seated Player'
 
 ## Decisions so far
 
-<!-- Closed tickets are linked here with a one-line gist. -->
+- [Research push support for web and the Android app](issues/01-supported-delivery.md) — Standards-based Web Push covers supported browsers and installed iOS PWAs; Android TWA needs delegated notifications, Android 13+ permission and device validation before claiming support.
 
 ## Not yet specified
 
-- Platform research may expose Android-specific permission or delivery work, browser limitations, or a prerequisite that cannot be scoped until the supported path is known.
 - Delivery and presence decisions may expose additional failure or lifecycle cases requiring their own tickets before a handoff spec is credible.
 
 ## Out of scope
