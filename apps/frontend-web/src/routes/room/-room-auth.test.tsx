@@ -15,9 +15,8 @@ vi.mock("../../libs/auth-client", () => ({
 afterEach(cleanup);
 
 test("direct room visits offer the existing sign-in and sign-up forms", () => {
-  render(<RoomSignIn roomId="ABCDE" />);
+  render(<RoomSignIn />);
 
-  expect(screen.getByText("Room ABCDE")).toBeTruthy();
   expect(document.querySelector('img[src="/title-logo.png"]')).toBeTruthy();
   expect(document.querySelector('img[src="/title-text.png"]')).toBeTruthy();
   expect(document.querySelector('img[src="/title-crew.png"]')).toBeTruthy();
@@ -32,7 +31,7 @@ test("direct room visits offer the existing sign-in and sign-up forms", () => {
 
 test("Google sign-in returns visitors to the same room", () => {
   window.history.replaceState({}, "", "/room/ABCDE");
-  render(<RoomSignIn roomId="ABCDE" />);
+  render(<RoomSignIn />);
 
   fireEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
   expect(authClient.signIn.social).toHaveBeenCalledWith({

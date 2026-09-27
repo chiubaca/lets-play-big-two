@@ -35,14 +35,6 @@
   width: min(32svh, 240px);
 }
 
-.room-auth-code {
-  margin: 0 0 14px;
-  color: var(--casino-cream-muted);
-  font: 10px var(--font-mono);
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-}
-
 .room-auth-card {
   width: 100%;
   padding: clamp(14px, 2svh, 24px);
@@ -73,10 +65,6 @@
 
   .room-auth-card {
     padding: 14px 18px;
-  }
-
-  .room-auth-code {
-    margin-bottom: 6px;
   }
 
   .room-auth-card .auth-panel-heading {

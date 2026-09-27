@@ -99,7 +99,7 @@ export function OnlineGameRoom({ roomId, user }: { roomId: string; user: GameRoo
       gameState={gameState}
       send={send}
       sendChat={sendChat}
-      tableLabel={`Room ${roomId}`}
+      tableLabel={roomId}
       roomCode={roomId}
       user={user}
     />

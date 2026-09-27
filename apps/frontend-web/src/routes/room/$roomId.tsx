@@ -24,13 +24,13 @@ function RoomPage() {
   }
 
   if (!user) {
-    return <RoomSignIn roomId={roomId} />;
+    return <RoomSignIn />;
   }
 
   return <OnlineGameRoom roomId={roomId} user={{ id: user.id, name: user.name }} />;
 }
 
-export function RoomSignIn({ roomId }: { roomId: string }) {
+export function RoomSignIn() {
   return (
     <main className="room-auth-page">
       <CasinoBackdrop />
@@ -39,7 +39,6 @@ export function RoomSignIn({ roomId }: { roomId: string }) {
           <HomeLogo />
         </div>
         <div className="auth-panel-surface room-auth-card">
-          <p className="room-auth-code">Room {roomId}</p>
           <AuthPanel returnToCurrentPage />
         </div>
       </div>
