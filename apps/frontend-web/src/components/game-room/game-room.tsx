@@ -325,6 +325,7 @@ export const GameRoom = ({
               seated={!spectator}
               blocked={panel !== null || (finished && showResult)}
               send={sendChat}
+              playSound={playSound}
             />
           )}
           {spectatorCount !== undefined && (

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-type TableSound = "select" | "deselect" | "play" | "turn" | "notice";
+type TableSound = "select" | "deselect" | "play" | "turn" | "notice" | "chat-send" | "chat-receive";
 
 export function useTableAudio() {
   const context = useRef<AudioContext | null>(null);
@@ -30,6 +30,28 @@ export function useTableAudio() {
   const playSound = useCallback((sound: TableSound) => {
     const audio = context.current;
     if (mutedRef.current || !audio || audio.state !== "running") return;
+    if (sound === "chat-send" || sound === "chat-receive") {
+      const notes = sound === "chat-send" ? [740, 930] : [620, 780];
+      notes.forEach((frequency, index) => {
+        const start = audio.currentTime + index * 0.09;
+        const oscillator = audio.createOscillator();
+        const gain = audio.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(frequency, start);
+        gain.gain.setValueAtTime(0, start);
+        gain.gain.linearRampToValueAtTime(0.035, start + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.2);
+        oscillator.connect(gain);
+        gain.connect(audio.destination);
+        oscillator.start(start);
+        oscillator.stop(start + 0.2);
+        oscillator.onended = () => {
+          oscillator.disconnect();
+          gain.disconnect();
+        };
+      });
+      return;
+    }
     if (sound === "select" || sound === "deselect" || sound === "play") {
       const duration = sound === "play" ? 0.13 : 0.045;
       const buffer = audio.createBuffer(

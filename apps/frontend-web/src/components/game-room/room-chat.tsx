@@ -16,11 +16,13 @@ export function RoomChat({
   seated,
   blocked,
   send,
+  playSound,
 }: {
   roomId: string;
   seated: boolean;
   blocked: boolean;
   send: (input: { text: string; clientSendId: string }) => Promise<ChatMessage>;
+  playSound: (sound: "chat-send" | "chat-receive") => void;
 }) {
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(0);
@@ -30,6 +32,7 @@ export function RoomChat({
   const [sending, setSending] = useState(false);
   const [connected, setConnected] = useState(false);
   const seen = useRef(new Set<string>());
+  const ownSends = useRef(new Set<string>());
   const trigger = useRef<HTMLButtonElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const log = useRef<HTMLDivElement>(null);
@@ -40,6 +43,7 @@ export function RoomChat({
     if (seen.current.has(message.id)) return;
     seen.current.add(message.id);
     if (incoming && !visible.current) setUnread((count) => count + 1);
+    if (incoming && !ownSends.current.has(message.clientSendId)) playSound("chat-receive");
     setMessages((previous) => [...previous, message].sort((a, b) => a.order - b.order));
   };
 
@@ -103,11 +107,14 @@ export function RoomChat({
     event.preventDefault();
     if (!seated || !draft.trim() || sending) return;
     const attempted = draft;
+    const clientSendId = crypto.randomUUID();
+    ownSends.current.add(clientSendId);
     setSending(true);
     setError("");
     try {
-      const accepted = await send({ text: attempted, clientSendId: crypto.randomUUID() });
+      const accepted = await send({ text: attempted, clientSendId });
       addMessage(accepted, false);
+      playSound("chat-send");
       setDraft((current) => (current === attempted ? "" : current));
       composer.current?.focus();
     } catch (cause) {
@@ -209,6 +216,12 @@ export function RoomChat({
                 onChange={(event) => {
                   setDraft(event.target.value);
                   setError("");
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing)
+                    return;
+                  event.preventDefault();
+                  event.currentTarget.form?.requestSubmit();
                 }}
               />
               <button type="submit" disabled={!draft.trim() || sending} aria-label="Send message">
