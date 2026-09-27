@@ -192,6 +192,34 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
       new Request(c.req.raw, { headers }),
     );
   })
+  .get("/api/room/chat/:roomId", async (c) => {
+    const session = await auth.api.getSession({ headers: c.req.raw.headers });
+    if (!session) return c.json({ error: "Unauthorized" }, 401);
+    if (await accountDeletionIsPending(session.user.id)) {
+      return c.json({ error: "Account deletion is in progress" }, 409);
+    }
+    const roomId = c.req.param("roomId");
+    const room = await getDb()
+      .select({ id: roomTable.id })
+      .from(roomTable)
+      .where(eq(roomTable.id, roomId))
+      .limit(1);
+    if (!room.length) return c.notFound();
+    const before = c.req.query("before");
+    const after = c.req.query("after");
+    const validCursor = (value: string | undefined) =>
+      value === undefined || (/^[1-9]\d*$/.test(value) && Number.isSafeInteger(Number(value)));
+    if (!validCursor(before) || !validCursor(after) || (before && after)) {
+      return c.json({ error: "Invalid history cursor" }, 400);
+    }
+    const page = await c.env.ROOM_CHAT_DURABLE_OBJECT.getByName(roomId).history(
+      { roomId, userId: session.user.id, sessionId: session.session.id },
+      before ? Number(before) : undefined,
+      after ? Number(after) : undefined,
+    );
+    if (!page) return c.notFound();
+    return c.json(page, 200, { "Cache-Control": "no-store" });
+  })
   .post(
     "/api/room/chat/:roomId",
     async (c, next) => {

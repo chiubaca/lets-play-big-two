@@ -7,8 +7,11 @@ export type ChatMessage = {
   order: number;
   clientSendId: string;
   author: string;
+  role: "Player" | "Spectator" | null;
   text: string;
 };
+
+export type ChatPage = { messages: ChatMessage[]; hasMore: boolean };
 
 type Visitor = { roomId: string; userId: string; sessionId: string };
 
@@ -20,9 +23,18 @@ export class RoomChatObject extends DurableObject<Env> {
     ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS chat_sequence (id INTEGER PRIMARY KEY CHECK (id = 1), value INTEGER NOT NULL)",
     );
+    ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS chat_messages (
+      order_id INTEGER PRIMARY KEY, user_id TEXT, client_send_id TEXT NOT NULL,
+      author TEXT NOT NULL, role TEXT, text TEXT NOT NULL
+    )`);
+    ctx.storage.sql.exec(
+      "CREATE INDEX IF NOT EXISTS chat_messages_user ON chat_messages (user_id)",
+    );
   }
 
-  private async eligible(visitor: Visitor): Promise<{ seatName: string | null } | null> {
+  private async eligible(
+    visitor: Visitor,
+  ): Promise<{ name: string; seatName: string | null } | null> {
     if (
       !visitor.roomId ||
       !this.ctx.id.equals(this.env.ROOM_CHAT_DURABLE_OBJECT.idFromName(visitor.roomId))
@@ -30,7 +42,7 @@ export class RoomChatObject extends DurableObject<Env> {
       return null;
     }
     const result = await this.env.BIG_TWO_DB.prepare(`
-      SELECT s.id FROM session s JOIN user u ON u.id = s.user_id
+      SELECT u.name FROM session s JOIN user u ON u.id = s.user_id
       JOIN room r ON r.id = ?
       WHERE s.id = ? AND s.user_id = ? AND s.expires_at > ?
       AND NOT EXISTS (SELECT 1 FROM accountDeletion d WHERE d.user_id = s.user_id)
@@ -38,9 +50,88 @@ export class RoomChatObject extends DurableObject<Env> {
       .bind(visitor.roomId, visitor.sessionId, visitor.userId, Date.now())
       .first();
     if (!result) return null;
-    return this.env.BIG_TWO_ROOM_DURABLE_OBJECT.getByName(visitor.roomId).getChatSeat(
+    const seat = await this.env.BIG_TWO_ROOM_DURABLE_OBJECT.getByName(visitor.roomId).getChatSeat(
       visitor.userId,
     );
+    return seat ? { name: result.name as string, seatName: seat.seatName } : null;
+  }
+
+  async history(visitor: Visitor, before?: number, after?: number): Promise<ChatPage | null> {
+    if (!(await this.eligible(visitor))) return null;
+    const rows = this.ctx.storage.sql
+      .exec<{
+        order_id: number;
+        client_send_id: string;
+        author: string;
+        role: "Player" | "Spectator" | null;
+        text: string;
+      }>(
+        `SELECT order_id, client_send_id, author, role, text FROM chat_messages
+         WHERE order_id ${after !== undefined ? ">" : "<"} ?
+         ORDER BY order_id ${after !== undefined ? "ASC" : "DESC"} LIMIT 51`,
+        after ?? before ?? Number.MAX_SAFE_INTEGER,
+      )
+      .toArray();
+    return {
+      messages: rows.slice(0, 50).map((row) => ({
+        type: "message",
+        id: `${visitor.roomId}:${row.order_id}`,
+        order: row.order_id,
+        clientSendId: row.client_send_id,
+        author: row.author,
+        role: row.role,
+        text: row.text,
+      })),
+      hasMore: rows.length > 50,
+    };
+  }
+
+  async redactAuthor(userId: string): Promise<void> {
+    const operation = this.pending.then(() => this.redactStoredAuthor(userId));
+    this.pending = operation.then(
+      () => {},
+      () => {},
+    );
+    await operation;
+  }
+
+  private async redactStoredAuthor(userId: string): Promise<void> {
+    const rows = this.ctx.storage.sql
+      .exec<{ order_id: number; client_send_id: string }>(
+        "SELECT order_id, client_send_id FROM chat_messages WHERE user_id = ?",
+        userId,
+      )
+      .toArray();
+    this.ctx.storage.sql.exec(
+      "UPDATE chat_messages SET user_id = NULL, author = 'Deleted participant', role = NULL, text = 'Message removed' WHERE user_id = ?",
+      userId,
+    );
+    await this.ctx.storage.sync();
+    for (const socket of this.ctx.getWebSockets()) {
+      const visitor = socket.deserializeAttachment() as Visitor | null;
+      if (!visitor || !(await this.eligible(visitor))) {
+        socket.close(1008, "Room chat access ended");
+        continue;
+      }
+      for (const row of rows) {
+        try {
+          socket.send(
+            JSON.stringify({
+              type: "redaction",
+              id: `${visitor.roomId}:${row.order_id}`,
+              order: row.order_id,
+              author: "Deleted participant",
+              role: null,
+              text: "Message removed",
+              clientSendId: row.client_send_id,
+            }),
+          );
+        } catch {
+          socket.close(1011, "Chat connection unavailable");
+          break;
+        }
+      }
+    }
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -72,9 +163,6 @@ export class RoomChatObject extends DurableObject<Env> {
   private async accept(visitor: Visitor, input: ChatInput) {
     const seat = await this.eligible(visitor);
     if (!seat) return { error: "Room chat is no longer available. Reopen the room.", status: 403 };
-    if (!seat.seatName)
-      return { error: "Only seated Players can send room chat. Join a seat first.", status: 403 };
-
     const row = this.ctx.storage.sql
       .exec<{ value: number }>(`
       INSERT INTO chat_sequence (id, value) VALUES (1, 1)
@@ -86,9 +174,20 @@ export class RoomChatObject extends DurableObject<Env> {
       id: `${visitor.roomId}:${row.value}`,
       order: row.value,
       clientSendId: input.clientSendId,
-      author: seat.seatName,
+      author: seat.name,
+      role: seat.seatName ? "Player" : "Spectator",
       text: input.text,
     };
+    this.ctx.storage.sql.exec(
+      "INSERT INTO chat_messages (order_id, user_id, client_send_id, author, role, text) VALUES (?, ?, ?, ?, ?, ?)",
+      row.value,
+      visitor.userId,
+      input.clientSendId,
+      message.author,
+      message.role,
+      message.text,
+    );
+    await this.ctx.storage.sync();
     const payload = JSON.stringify(message);
     for (const socket of this.ctx.getWebSockets()) {
       try {

@@ -22,14 +22,51 @@ let roomExists = true;
 let seatName: string | null = "Stored seat name";
 let sessionValid = true;
 let order = 0;
+const stored: Array<{
+  order_id: number;
+  user_id: string | null;
+  client_send_id: string;
+  author: string;
+  role: "Player" | "Spectator" | null;
+  text: string;
+}> = [];
 const state = {
   id: { equals: (id: string) => id === "ABCDE" },
   storage: {
     sql: {
-      exec: (sql: string) =>
-        sql.includes("RETURNING") ? { one: () => ({ value: ++order }) } : undefined,
+      exec: (sql: string, ...args: unknown[]) => {
+        if (sql.includes("RETURNING")) return { one: () => ({ value: ++order }) };
+        if (sql.includes("INSERT INTO chat_messages")) {
+          stored.push({
+            order_id: args[0] as number,
+            user_id: args[1] as string,
+            client_send_id: args[2] as string,
+            author: args[3] as string,
+            role: args[4] as "Player" | "Spectator",
+            text: args[5] as string,
+          });
+        }
+        if (sql.includes("SELECT order_id, client_send_id, author")) {
+          const after = sql.includes("order_id >");
+          const rows = stored.filter((row) =>
+            after ? row.order_id > (args[0] as number) : row.order_id < (args[0] as number),
+          );
+          return { toArray: () => (after ? rows : rows.reverse()).slice(0, 51) };
+        }
+        if (sql.includes("SELECT order_id, client_send_id FROM"))
+          return { toArray: () => stored.filter((row) => row.user_id === args[0]) };
+        if (sql.includes("UPDATE chat_messages"))
+          for (const row of stored.filter((row) => row.user_id === args[0])) {
+            row.user_id = null;
+            row.author = "Deleted participant";
+            row.role = null;
+            row.text = "Message removed";
+          }
+        return undefined;
+      },
     },
     setAlarm: vi.fn(),
+    sync: vi.fn(),
   },
   getWebSockets: () => sockets,
   acceptWebSocket: (socket: (typeof sockets)[number]) => sockets.push(socket),
@@ -38,7 +75,7 @@ const env = {
   ROOM_CHAT_DURABLE_OBJECT: { idFromName: (roomId: string) => roomId },
   BIG_TWO_DB: {
     prepare: () => ({
-      bind: () => ({ first: async () => (sessionValid ? { id: "session" } : null) }),
+      bind: () => ({ first: async () => (sessionValid ? { name: "Ada account" } : null) }),
     }),
   },
   BIG_TWO_ROOM_DURABLE_OBJECT: {
@@ -64,6 +101,7 @@ afterEach(() => {
   sessionValid = true;
   seatName = "Stored seat name";
   order = 0;
+  stored.length = 0;
   vi.unstubAllGlobals();
 });
 
@@ -76,7 +114,8 @@ it("fans out ordered accepted messages to every eligible tab with matching ackno
   expect(one.message).toMatchObject({
     id: "ABCDE:1",
     order: 1,
-    author: "Stored seat name",
+    author: "Ada account",
+    role: "Player",
     text: input.text,
     clientSendId: "send-1",
   });
@@ -91,16 +130,26 @@ it("fans out ordered accepted messages to every eligible tab with matching ackno
   ]);
 });
 
-it("checks the current seat on every send, but allows former Players to keep reading", async () => {
+it("snapshots the current role and lets Spectators send without taking a seat", async () => {
   const socket = connect();
   const chat = new RoomChatObject(state, env);
   seatName = null;
-  expect((await chat.send(visitor, input)).status).toBe(403);
+  expect((await chat.send(visitor, input)).message).toMatchObject({
+    author: "Ada account",
+    role: "Spectator",
+  });
   seatName = "New seat name";
-  expect((await chat.send(visitor, input)).message?.author).toBe("New seat name");
+  expect((await chat.send(visitor, { ...input, clientSendId: "send-2" })).message).toMatchObject({
+    author: "Ada account",
+    role: "Player",
+  });
   seatName = null;
   await chat.alarm();
   expect(socket.close).not.toHaveBeenCalled();
+  expect((await chat.history(visitor))?.messages.map((entry) => entry.role)).toEqual([
+    "Player",
+    "Spectator",
+  ]);
 });
 
 it("revokes invalid sessions and removed rooms before subsequent delivery", async () => {
@@ -160,7 +209,7 @@ it("confirms acceptance even if a connected socket fails during fan-out", async 
   expect(other.send).toHaveBeenCalledOnce();
 });
 
-it("admits seated and unseated visitors with no replay and rejects a missing live room", async () => {
+it("admits seated and unseated visitors, returns bounded history and rejects a missing live room", async () => {
   const NativeResponse = Response;
   vi.stubGlobal(
     "Response",
@@ -201,6 +250,9 @@ it("admits seated and unseated visitors with no replay and rejects a missing liv
   expect(sockets[0].send).not.toHaveBeenCalled();
   seatName = "Stored seat name";
   await chat.send(visitor, input);
+  expect((await chat.history(visitor))?.messages).toMatchObject([
+    { text: input.text, role: "Player" },
+  ]);
   expect((await chat.fetch(request)).status).toBe(101);
   expect(sockets[1].send).not.toHaveBeenCalled();
   roomExists = false;
@@ -214,4 +266,56 @@ it("admits seated and unseated visitors with no replay and rejects a missing liv
     },
   });
   expect((await chat.fetch(mismatched)).status).toBe(403);
+});
+
+it("redacts stored and connected messages without removing their positions", async () => {
+  const socket = connect();
+  const chat = new RoomChatObject(state, env);
+  await chat.send(visitor, input);
+  socket.send.mockClear();
+  await chat.redactAuthor(visitor.userId);
+  expect((await chat.history(visitor))?.messages).toMatchObject([
+    { order: 1, author: "Deleted participant", text: "Message removed", role: null },
+  ]);
+  expect(JSON.parse(socket.send.mock.calls[0][0])).toMatchObject({ type: "redaction", order: 1 });
+  expect(stored[0].user_id).toBeNull();
+});
+
+it("paginates a long history without gaps while new sends arrive", async () => {
+  const chat = new RoomChatObject(state, env);
+  for (let index = 1; index <= 105; index++) {
+    await chat.send(visitor, { text: `message ${index}`, clientSendId: `send-${index}` });
+  }
+  const newest = await chat.history(visitor);
+  expect(newest?.messages.map((item) => item.order)).toEqual(
+    Array.from({ length: 50 }, (_, index) => 105 - index),
+  );
+  expect(newest?.hasMore).toBe(true);
+  await chat.send(visitor, { text: "new live message", clientSendId: "send-106" });
+  const older = await chat.history(visitor, 56);
+  const oldest = await chat.history(visitor, 6);
+  expect(
+    [...newest!.messages, ...older!.messages, ...oldest!.messages]
+      .map((message) => message.order)
+      .sort((a, b) => a - b),
+  ).toEqual(Array.from({ length: 105 }, (_, index) => index + 1));
+  expect(oldest?.hasMore).toBe(false);
+  expect((await chat.history(visitor, undefined, 105))?.messages).toMatchObject([
+    { order: 106, text: "new live message" },
+  ]);
+});
+
+it("never confirms a send when durable storage fails", async () => {
+  const socket = connect();
+  const brokenState = {
+    ...state,
+    storage: {
+      ...state.storage,
+      sync: vi.fn().mockRejectedValue(new Error("storage unavailable")),
+    },
+  };
+  await expect(
+    new RoomChatObject(brokenState as unknown as DurableObjectState, env).send(visitor, input),
+  ).rejects.toThrow("storage unavailable");
+  expect(socket.send).not.toHaveBeenCalled();
 });

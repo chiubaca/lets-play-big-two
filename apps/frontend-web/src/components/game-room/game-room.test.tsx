@@ -427,14 +427,24 @@ it("shows a fresh celebration when another game ends in the same online room", a
 
 it("keeps the online chat log and draft across play, Results, and another game", async () => {
   let receive!: (event: { data: string }) => void;
+  let connect!: () => void;
   class ChatSocket {
     onmessage: ((event: { data: string }) => void) | null = null;
+    onopen: (() => void) | null = null;
     constructor(_url: string) {
       receive = (event) => this.onmessage?.(event);
+      connect = () => this.onopen?.();
     }
     close() {}
   }
   vi.stubGlobal("WebSocket", ChatSocket);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ messages: [], hasMore: false }),
+    }),
+  );
   vi.stubEnv("VITE_BACKEND_URL", "https://api.example.com");
   const props = {
     send: () => {},
@@ -446,6 +456,10 @@ it("keeps the online chat log and draft across play, Results, and another game",
   try {
     const waiting = { ...gameState, value: "WAITING_FOR_PLAYERS" } as BigTwoGameMachineSnapshot;
     const room = render(<GameRoom {...props} gameState={waiting} />);
+    await act(async () => {
+      connect();
+      await Promise.resolve();
+    });
     const trigger = screen.getByRole("button", { name: "Room chat" });
     receive({
       data: JSON.stringify({

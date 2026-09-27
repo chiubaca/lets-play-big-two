@@ -9,6 +9,7 @@ class ChatSocket {
   static connections: ChatSocket[] = [];
   onmessage: ((event: { data: string }) => void) | null = null;
   onclose: (() => void) | null = null;
+  onopen: (() => void) | null = null;
   constructor(public url: string) {
     ChatSocket.connections.push(this);
   }
@@ -17,22 +18,35 @@ class ChatSocket {
     this.onmessage?.({ data: JSON.stringify(message) });
   }
 }
+const fetchHistory = vi.fn();
 
 afterEach(() => {
   cleanup();
   send.mockReset();
   playSound.mockReset();
   ChatSocket.connections = [];
+  fetchHistory.mockReset();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
 });
 
-function show(seated = true, blocked = false) {
+function show(blocked = false) {
   vi.stubEnv("VITE_BACKEND_URL", "https://api.example.com");
   vi.stubGlobal("WebSocket", ChatSocket);
-  return render(
-    <RoomChat roomId="ABCDE" seated={seated} blocked={blocked} send={send} playSound={playSound} />,
-  );
+  vi.stubGlobal("fetch", fetchHistory);
+  fetchHistory.mockResolvedValue({
+    ok: true,
+    json: async () => ({ messages: [], hasMore: false }),
+  });
+  return render(<RoomChat roomId="ABCDE" blocked={blocked} send={send} playSound={playSound} />);
+}
+
+async function ready() {
+  await act(async () => {
+    ChatSocket.connections.at(-1)?.onopen?.();
+    await Promise.resolve();
+  });
+  expect(fetchHistory).toHaveBeenCalled();
 }
 
 const message = {
@@ -41,11 +55,13 @@ const message = {
   order: 1,
   clientSendId: "abc",
   author: "<Mina>",
+  role: "Spectator" as const,
   text: "**hello** https://example.com",
 };
 
-it("receives while closed, announces a count, opens a literal live log, and returns focus on Escape", () => {
+it("receives while closed, announces a count, opens a literal live log, and returns focus on Escape", async () => {
   show();
+  await ready();
   expect(ChatSocket.connections[0].url).toBe("wss://api.example.com/api/room/chat/ws/ABCDE");
   expect(screen.queryByRole("log")).toBeNull();
   act(() => ChatSocket.connections[0].receive(message));
@@ -55,7 +71,7 @@ it("receives while closed, announces a count, opens a literal live log, and retu
   fireEvent.click(trigger);
   expect(trigger.getAttribute("aria-expanded")).toBe("true");
   expect(screen.getByRole("log", { name: "Room messages" }).textContent).toContain(
-    "<Mina> **hello** https://example.com",
+    "<Mina> · Spectator **hello** https://example.com",
   );
   expect(screen.queryByRole("link", { name: /example.com/ })).toBeNull();
   fireEvent.keyDown(screen.getByRole("log"), { key: "Escape" });
@@ -71,6 +87,7 @@ it("merges socket echo and HTTP acknowledgement into one entry and preserves fai
     }),
   );
   show();
+  await ready();
   fireEvent.click(screen.getByRole("button", { name: "Room chat" }));
   fireEvent.change(screen.getByRole("textbox", { name: "Room chat message" }), {
     target: { value: message.text },
@@ -95,6 +112,7 @@ it("merges socket echo and HTTP acknowledgement into one entry and preserves fai
 it("sends on Enter from the composer but keeps Shift+Enter for a newline", async () => {
   send.mockResolvedValue(message);
   show();
+  await ready();
   fireEvent.click(screen.getByRole("button", { name: "Room chat" }));
   const composer = screen.getByRole("textbox", { name: "Room chat message" });
   expect(document.activeElement).toBe(composer);
@@ -110,27 +128,24 @@ it("sends on Enter from the composer but keeps Shift+Enter for a newline", async
   await waitFor(() => expect((composer as HTMLTextAreaElement).value).toBe(""));
 });
 
-it("counts messages blocked by a modal and changes between read-only and composer without losing the draft", () => {
-  const view = show(true, true);
+it("counts messages blocked by a modal and keeps the composer across role changes", async () => {
+  const view = show(true);
+  await ready();
   fireEvent.click(screen.getByRole("button", { name: "Room chat" }));
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "unsent" } });
   act(() => ChatSocket.connections[0].receive(message));
   expect(screen.getByRole("button", { name: /1 unread/ })).toBeTruthy();
-  view.rerender(
-    <RoomChat roomId="ABCDE" seated={false} blocked={false} send={send} playSound={playSound} />,
-  );
-  expect(screen.queryByRole("textbox")).toBeNull();
-  expect(screen.getByText(/only seated Players can send/)).toBeTruthy();
-  view.rerender(
-    <RoomChat roomId="ABCDE" seated blocked={false} send={send} playSound={playSound} />,
-  );
+  view.rerender(<RoomChat roomId="ABCDE" blocked={false} send={send} playSound={playSound} />);
+  expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("unsent");
+  view.rerender(<RoomChat roomId="ABCDE" blocked={false} send={send} playSound={playSound} />);
   expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("unsent");
 });
 
-it("keeps only witnessed messages on reconnect and starts empty in a fresh tab", async () => {
+it("reconciles history after reconnect without replay sounds or unread", async () => {
   vi.useFakeTimers();
   try {
-    const view = show(false);
+    const view = show();
+    await ready();
     act(() => ChatSocket.connections[0].receive(message));
     fireEvent.click(screen.getByRole("button", { name: /1 unread/ }));
     expect(screen.getByRole("log").textContent).toContain(message.text);
@@ -140,13 +155,68 @@ it("keeps only witnessed messages on reconnect and starts empty in a fresh tab",
       vi.advanceTimersByTime(2000);
     });
     expect(ChatSocket.connections).toHaveLength(2);
-    expect(screen.getByRole("log").querySelectorAll(".room-chat-entry")).toHaveLength(1);
+    fetchHistory.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        messages: [
+          { ...message, author: "Deleted participant", text: "Message removed", role: null },
+        ],
+        hasMore: false,
+      }),
+    });
+    await ready();
+    expect(screen.getByRole("log").textContent).toContain("Message removed");
+    expect(screen.getByRole("log").textContent).not.toContain(message.text);
     view.unmount();
-    show(false);
-    fireEvent.click(screen.getByRole("button", { name: "Room chat" }));
-    expect(screen.getByRole("log").querySelectorAll(".room-chat-entry")).toHaveLength(0);
     expect(send).not.toHaveBeenCalled();
   } finally {
     vi.useRealTimers();
   }
+});
+
+it("loads older pages while live messages arrive, without treating history as unread", async () => {
+  const earlier = { ...message, id: "ABCDE:1", order: 1 };
+  const recent = { ...message, id: "ABCDE:2", order: 2, text: "recent" };
+  show();
+  fetchHistory.mockResolvedValue({
+    ok: true,
+    json: async () => ({ messages: [recent], hasMore: true }),
+  });
+  await ready();
+  expect(screen.getByRole("button", { name: "Room chat" })).toBeTruthy();
+  expect(playSound).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Room chat" }));
+  fetchHistory.mockResolvedValue({
+    ok: true,
+    json: async () => ({ messages: [earlier], hasMore: false }),
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Load older messages" }));
+  act(() =>
+    ChatSocket.connections[0].receive({ ...message, id: "ABCDE:3", order: 3, text: "live" }),
+  );
+  await waitFor(() =>
+    expect(screen.getByRole("log").querySelectorAll(".room-chat-entry")).toHaveLength(3),
+  );
+  expect(screen.getByRole("log").textContent).toContain("recent");
+  expect(screen.queryByRole("button", { name: "Load older messages" })).toBeNull();
+  expect(fetchHistory.mock.calls.at(-1)?.[0].toString()).toContain("before=2");
+});
+
+it("redacts visible messages and does not restore stale text from an in-flight page", async () => {
+  show();
+  await ready();
+  fireEvent.click(screen.getByRole("button", { name: "Room chat" }));
+  act(() => ChatSocket.connections[0].receive(message));
+  const redaction = {
+    ...message,
+    type: "redaction",
+    author: "Deleted participant",
+    text: "Message removed",
+    role: null,
+  };
+  act(() => ChatSocket.connections[0].receive(redaction));
+  expect(screen.getByRole("log").textContent).toContain("Message removed");
+  expect(screen.getByRole("log").textContent).not.toContain(message.text);
+  act(() => ChatSocket.connections[0].receive({ ...message, id: "ABCDE:2", order: 2 }));
+  expect(screen.getByRole("log").querySelectorAll(".room-chat-entry")).toHaveLength(2);
 });

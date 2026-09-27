@@ -45,9 +45,10 @@ export const auth = betterAuth({
         const rooms = await db.select({ roomId: schema.roomTable.id }).from(schema.roomTable);
 
         await Promise.all(
-          rooms.map(({ roomId }) => {
+          rooms.map(async ({ roomId }) => {
             const durableObjectId = env.BIG_TWO_ROOM_DURABLE_OBJECT.idFromName(roomId);
-            return env.BIG_TWO_ROOM_DURABLE_OBJECT.get(durableObjectId).redactPlayer(user.id);
+            await env.ROOM_CHAT_DURABLE_OBJECT.getByName(roomId).redactAuthor(user.id);
+            await env.BIG_TWO_ROOM_DURABLE_OBJECT.get(durableObjectId).redactPlayer(user.id);
           }),
         );
 

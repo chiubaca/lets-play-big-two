@@ -362,7 +362,6 @@ export const GameRoom = ({
             <RoomChat
               key={roomCode}
               roomId={roomCode}
-              seated={!spectator}
               blocked={panel !== null || (finished && showResult)}
               send={sendChat}
               playSound={playSound}

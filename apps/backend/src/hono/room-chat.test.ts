@@ -18,6 +18,7 @@ vi.mock("cloudflare:workers", () => ({
 const session = vi.fn();
 const send = vi.fn();
 const fetchSocket = vi.fn();
+const history = vi.fn();
 let roomExists = true;
 let deleting = false;
 
@@ -44,7 +45,7 @@ vi.mock("@big-two/data-ops/database", () => ({
 }));
 
 const env = {
-  ROOM_CHAT_DURABLE_OBJECT: { getByName: () => ({ send, fetch: fetchSocket }) },
+  ROOM_CHAT_DURABLE_OBJECT: { getByName: () => ({ send, fetch: fetchSocket, history }) },
 } as unknown as Cloudflare.Env;
 const clientSendId = "123e4567-e89b-12d3-a456-426614174000";
 const post = (value: unknown) =>
@@ -62,9 +63,35 @@ afterEach(() => {
   session.mockReset();
   send.mockReset();
   fetchSocket.mockReset();
+  history.mockReset();
   roomExists = true;
   deleting = false;
   vi.unstubAllGlobals();
+});
+
+it("guards paged history and never caches it publicly", async () => {
+  const get = (query = "") => App.request(`/api/room/chat/ABCDE${query}`, {}, env);
+  session.mockResolvedValue(null);
+  expect((await get()).status).toBe(401);
+  session.mockResolvedValue({ user: { id: "ada" }, session: { id: "session-1" } });
+  deleting = true;
+  expect((await get()).status).toBe(409);
+  deleting = false;
+  roomExists = false;
+  expect((await get()).status).toBe(404);
+  roomExists = true;
+  expect((await get("?before=0")).status).toBe(400);
+  expect((await get("?before=10&after=11")).status).toBe(400);
+  history.mockResolvedValue({ messages: [{ id: "ABCDE:2", order: 2 }], hasMore: false });
+  const response = await get("?before=3");
+  expect(response.status).toBe(200);
+  expect(response.headers.get("Cache-Control")).toBe("no-store");
+  expect(await response.json()).toMatchObject({ messages: [{ order: 2 }] });
+  expect(history).toHaveBeenCalledWith(
+    { roomId: "ABCDE", userId: "ada", sessionId: "session-1" },
+    3,
+    undefined,
+  );
 });
 
 it("rejects signed-out, deleting, and removed-room sends before forwarding to chat", async () => {
@@ -193,6 +220,7 @@ it("routes authenticated upgrades and sends through the live chat object across 
           sql.includes("RETURNING") ? { one: () => ({ value: ++sequence }) } : undefined,
       },
       setAlarm: vi.fn(),
+      sync: vi.fn(),
     },
   } as unknown as DurableObjectState;
   const gameRoom = new BigTwoRoomObject(
@@ -226,7 +254,9 @@ it("routes authenticated upgrades and sends through the live chat object across 
     ROOM_CHAT_DURABLE_OBJECT: { idFromName: (roomId: string) => roomId },
     BIG_TWO_DB: {
       prepare: () => ({
-        bind: () => ({ first: async () => (roomExists && !deleting ? { id: "session-1" } : null) }),
+        bind: () => ({
+          first: async () => (roomExists && !deleting ? { name: "Ada account" } : null),
+        }),
       }),
     },
     BIG_TWO_ROOM_DURABLE_OBJECT: {
@@ -291,14 +321,15 @@ it("routes authenticated upgrades and sends through the live chat object across 
     const acknowledgement = await reply.json();
     expect(acknowledgement).toMatchObject({
       order: sequence,
-      author: "Room seat <Ada>",
+      author: "Ada account",
+      role: "Player",
       text: phase,
     });
     expect(JSON.parse(sockets[0].received.at(-1)!)).toEqual(acknowledgement);
     expect(JSON.parse(sockets[1].received.at(-1)!)).toEqual(acknowledgement);
   }
   seat = null;
-  expect((await sendLive("not seated")).status).toBe(403);
+  expect((await sendLive("not seated")).status).toBe(200);
   expect((await upgrade()).status).toBe(101); // Former Player remains a Spectator.
   live = false;
   expect((await upgrade()).status).toBe(403);
