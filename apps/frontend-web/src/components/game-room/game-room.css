@@ -615,6 +615,7 @@
 }
 .game-room button:focus-visible,
 .game-room a:focus-visible,
+.table-dialog button:focus-visible,
 .table-dialog a:focus-visible {
   outline: 3px solid var(--casino-focus);
   outline-offset: 4px;
@@ -702,6 +703,37 @@
   color: #b9b99f;
   line-height: 1.8;
 }
+.table-menu-dialog,
+.leave-table-dialog {
+  width: min(400px, calc(100% - 2rem));
+  max-width: 400px;
+  gap: 12px;
+  padding: 26px;
+  background: radial-gradient(ellipse at 50% 0%, #a7803030, transparent 62%), var(--casino-panel);
+  box-shadow: 0 24px 70px #0008;
+}
+.table-menu-dialog [data-slot="dialog-title"],
+.leave-table-dialog [data-slot="dialog-title"] {
+  font-family: Georgia, serif;
+  color: #fff0c8;
+  font-size: 22px;
+}
+.table-menu-dialog [data-slot="dialog-description"] {
+  margin-bottom: 4px;
+}
+.table-menu-actions {
+  display: grid;
+  gap: 10px;
+}
+.table-menu-actions > .table-small-button,
+.table-menu-actions .table-lobby-option .table-small-button {
+  width: 100%;
+}
+.table-menu-actions .table-lobby-option {
+  padding-top: 16px;
+  margin-top: 4px;
+  border-top: 1px solid #c5a46155;
+}
 .table-dialog.winner-dialog {
   width: min(440px, calc(100% - 2rem));
   max-width: 440px;
@@ -788,7 +820,9 @@
   background: #ffe2a0;
 }
 .table-small-button {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid #c5a461;
   border-radius: 10px;
   padding: 10px 18px;
@@ -797,29 +831,67 @@
   text-align: center;
   cursor: pointer;
 }
+.table-dialog .table-small-button {
+  min-height: 44px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.table-menu-primary {
+  border-color: #ffe2a0;
+  color: #251b0a;
+  background: var(--casino-gold-gradient);
+}
+.table-menu-primary:hover {
+  background: #ffe2a0;
+}
 .table-lobby-option {
   display: grid;
-  justify-items: start;
-  gap: 4px;
+  justify-items: center;
+  gap: 7px;
+  text-align: center;
 }
 .table-lobby-option small {
   color: #b9b99f;
   font-size: 11px;
+  line-height: 1.35;
 }
 .table-leave-button {
   border-color: #c78175;
   color: #ffe2d6;
   background: #572c2a;
 }
-.leave-table-dialog [data-slot="dialog-title"] {
-  font-family: Georgia, serif;
-  color: #ffe2a0;
-  font-size: 22px;
+.table-leave-button:hover {
+  border-color: #e7a293;
+  background: #713732;
+}
+.winner-dialog .table-lobby-option {
+  width: 100%;
+}
+.winner-dialog .table-lobby-option .table-small-button {
+  width: 100%;
+  margin-top: 0;
+  border-color: #a38250;
+  color: #f5d99d;
+  background: transparent;
+  box-shadow: none;
+}
+.winner-dialog .table-lobby-option .table-small-button:hover {
+  background: #c5a46122;
 }
 .leave-table-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
   gap: 10px;
+}
+@media (max-width: 420px) {
+  .leave-table-actions {
+    grid-template-columns: 1fr;
+  }
 }
 .leave-table-actions button:disabled {
   cursor: wait;

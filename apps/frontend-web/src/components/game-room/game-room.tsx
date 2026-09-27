@@ -702,7 +702,7 @@ export const GameRoom = ({
           if (!open) setPanel(null);
         }}
       >
-        <DialogContent className="table-dialog">
+        <DialogContent className={`table-dialog ${panel === "menu" ? "table-menu-dialog" : ""}`}>
           <DialogTitle>
             {panel === "menu"
               ? "Your table"
@@ -766,10 +766,10 @@ export const GameRoom = ({
             </div>
           )}
           {panel === "menu" && (
-            <>
+            <div className="table-menu-actions">
               {host && (
                 <button
-                  className="table-small-button"
+                  className="table-small-button table-menu-primary"
                   aria-label="Start a new game"
                   onClick={() => {
                     void act({ type: "RESET_GAME" });
@@ -796,7 +796,7 @@ export const GameRoom = ({
                 </a>
               ) : null}
               {roomCode && <ReturnToLobby />}
-            </>
+            </div>
           )}
         </DialogContent>
       </Dialog>
