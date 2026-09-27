@@ -35,3 +35,6 @@ The place where people create, find, and join online rooms.
 **Return to lobby**:
 Going to the Lobby without giving up a seat in the room or ending its game.
 _Avoid_: Leave table
+
+**Turn notification**:
+An opt-in alert to a seated Player when their turn begins in an online room they are not actively viewing. The Player's preference applies across their online rooms, not to offline games.
