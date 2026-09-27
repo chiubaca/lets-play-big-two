@@ -395,6 +395,18 @@ it("preserves the solo result behavior without a finished-room strip", () => {
   expect(screen.queryByRole("region", { name: "Finished room" })).toBeNull();
 });
 
+it("keeps the offline non-Host result's Return home link", () => {
+  render(
+    <GameRoom
+      gameState={finishedState}
+      send={() => {}}
+      tableLabel="Offline table"
+      user={{ id: "ada", name: "Ada" }}
+    />,
+  );
+  expect(screen.getByRole("link", { name: "Return home" }).getAttribute("href")).toBe("/");
+});
+
 it("shows a fresh celebration when another game ends in the same online room", async () => {
   const props = {
     send: () => {},

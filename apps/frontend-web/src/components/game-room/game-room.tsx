@@ -60,6 +60,17 @@ type GameRoomProps = {
   hideHand?: boolean;
 };
 
+function ReturnToLobby() {
+  return (
+    <div className="table-lobby-option">
+      <a className="table-small-button" href="/">
+        Return to lobby
+      </a>
+      <small>You will not leave this table.</small>
+    </div>
+  );
+}
+
 function PlayerSeat({
   name,
   count,
@@ -784,14 +795,7 @@ export const GameRoom = ({
                   Leave table
                 </a>
               ) : null}
-              {roomCode && (
-                <div className="table-lobby-option">
-                  <a className="table-small-button" href="/">
-                    Return to lobby
-                  </a>
-                  <small>You will not leave this table.</small>
-                </div>
-              )}
+              {roomCode && <ReturnToLobby />}
             </>
           )}
         </DialogContent>
@@ -880,13 +884,11 @@ export const GameRoom = ({
           ) : spectator ? (
             <p>Waiting for the host to start another game…</p>
           ) : null}
-          {roomCode && (
-            <div className="table-lobby-option">
-              <a className="table-small-button" href="/">
-                Return to lobby
-              </a>
-              <small>You will not leave this table.</small>
-            </div>
+          {roomCode && <ReturnToLobby />}
+          {!roomCode && !host && (
+            <a className="table-small-button" href="/">
+              Return home
+            </a>
           )}
           {roomCode && restartError && <p role="alert">{restartError}</p>}
         </DialogContent>
