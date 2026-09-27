@@ -10,7 +10,7 @@ export type ChatMessage = {
   text: string;
 };
 
-type Visitor = { userId: string; sessionId: string };
+type Visitor = { roomId: string; userId: string; sessionId: string };
 
 export class RoomChatObject extends DurableObject<Env> {
   private pending: Promise<void> = Promise.resolve();
@@ -22,32 +22,36 @@ export class RoomChatObject extends DurableObject<Env> {
     );
   }
 
-  private get roomId() {
-    return this.ctx.id.name;
-  }
-
   private async eligible(visitor: Visitor): Promise<{ seatName: string | null } | null> {
-    if (!this.roomId) return null;
+    if (
+      !visitor.roomId ||
+      !this.ctx.id.equals(this.env.ROOM_CHAT_DURABLE_OBJECT.idFromName(visitor.roomId))
+    ) {
+      return null;
+    }
     const result = await this.env.BIG_TWO_DB.prepare(`
       SELECT s.id FROM session s JOIN user u ON u.id = s.user_id
       JOIN room r ON r.id = ?
       WHERE s.id = ? AND s.user_id = ? AND s.expires_at > ?
       AND NOT EXISTS (SELECT 1 FROM accountDeletion d WHERE d.user_id = s.user_id)
     `)
-      .bind(this.roomId, visitor.sessionId, visitor.userId, Date.now())
+      .bind(visitor.roomId, visitor.sessionId, visitor.userId, Date.now())
       .first();
     if (!result) return null;
-    return this.env.BIG_TWO_ROOM_DURABLE_OBJECT.getByName(this.roomId).getChatSeat(visitor.userId);
+    return this.env.BIG_TWO_ROOM_DURABLE_OBJECT.getByName(visitor.roomId).getChatSeat(
+      visitor.userId,
+    );
   }
 
   async fetch(request: Request): Promise<Response> {
     const userId = request.headers.get("X-Chat-User-ID");
     const sessionId = request.headers.get("X-Chat-Session-ID");
-    if (!userId || !sessionId || !(await this.eligible({ userId, sessionId }))) {
+    const roomId = request.headers.get("X-Chat-Room-ID");
+    if (!userId || !sessionId || !roomId || !(await this.eligible({ roomId, userId, sessionId }))) {
       return new Response("Room chat is unavailable", { status: 403 });
     }
     const [client, server] = Object.values(new WebSocketPair());
-    server.serializeAttachment({ userId, sessionId } satisfies Visitor);
+    server.serializeAttachment({ roomId, userId, sessionId } satisfies Visitor);
     this.ctx.acceptWebSocket(server);
     await this.ctx.storage.setAlarm(Date.now() + 10_000);
     return new Response(null, { status: 101, webSocket: client });
@@ -79,7 +83,7 @@ export class RoomChatObject extends DurableObject<Env> {
       .one();
     const message: ChatMessage = {
       type: "message",
-      id: `${this.roomId}:${row.value}`,
+      id: `${visitor.roomId}:${row.value}`,
       order: row.value,
       clientSendId: input.clientSendId,
       author: seat.seatName,

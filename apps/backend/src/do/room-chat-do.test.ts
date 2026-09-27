@@ -14,7 +14,7 @@ vi.mock("cloudflare:workers", () => ({
 import { RoomChatObject } from "./room-chat-do";
 
 const sockets: Array<{
-  deserializeAttachment: () => { userId: string; sessionId: string };
+  deserializeAttachment: () => { roomId: string; userId: string; sessionId: string };
   send: ReturnType<typeof vi.fn>;
   close: ReturnType<typeof vi.fn>;
 }> = [];
@@ -23,7 +23,7 @@ let seatName: string | null = "Stored seat name";
 let sessionValid = true;
 let order = 0;
 const state = {
-  id: { name: "ABCDE" },
+  id: { equals: (id: string) => id === "ABCDE" },
   storage: {
     sql: {
       exec: (sql: string) =>
@@ -35,6 +35,7 @@ const state = {
   acceptWebSocket: (socket: (typeof sockets)[number]) => sockets.push(socket),
 } as unknown as DurableObjectState;
 const env = {
+  ROOM_CHAT_DURABLE_OBJECT: { idFromName: (roomId: string) => roomId },
   BIG_TWO_DB: {
     prepare: () => ({
       bind: () => ({ first: async () => (sessionValid ? { id: "session" } : null) }),
@@ -44,7 +45,7 @@ const env = {
     getByName: () => ({ getChatSeat: async () => (roomExists ? { seatName } : null) }),
   },
 } as unknown as Env;
-const visitor = { userId: "ada", sessionId: "session" };
+const visitor = { roomId: "ABCDE", userId: "ada", sessionId: "session" };
 const input = { text: "literal <b>text</b>", clientSendId: "send-1" };
 
 function connect(userId = "ada") {
@@ -114,6 +115,21 @@ it("revokes invalid sessions and removed rooms before subsequent delivery", asyn
   expect((await chat.send(visitor, input)).status).toBe(403);
 });
 
+it("rejects a visitor claiming a different room, including on a stored socket", async () => {
+  const socket = connect();
+  const chat = new RoomChatObject(state, env);
+  const wrongRoom = { ...visitor, roomId: "OTHER" };
+  expect((await chat.send(wrongRoom, input)).status).toBe(403);
+  expect(socket.send).not.toHaveBeenCalled();
+  sockets.push({
+    deserializeAttachment: () => wrongRoom,
+    send: vi.fn(),
+    close: vi.fn(),
+  });
+  await chat.alarm();
+  expect(sockets[1].close).toHaveBeenCalledWith(1008, "Room chat access ended");
+});
+
 it("does not deliver to a tab whose account or session has become ineligible", async () => {
   const current = connect();
   const stale = connect("revoked");
@@ -173,7 +189,11 @@ it("admits seated and unseated visitors with no replay and rejects a missing liv
     },
   );
   const request = new Request("https://api.example.com/chat", {
-    headers: { "X-Chat-User-ID": visitor.userId, "X-Chat-Session-ID": visitor.sessionId },
+    headers: {
+      "X-Chat-User-ID": visitor.userId,
+      "X-Chat-Session-ID": visitor.sessionId,
+      "X-Chat-Room-ID": visitor.roomId,
+    },
   });
   const chat = new RoomChatObject(state, env);
   seatName = null;
@@ -185,4 +205,13 @@ it("admits seated and unseated visitors with no replay and rejects a missing liv
   expect(sockets[1].send).not.toHaveBeenCalled();
   roomExists = false;
   expect((await chat.fetch(request)).status).toBe(403);
+  roomExists = true;
+  const mismatched = new Request("https://api.example.com/chat", {
+    headers: {
+      "X-Chat-User-ID": visitor.userId,
+      "X-Chat-Session-ID": visitor.sessionId,
+      "X-Chat-Room-ID": "OTHER",
+    },
+  });
+  expect((await chat.fetch(mismatched)).status).toBe(403);
 });

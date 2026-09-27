@@ -187,6 +187,7 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
     const headers = new Headers(c.req.raw.headers);
     headers.set("X-Chat-User-ID", session.user.id);
     headers.set("X-Chat-Session-ID", session.session.id);
+    headers.set("X-Chat-Room-ID", roomId);
     return c.env.ROOM_CHAT_DURABLE_OBJECT.getByName(roomId).fetch(
       new Request(c.req.raw, { headers }),
     );
@@ -239,7 +240,7 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
       const parsed = parseChatInput(c.req.valid("json"));
       if (!parsed.input) return c.json({ error: parsed.error }, 400);
       const result = await c.env.ROOM_CHAT_DURABLE_OBJECT.getByName(roomId).send(
-        { userId: session.user.id, sessionId: session.session.id },
+        { roomId, userId: session.user.id, sessionId: session.session.id },
         parsed.input,
       );
       if (!result.message)

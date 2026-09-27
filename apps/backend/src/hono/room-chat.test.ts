@@ -94,7 +94,7 @@ it("accepts trimmed plain text and passes only authenticated identity to chat", 
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual(message);
   expect(send).toHaveBeenCalledWith(
-    { userId: "ada", sessionId: "session-1" },
+    { roomId: "ABCDE", userId: "ada", sessionId: "session-1" },
     { text: "hi", clientSendId },
   );
 });
@@ -177,14 +177,14 @@ it("routes authenticated upgrades and sends through the live chat object across 
   let live = true;
   let sequence = 0;
   const sockets: Array<{
-    attachment: { userId: string; sessionId: string };
+    attachment: { roomId: string; userId: string; sessionId: string };
     received: string[];
-    deserializeAttachment: () => { userId: string; sessionId: string };
+    deserializeAttachment: () => { roomId: string; userId: string; sessionId: string };
     send: (value: string) => void;
     close: ReturnType<typeof vi.fn>;
   }> = [];
   const state = {
-    id: { name: "ABCDE" },
+    id: { equals: (id: string) => id === "ABCDE" },
     getWebSockets: () => sockets,
     acceptWebSocket: (socket: (typeof sockets)[number]) => sockets.push(socket),
     storage: {
@@ -223,6 +223,7 @@ it("routes authenticated upgrades and sends through the live chat object across 
     {} as Env,
   );
   const liveEnv = {
+    ROOM_CHAT_DURABLE_OBJECT: { idFromName: (roomId: string) => roomId },
     BIG_TWO_DB: {
       prepare: () => ({
         bind: () => ({ first: async () => (roomExists && !deleting ? { id: "session-1" } : null) }),
@@ -251,9 +252,9 @@ it("routes authenticated upgrades and sends through the live chat object across 
     class {
       0 = {};
       1 = {
-        attachment: { userId: "", sessionId: "" },
+        attachment: { roomId: "", userId: "", sessionId: "" },
         received: [] as string[],
-        serializeAttachment(value: { userId: string; sessionId: string }) {
+        serializeAttachment(value: { roomId: string; userId: string; sessionId: string }) {
           this.attachment = value;
         },
         deserializeAttachment() {
