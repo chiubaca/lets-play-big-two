@@ -49,6 +49,7 @@ export function RoomChat({
   const trigger = useRef<HTMLButtonElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const log = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLElement>(null);
   const visible = useRef(false);
   visible.current = open && !blocked;
 
@@ -124,6 +125,30 @@ export function RoomChat({
 
   useEffect(() => {
     if (open && !blocked) composer.current?.focus();
+  }, [open]);
+
+  useEffect(() => {
+    const element = panel.current;
+    if (!open || !element) return;
+
+    const updateViewport = () => {
+      const viewport = window.visualViewport;
+      element.style.setProperty("--room-chat-viewport-top", `${viewport?.offsetTop ?? 0}px`);
+      element.style.setProperty(
+        "--room-chat-viewport-height",
+        `${viewport?.height ?? window.innerHeight}px`,
+      );
+    };
+
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    window.visualViewport?.addEventListener("resize", updateViewport);
+    window.visualViewport?.addEventListener("scroll", updateViewport);
+    return () => {
+      window.removeEventListener("resize", updateViewport);
+      window.visualViewport?.removeEventListener("resize", updateViewport);
+      window.visualViewport?.removeEventListener("scroll", updateViewport);
+    };
   }, [open]);
 
   useEffect(() => {
@@ -298,6 +323,7 @@ export function RoomChat({
       )}
       {open && (
         <section
+          ref={panel}
           id="room-chat-panel"
           className="room-chat-panel"
           aria-label="Room chat"
@@ -309,10 +335,7 @@ export function RoomChat({
           }}
         >
           <div className="room-chat-heading">
-            <div>
-              <h2>Room chat</h2>
-              <small>Room conversation</small>
-            </div>
+            <h2>Room chat</h2>
             <button type="button" aria-label="Close room chat" onClick={close}>
               <X size={18} aria-hidden="true" />
             </button>
