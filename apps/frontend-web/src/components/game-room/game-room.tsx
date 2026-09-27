@@ -392,7 +392,7 @@ export const GameRoom = ({
             }}
           >
             <span>
-              <small>Room Code</small>
+              <small>Room</small>
               <strong>{tableLabel}</strong>
             </span>
             {copied ? <Check /> : <Copy />}

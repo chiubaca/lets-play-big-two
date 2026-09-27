@@ -79,47 +79,51 @@
 }
 .room-code {
   position: absolute;
-  top: 0;
+  top: 11px;
   left: 50%;
   transform: translateX(-50%);
-  min-width: 174px;
   max-width: 45%;
-  height: 67px;
-  padding: 9px 18px;
-  border: 1px solid var(--casino-gold);
-  border-radius: 16px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid #c5a46199;
+  border-radius: 18px;
   background: var(--casino-panel-gradient);
   box-shadow:
-    inset 0 -2px #9f651d,
-    0 5px 14px #0008;
+    inset 0 -1px #9f651d88,
+    0 3px 8px #0006;
   display: flex;
   align-items: center;
-  gap: 22px;
-  text-align: left;
+  gap: 8px;
+  color: var(--casino-cream);
   cursor: pointer;
 }
 .room-code small {
-  display: block;
-  font-size: 12px;
-  color: #cdb77f;
-  letter-spacing: 0.04em;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--casino-cream-muted);
 }
 .room-code strong {
-  display: block;
-  font-size: clamp(16px, 2vw, 28px);
-  font-weight: 550;
-  letter-spacing: 0.04em;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .room-code > span {
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
 }
 .room-code svg {
-  width: 25px;
+  width: 14px;
   flex-shrink: 0;
-  color: var(--casino-gold);
+  color: var(--casino-cream-muted);
 }
 .finished-room-strip {
   position: relative;
@@ -1090,22 +1094,11 @@
     display: none;
   }
   .room-code {
-    min-width: 133px;
     max-width: 41%;
-    height: 55px;
-    border-radius: 13px;
-    padding: 6px 11px;
-    gap: 10px;
-    left: 47%;
-  }
-  .room-code small {
-    font-size: 10px;
-  }
-  .room-code strong {
-    font-size: 18px;
-  }
-  .room-code svg {
-    width: 20px;
+    top: 4px;
+    height: 35px;
+    padding: 0 10px;
+    gap: 6px;
   }
   .help-icon {
     width: 39px;
@@ -1485,10 +1478,7 @@
     height: 42px;
   }
   .room-code {
-    height: 47px;
-  }
-  .room-code strong {
-    font-size: 18px;
+    top: 3px;
   }
   .table-shell {
     padding: 12px;
@@ -1580,13 +1570,7 @@
     height: 65px;
   }
   .room-code {
-    min-width: 110px;
     max-width: 42%;
-    left: 45%;
-    gap: 5px;
-  }
-  .room-code strong {
-    font-size: 14px;
   }
   .room-header-actions {
     gap: 5px;
@@ -1646,13 +1630,7 @@
     width: 36px;
   }
   .room-code {
-    height: 40px;
-  }
-  .room-code small {
-    font-size: 9px;
-  }
-  .room-code strong {
-    font-size: 16px;
+    top: 0;
   }
   .table-shell {
     padding: 9px;

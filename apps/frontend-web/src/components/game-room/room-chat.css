@@ -198,8 +198,7 @@
     top: 49px;
     left: 50%;
     transform: translateX(-50%);
-    height: 41px;
-    min-width: 145px;
+    height: 35px;
     max-width: 60%;
   }
 }
