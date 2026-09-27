@@ -30,4 +30,5 @@ export const gameEventSchema = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("PASS_TURN"), playerId: z.string().min(1) }),
   z.object({ type: z.literal("RESET_GAME") }),
+  z.object({ type: z.literal("LEAVE_GAME"), playerId: z.string().min(1) }),
 ]);

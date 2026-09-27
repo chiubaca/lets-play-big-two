@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { BigTwoGameMachineSnapshot, RoomGameState } from "@big-two/game-state-machine";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 import { useState } from "react";
@@ -259,7 +259,7 @@ it("keeps restart on the host's finished strip and preserves it after a failed a
   fireEvent.click(screen.getByRole("button", { name: "Play again" }));
   await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("Could not restart now"));
   expect(screen.getByRole("button", { name: "Results" })).toBeTruthy();
-  expect(screen.getByRole("link", { name: "Return home" }).getAttribute("href")).toBe("/");
+  expect(screen.getByRole("link", { name: /Return to lobby/ }).getAttribute("href")).toBe("/");
   fireEvent.click(screen.getByRole("button", { name: "Play again" }));
   await waitFor(() => expect(send).toHaveBeenCalledTimes(2));
   rerender(
@@ -285,7 +285,7 @@ it("offers non-host Players and Spectators a way to stay or leave, never restart
   const { rerender } = render(<GameRoom {...props} user={{ id: "ada", name: "Ada" }} />);
   expect(screen.getByRole("region", { name: "Finished room" }).textContent).toContain("Ada wins!");
   expect(screen.getByRole("button", { name: "Results" })).toBeTruthy();
-  expect(screen.getByRole("link", { name: "Return home" })).toBeTruthy();
+  expect(screen.getByRole("link", { name: /Return to lobby/ })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Play again" })).toBeNull();
 
   rerender(<GameRoom {...props} user={{ id: "visitor", name: "Visitor" }} />);
@@ -293,6 +293,92 @@ it("offers non-host Players and Spectators a way to stay or leave, never restart
     "Waiting for the host",
   );
   expect(screen.queryByRole("button", { name: "Play again" })).toBeNull();
+});
+
+it("confirms an online Player's departure, keeps them in the room, and preserves their seat on failure", async () => {
+  const send = vi
+    .fn()
+    .mockRejectedValueOnce(new Error("Connection lost"))
+    .mockResolvedValue(undefined);
+  const props = {
+    gameState,
+    send,
+    roomCode: "ABCDE",
+    tableLabel: "Room ABCDE",
+    user: { id: "solo-player", name: "You" },
+  };
+  const room = render(<GameRoom {...props} />);
+  fireEvent.click(screen.getByRole("button", { name: "Open table menu" }));
+  expect(screen.getByRole("link", { name: /Return to lobby/ }).getAttribute("href")).toBe("/");
+  expect(screen.getByText(/you will not leave this table/i)).toBeTruthy();
+  expect(send).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Leave table" }));
+  expect(screen.getByRole("dialog").textContent).toContain("reset the game for everyone");
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(send).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole("button", { name: "Open table menu" }));
+  fireEvent.click(screen.getByRole("button", { name: "Leave table" }));
+  fireEvent.click(screen.getByRole("button", { name: "Leave table and reset game" }));
+  await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Connection lost"));
+  expect(send).toHaveBeenCalledWith({ type: "LEAVE_GAME", playerId: "solo-player" });
+  expect(screen.getByRole("dialog")).toBeTruthy();
+
+  fireEvent.click(screen.getByRole("button", { name: "Leave table and reset game" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  room.rerender(
+    <GameRoom
+      {...props}
+      gameState={{
+        ...gameState,
+        value: "WAITING_FOR_PLAYERS",
+        context: { ...gameState.context, players: players.slice(1) },
+      }}
+    />,
+  );
+  expect(screen.getByRole("button", { name: "Join Table" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Open table menu" }));
+  expect(screen.queryByRole("button", { name: "Leave table" })).toBeNull();
+  expect(screen.getByRole("link", { name: /Return to lobby/ })).toBeTruthy();
+});
+
+it("shows a brief departure notice to the remaining Players", async () => {
+  vi.useFakeTimers();
+  try {
+    const props = {
+      gameState,
+      send: () => {},
+      roomCode: "ABCDE",
+      tableLabel: "Room ABCDE",
+      user: { id: "ada", name: "Ada" },
+    };
+    const room = render(<GameRoom {...props} />);
+    room.rerender(
+      <GameRoom
+        {...props}
+        gameState={
+          {
+            ...gameState,
+            value: "WAITING_FOR_PLAYERS",
+            context: { ...gameState.context, players: players.slice(1) },
+            roomNotice: "You left the table, so the game was reset.",
+          } as unknown as RoomGameState
+        }
+      />,
+    );
+    expect(screen.getByText("You left the table, so the game was reset.")).toBeTruthy();
+    await act(async () => vi.advanceTimersByTime(5000));
+    expect(screen.queryByText("You left the table, so the game was reset.")).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("keeps offline Leave table as a navigation link", () => {
+  render(<SoloTable />);
+  fireEvent.click(screen.getByRole("button", { name: "Open table menu" }));
+  expect(screen.getByRole("link", { name: "Leave table" }).getAttribute("href")).toBe("/");
+  expect(screen.queryByRole("link", { name: /Return to lobby/ })).toBeNull();
 });
 
 it("preserves the solo result behavior without a finished-room strip", () => {

@@ -354,3 +354,38 @@ describe("reset", () => {
     expect(snapshot.context.guardMessage).toBeUndefined();
   });
 });
+
+describe("leave table", () => {
+  it.each(["ROUND_FIRST_MOVE", "NEXT_PLAYER_TURN", "PLAY_NEW_ROUND", "GAME_END"] as const)(
+    "removes a Player and returns %s to waiting with the other seats intact",
+    (phase) => {
+      const actor = createActorAt(
+        phase,
+        gameContext({
+          roundMode: "single",
+          cardPile: [[card("4", "DIAMOND")]],
+          currentPlayerIndex: 1,
+          winner: phase === "GAME_END" ? player("p2", []) : undefined,
+        }),
+      );
+      actor.send({ type: "LEAVE_GAME", playerId: "p1" });
+
+      const { context, value } = actor.getSnapshot();
+      expect(value).toBe("WAITING_FOR_PLAYERS");
+      expect(context.players).toEqual([player("p2", [])]);
+      expect(context.currentPlayerIndex).toBe(0);
+      expect(context.cardPile).toEqual([]);
+      expect(context.roundMode).toBeNull();
+      expect(context.winner).toBeUndefined();
+    },
+  );
+
+  it("lets the last Player leave a waiting room and a former Player rejoin", () => {
+    const actor = createActor(bigTwoGameMachine).start();
+    actor.send({ type: "JOIN_GAME", playerId: "p1", playerName: "Player 1" });
+    actor.send({ type: "LEAVE_GAME", playerId: "p1" });
+    expect(actor.getSnapshot().context.players).toEqual([]);
+    actor.send({ type: "JOIN_GAME", playerId: "p1", playerName: "Player 1" });
+    expect(actor.getSnapshot().context.players).toEqual([player("p1", [])]);
+  });
+});

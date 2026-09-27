@@ -34,12 +34,25 @@ describe("getGameActionAuthorizationError", () => {
   });
 
   it.each([{ type: "START_GAME" }, { type: "RESET_GAME" }] satisfies GameEvent[])(
-    "allows only the creator to send $type",
+    "allows only the Host to send $type",
     (event) => {
       expect(authorize(event, "creator")).toBeUndefined();
-      expect(authorize(event, "guest")).toBe("Only the room creator can manage the game");
+      expect(authorize(event, "guest")).toBe("Only the Host can manage the game");
+      expect(
+        getGameActionAuthorizationError({ event, players: players.slice(1), requesterId: "guest" }),
+      ).toBeUndefined();
     },
   );
+
+  it("allows any seated Player to leave only their own seat", () => {
+    expect(authorize({ type: "LEAVE_GAME", playerId: "guest" }, "guest")).toBeUndefined();
+    expect(authorize({ type: "LEAVE_GAME", playerId: "creator" }, "guest")).toBe(
+      "Cannot act as another player",
+    );
+    expect(authorize({ type: "LEAVE_GAME", playerId: "outsider" }, "outsider")).toBe(
+      "You are not a participant in this room",
+    );
+  });
 
   it("allows a participant to submit their own turn action", () => {
     expect(

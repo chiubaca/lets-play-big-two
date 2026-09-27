@@ -215,6 +215,12 @@ export const bigTwoGameMachine = setup({
       winner: undefined,
       guardMessage: undefined,
     })),
+    removePlayer: assign(({ context, event }) => ({
+      players:
+        event.type === "LEAVE_GAME"
+          ? context.players.filter((player) => player.id !== event.playerId)
+          : context.players,
+    })),
     passTurn: assign(({ context }) => ({
       currentPlayerIndex: rotatePlayerIndex({
         currentPlayerIndex: context.currentPlayerIndex,
@@ -256,6 +262,8 @@ export const bigTwoGameMachine = setup({
   },
   guards: {
     hasMinPlayers: ({ context }) => context.players.length > 1,
+    isSeatedPlayer: ({ context, event }) =>
+      event.type === "LEAVE_GAME" && context.players.some((player) => player.id === event.playerId),
     canJoinGame: ({ context, event }) => {
       if (event.type !== "JOIN_GAME") return false;
       const isAlreadyInGame = context.players.some((player) => player.id === event.playerId);
@@ -287,6 +295,13 @@ export const bigTwoGameMachine = setup({
     consecutivePasses: 0,
     winner: undefined,
   }),
+  on: {
+    LEAVE_GAME: {
+      guard: "isSeatedPlayer",
+      actions: ["resetGame", "removePlayer"],
+      target: ".WAITING_FOR_PLAYERS",
+    },
+  },
   states: {
     WAITING_FOR_PLAYERS: {
       on: {

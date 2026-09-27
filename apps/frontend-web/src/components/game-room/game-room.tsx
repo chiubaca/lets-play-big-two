@@ -149,6 +149,11 @@ export const GameRoom = ({
   const [message, setMessage] = useState<string>();
   const [sortBySuit, setSortBySuit] = useState(false);
   const [panel, setPanel] = useState<"menu" | "settings" | "help" | null>(null);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [leavePending, setLeavePending] = useState(false);
+  const [leaveError, setLeaveError] = useState<string>();
+  const [roomNotice, setRoomNotice] = useState<string>();
+  const noticeTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [copied, setCopied] = useState(false);
   const [fanOut, setFanOut] = useState<number>(DEFAULT_DEV_LAYOUT.fanOut);
   const [cardArc, setCardArc] = useState<number>(DEFAULT_DEV_LAYOUT.arc);
@@ -167,6 +172,15 @@ export const GameRoom = ({
   const isMyTurn = !hideHand && currentId === user.id && isGameTurnState(currentValue);
   const pile = gameState?.context.cardPile;
   const lastPlayKey = JSON.stringify(pile?.at(-1) ?? []);
+  const liveNotice = gameState && "roomNotice" in gameState ? gameState.roomNotice : undefined;
+
+  useEffect(() => {
+    if (!roomCode || !liveNotice) return;
+    clearTimeout(noticeTimeout.current);
+    setRoomNotice(liveNotice);
+    noticeTimeout.current = setTimeout(() => setRoomNotice(undefined), 5000);
+  }, [liveNotice, roomCode]);
+  useEffect(() => () => clearTimeout(noticeTimeout.current), []);
 
   useEffect(() => {
     setSelectedCards([]);
@@ -275,6 +289,21 @@ export const GameRoom = ({
       playSound("notice");
     }
   };
+  const leave = async () => {
+    if (!roomCode || !me || leavePending) return;
+    setLeavePending(true);
+    setLeaveError(undefined);
+    try {
+      await send({ type: "LEAVE_GAME", playerId: user.id });
+      setConfirmLeave(false);
+    } catch (error) {
+      setLeaveError(
+        error instanceof Error ? error.message : "Could not leave the table. Try again.",
+      );
+    } finally {
+      setLeavePending(false);
+    }
+  };
   const hint = () => {
     const cards = requestHint?.();
     setSelectedCards(cards ?? []);
@@ -376,6 +405,11 @@ export const GameRoom = ({
           </button>
         </div>
       </header>
+      {roomNotice && (
+        <p className="room-departure-notice" role="status">
+          {roomNotice}
+        </p>
+      )}
       {roomCode && finished && (
         <section className="finished-room-strip" aria-label="Finished room">
           <div className="finished-room-summary">
@@ -400,7 +434,7 @@ export const GameRoom = ({
               </button>
             )}
             <a className="table-small-button" href="/">
-              Return home
+              Return to lobby
             </a>
           </div>
           {restartError && (
@@ -734,13 +768,76 @@ export const GameRoom = ({
                   New Game
                 </button>
               )}
-              <a className="table-small-button" href="/">
-                Leave table
-              </a>
+              {roomCode && !spectator ? (
+                <button
+                  className="table-small-button table-leave-button"
+                  onClick={() => {
+                    setPanel(null);
+                    setLeaveError(undefined);
+                    setConfirmLeave(true);
+                  }}
+                >
+                  Leave table
+                </button>
+              ) : !roomCode ? (
+                <a className="table-small-button" href="/">
+                  Leave table
+                </a>
+              ) : null}
+              {roomCode && (
+                <div className="table-lobby-option">
+                  <a className="table-small-button" href="/">
+                    Return to lobby
+                  </a>
+                  <small>You will not leave this table.</small>
+                </div>
+              )}
             </>
           )}
         </DialogContent>
       </Dialog>
+      {roomCode && (
+        <Dialog
+          open={confirmLeave}
+          onOpenChange={(open) => {
+            if (!open && !leavePending) setConfirmLeave(false);
+          }}
+        >
+          <DialogContent
+            className="table-dialog leave-table-dialog"
+            showCloseButton={!leavePending}
+          >
+            <DialogTitle>Leave this table?</DialogTitle>
+            <DialogDescription>
+              You’ll give up your seat and reset the game for everyone. You’ll stay here as a
+              Spectator and can take an open seat again later.
+            </DialogDescription>
+            <div className="leave-table-actions">
+              <button
+                type="button"
+                className="table-small-button"
+                disabled={leavePending}
+                onClick={() => setConfirmLeave(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="table-small-button table-leave-button"
+                disabled={leavePending}
+                onClick={() => void leave()}
+              >
+                {leavePending ? "Leaving…" : "Leave table and reset game"}
+              </button>
+            </div>
+            {leaveError && (
+              <p role="alert" className="leave-table-error">
+                {leaveError}
+              </p>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
       <Dialog
         open={finished && (!roomCode || showResult)}
         onOpenChange={(open) => {
@@ -781,16 +878,15 @@ export const GameRoom = ({
               Play again
             </button>
           ) : spectator ? (
-            <>
-              <p>Waiting for the host to start another game…</p>
+            <p>Waiting for the host to start another game…</p>
+          ) : null}
+          {roomCode && (
+            <div className="table-lobby-option">
               <a className="table-small-button" href="/">
-                Return home
+                Return to lobby
               </a>
-            </>
-          ) : (
-            <a className="table-small-button" href="/">
-              Return home
-            </a>
+              <small>You will not leave this table.</small>
+            </div>
           )}
           {roomCode && restartError && <p role="alert">{restartError}</p>}
         </DialogContent>

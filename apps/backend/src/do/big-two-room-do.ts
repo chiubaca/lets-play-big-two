@@ -65,9 +65,29 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     ) {
       return { success: false, error: "This room is no longer accepting players" };
     }
+    if (
+      event.type === "LEAVE_GAME" &&
+      gameStateSnapshot.context.players.some((player) => player.id === requesterId)
+    ) {
+      return { success: false, error: "Could not leave the table. Please try again." };
+    }
     const serialisedGameState = JSON.stringify(gameStateSnapshot);
     this.sql.exec(`UPDATE game_room SET game_state = ? WHERE id = 1`, serialisedGameState);
-    this.broadcast(gameStateSnapshot);
+    const departingPlayer =
+      event.type === "LEAVE_GAME"
+        ? gameState.context.players.find((player) => player.id === requesterId)
+        : undefined;
+    this.broadcast(
+      gameStateSnapshot,
+      undefined,
+      departingPlayer && {
+        playerId: requesterId,
+        message:
+          gameState.value === "WAITING_FOR_PLAYERS"
+            ? `${departingPlayer.name} left the table.`
+            : `${departingPlayer.name} left the table, so the game was reset.`,
+      },
+    );
 
     return { success: true };
   }
@@ -110,12 +130,26 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     ).size;
   }
 
-  private broadcast(state: BigTwoGameMachineSnapshot, excluding?: WebSocket) {
+  private broadcast(
+    state: BigTwoGameMachineSnapshot,
+    excluding?: WebSocket,
+    notice?: { playerId: string; message: string },
+  ) {
     const count = this.spectatorCount(state, excluding);
     for (const socket of this.ctx.getWebSockets()) {
       if (socket === excluding) continue;
       const viewerId = socket.deserializeAttachment() as string | null;
-      if (viewerId) socket.send(JSON.stringify(roomView(state, viewerId, count)));
+      if (!viewerId) continue;
+      try {
+        socket.send(
+          JSON.stringify({
+            ...roomView(state, viewerId, count),
+            ...(notice && viewerId !== notice.playerId ? { roomNotice: notice.message } : {}),
+          }),
+        );
+      } catch {
+        // A disconnected viewer must not turn a persisted game action into a failed request.
+      }
     }
   }
 

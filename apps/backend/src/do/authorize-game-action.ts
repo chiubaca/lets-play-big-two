@@ -25,6 +25,6 @@ export function getGameActionAuthorizationError({
     (event.type === "START_GAME" || event.type === "RESET_GAME") &&
     players[0]?.id !== requesterId
   ) {
-    return "Only the room creator can manage the game";
+    return "Only the Host can manage the game";
   }
 }

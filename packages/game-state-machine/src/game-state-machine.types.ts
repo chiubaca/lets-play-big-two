@@ -11,6 +11,7 @@ export type BigTwoGameMachineSnapshot = SnapshotFrom<BigTwoGameMachine>;
 export type RoomGameState = BigTwoGameMachineSnapshot & {
   handCounts: Record<string, number>;
   spectatorCount: number;
+  roomNotice?: string;
 };
 
 export type GameEvent = z.infer<typeof gameEventSchema>;

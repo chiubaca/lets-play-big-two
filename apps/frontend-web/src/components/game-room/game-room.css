@@ -797,6 +797,53 @@
   text-align: center;
   cursor: pointer;
 }
+.table-lobby-option {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+}
+.table-lobby-option small {
+  color: #b9b99f;
+  font-size: 11px;
+}
+.table-leave-button {
+  border-color: #c78175;
+  color: #ffe2d6;
+  background: #572c2a;
+}
+.leave-table-dialog [data-slot="dialog-title"] {
+  font-family: Georgia, serif;
+  color: #ffe2a0;
+  font-size: 22px;
+}
+.leave-table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.leave-table-actions button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+.leave-table-error {
+  color: #ffb2a5;
+}
+.room-departure-notice {
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 40;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  margin: 0;
+  padding: 12px 18px;
+  border: 1px solid #c5a461;
+  border-radius: 12px;
+  color: var(--casino-cream);
+  background: var(--casino-panel);
+  box-shadow: 0 12px 36px #0007;
+  transform: translateX(-50%);
+}
 .table-settings-list {
   display: grid;
   gap: 16px;
