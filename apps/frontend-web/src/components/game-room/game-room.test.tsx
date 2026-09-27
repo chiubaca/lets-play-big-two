@@ -381,6 +381,7 @@ it("keeps the online chat log and draft across play, Results, and another game",
     await waitFor(() => expect(trigger.getAttribute("aria-label")).toContain("1 unread"));
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(trigger.getAttribute("aria-label")).toBe("Room chat");
     room.rerender(<GameRoom {...props} gameState={gameState} />);
     expect(screen.getByRole("log").textContent).toContain("second");
     expect(

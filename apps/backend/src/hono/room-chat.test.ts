@@ -1,6 +1,18 @@
 import { afterEach, expect, it, vi } from "vite-plus/test";
 import { App } from "./app";
+import { RoomChatObject } from "../do/room-chat-do";
 import { roomTable } from "@big-two/data-ops/drizzle/schema";
+
+vi.mock("cloudflare:workers", () => ({
+  DurableObject: class {
+    ctx: unknown;
+    env: unknown;
+    constructor(ctx: unknown, env: unknown) {
+      this.ctx = ctx;
+      this.env = env;
+    }
+  },
+}));
 
 const session = vi.fn();
 const send = vi.fn();
@@ -51,6 +63,7 @@ afterEach(() => {
   fetchSocket.mockReset();
   roomExists = true;
   deleting = false;
+  vi.unstubAllGlobals();
 });
 
 it("rejects signed-out, deleting, and removed-room sends before forwarding to chat", async () => {
@@ -154,4 +167,112 @@ it("rejects other origins and invalid JSON with actionable errors", async () => 
   );
   expect(malformed.status).toBe(400);
   expect(await malformed.json()).toMatchObject({ error: expect.stringContaining("JSON") });
+});
+
+it("routes authenticated upgrades and sends through the live chat object across phases and seat changes", async () => {
+  session.mockResolvedValue({ user: { id: "ada" }, session: { id: "session-1" } });
+  let seat: string | null = "Room seat <Ada>";
+  let phase = "WAITING_FOR_PLAYERS";
+  let sequence = 0;
+  const sockets: Array<{
+    attachment: { userId: string; sessionId: string };
+    received: string[];
+    deserializeAttachment: () => { userId: string; sessionId: string };
+    send: (value: string) => void;
+    close: ReturnType<typeof vi.fn>;
+  }> = [];
+  const state = {
+    id: { name: "ABCDE" },
+    getWebSockets: () => sockets,
+    acceptWebSocket: (socket: (typeof sockets)[number]) => sockets.push(socket),
+    storage: {
+      sql: {
+        exec: (sql: string) =>
+          sql.includes("RETURNING") ? { one: () => ({ value: ++sequence }) } : undefined,
+      },
+      setAlarm: vi.fn(),
+    },
+  } as unknown as DurableObjectState;
+  const liveEnv = {
+    BIG_TWO_DB: {
+      prepare: () => ({
+        bind: () => ({ first: async () => (roomExists && !deleting ? { id: "session-1" } : null) }),
+      }),
+    },
+    BIG_TWO_ROOM_DURABLE_OBJECT: {
+      getByName: () => ({ getChatSeat: async () => (phase ? { seatName: seat } : null) }),
+    },
+  } as unknown as Env;
+  const chat = new RoomChatObject(state, liveEnv);
+  const routeEnv = {
+    ROOM_CHAT_DURABLE_OBJECT: { getByName: () => chat },
+  } as unknown as Cloudflare.Env;
+  const NativeResponse = Response;
+  vi.stubGlobal(
+    "Response",
+    class extends NativeResponse {
+      constructor(body: BodyInit | null, options?: ResponseInit & { webSocket?: unknown }) {
+        super(body, options?.status === 101 ? { status: 200 } : options);
+        if (options?.status === 101) Object.defineProperty(this, "status", { value: 101 });
+      }
+    },
+  );
+  vi.stubGlobal(
+    "WebSocketPair",
+    class {
+      0 = {};
+      1 = {
+        attachment: { userId: "", sessionId: "" },
+        received: [] as string[],
+        serializeAttachment(value: { userId: string; sessionId: string }) {
+          this.attachment = value;
+        },
+        deserializeAttachment() {
+          return this.attachment;
+        },
+        send(value: string) {
+          this.received.push(value);
+        },
+        close: vi.fn(),
+      };
+    },
+  );
+
+  const upgrade = () =>
+    App.request("/api/room/chat/ws/ABCDE", { headers: { Upgrade: "websocket" } }, routeEnv);
+  expect((await upgrade()).status).toBe(101);
+  expect((await upgrade()).status).toBe(101);
+  expect(sockets).toHaveLength(2);
+  expect(sockets[1].received).toEqual([]); // A late tab gets no replay.
+
+  const sendLive = (text: string) =>
+    App.request(
+      "/api/room/chat/ABCDE",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, clientSendId }),
+      },
+      routeEnv,
+    );
+  for (phase of ["WAITING_FOR_PLAYERS", "NEXT_PLAYER_TURN", "GAME_END"]) {
+    const reply = await sendLive(phase);
+    expect(reply.status).toBe(200);
+    const acknowledgement = await reply.json();
+    expect(acknowledgement).toMatchObject({
+      order: sequence,
+      author: "Room seat <Ada>",
+      text: phase,
+    });
+    expect(JSON.parse(sockets[0].received.at(-1)!)).toEqual(acknowledgement);
+    expect(JSON.parse(sockets[1].received.at(-1)!)).toEqual(acknowledgement);
+  }
+  seat = null;
+  expect((await sendLive("not seated")).status).toBe(403);
+  expect((await upgrade()).status).toBe(101); // Former Player remains a Spectator.
+  roomExists = false;
+  await chat.alarm();
+  expect(sockets[0].close).toHaveBeenCalled();
+  expect((await upgrade()).status).toBe(404);
+  expect((await sendLive("removed")).status).toBe(404);
 });

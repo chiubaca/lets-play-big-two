@@ -44,8 +44,12 @@ export function RoomChat({
   };
 
   useEffect(() => {
+    if (open && !blocked) setUnread(0);
+  }, [open, blocked]);
+
+  useEffect(() => {
     if (open && !blocked) (seated ? composer.current : log.current)?.focus();
-  }, [open, blocked, seated]);
+  }, [open, seated]);
 
   useEffect(() => {
     const host = import.meta.env.VITE_BACKEND_URL.replace(/^https?/, "wss");

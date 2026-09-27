@@ -19,6 +19,8 @@ import { jevBotMoveRequestSchema } from "../lib/jev-bot.schema";
 import { createRoomCode } from "../lib/room-code";
 import { parseChatInput } from "../lib/chat-input";
 
+const allowedOrigins = ["https://local.bigtwo.com", "https://big-two.chiubaca.com"];
+
 async function accountDeletionIsPending(userId: string) {
   const db = getDb();
   const deletion = await db
@@ -31,14 +33,14 @@ async function accountDeletionIsPending(userId: string) {
 
 function chatOriginAllowed(request: Request) {
   const origin = request.headers.get("Origin");
-  return !origin || ["https://local.bigtwo.com", "https://big-two.chiubaca.com"].includes(origin);
+  return !origin || allowedOrigins.includes(origin);
 }
 
 export const App = new Hono<{ Bindings: Cloudflare.Env }>()
   .use(
     "*",
     cors({
-      origin: ["https://local.bigtwo.com", "https://big-two.chiubaca.com"],
+      origin: allowedOrigins,
       allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
       allowHeaders: ["Content-Type", "Authorization"],
       credentials: true,
