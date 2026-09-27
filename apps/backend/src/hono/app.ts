@@ -138,7 +138,7 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
     const durableObjectId = c.env.BIG_TWO_ROOM_DURABLE_OBJECT.idFromName(roomIdFromDb);
     const roomStub = c.env.BIG_TWO_ROOM_DURABLE_OBJECT.get(durableObjectId);
 
-    const gameState = await roomStub.getRoomView(session.user.id);
+    const gameState = await roomStub.getRoomView(session.user.id, roomId);
     if (!gameState) return c.notFound();
     return c.json(gameState, 200, { "Cache-Control": "no-store" });
   })
@@ -393,6 +393,7 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
       const result = await stub.gameAction(authenticatedGameEvent, session.user.id, roomId);
 
       if (!result.success) {
+        if (result.error === "Room not found") return c.notFound();
         return c.json({ error: result.error }, 403);
       }
 

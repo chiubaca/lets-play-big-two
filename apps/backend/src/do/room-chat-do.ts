@@ -157,6 +157,18 @@ export class RoomChatObject extends DurableObject<Env> {
     const [client, server] = Object.values(new WebSocketPair());
     server.serializeAttachment({ roomId, userId, sessionId } satisfies Visitor);
     this.ctx.acceptWebSocket(server);
+    // A departure may have set a deadline between the first claim and acceptance.
+    // The accepted connection must win that race.
+    if (
+      !(await this.env.BIG_TWO_ROOM_DURABLE_OBJECT.getByName(roomId).markConnected(
+        roomId,
+        userId,
+        sessionId,
+      ))
+    ) {
+      server.close(1008, "Room chat access ended");
+      return new Response("Room chat is unavailable", { status: 403 });
+    }
     await this.ctx.storage.setAlarm(Date.now() + 10_000);
     return new Response(null, { status: 101, webSocket: client });
   }

@@ -34,7 +34,12 @@ export function OnlineGameRoom({ roomId, user }: { roomId: string; user: GameRoo
         param: { roomId },
       });
       if (!response.ok) {
-        const body: unknown = await response.json();
+        let body: unknown;
+        try {
+          body = await response.json();
+        } catch {
+          // Expired rooms can return an ordinary 404 rather than a JSON action error.
+        }
         throw new Error(
           body && typeof body === "object" && "error" in body && typeof body.error === "string"
             ? body.error

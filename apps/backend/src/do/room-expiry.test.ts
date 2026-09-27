@@ -200,6 +200,19 @@ it("keeps a room with only a signed-in Spectator chat connection active", async 
   expect(room.result().exists).toBe(false);
 });
 
+it("lets an accepted connection cancel a deadline set during its handshake", async () => {
+  const room = fixture();
+  expect(await room.object.markConnected("ABCDE", "ada", "session")).toBe(true);
+  await room.object.visitorDeparted("ABCDE");
+  expect(room.row.expires_at).toBe(NOW + TWO_DAYS);
+  // The WebSocket was accepted after that departure. The post-acceptance claim wins.
+  expect(await room.object.markConnected("ABCDE", "ada", "session")).toBe(true);
+  expect(room.row.expires_at).toBeNull();
+  vi.setSystemTime(NOW + 60_000);
+  await room.object.visitorDeparted("ABCDE");
+  expect(room.row.expires_at).toBe(NOW + 60_000 + TWO_DAYS);
+});
+
 it("recalculates the deadline from the last departure when a paused game finishes", async () => {
   const room = fixture("playing");
   await room.object.markConnected("ABCDE", "ada", "session");

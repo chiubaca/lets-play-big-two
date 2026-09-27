@@ -51,6 +51,19 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     return !!result;
   }
 
+  private async available(roomId: string): Promise<boolean> {
+    const room = await this.env.BIG_TWO_DB.prepare(
+      "SELECT status, expires_at FROM room WHERE id = ?",
+    )
+      .bind(roomId)
+      .first<{ status: string; expires_at: number | null }>();
+    return (
+      !!room &&
+      room.status !== "expiring" &&
+      (room.expires_at === null || room.expires_at > Date.now())
+    );
+  }
+
   async markConnected(roomId: string, userId: string, sessionId: string): Promise<boolean> {
     return this.serial(async () => {
       if (!(await this.valid({ roomId, userId, sessionId }))) return false;
@@ -70,12 +83,29 @@ export class BigTwoRoomObject extends DurableObject<Env> {
   }
 
   private async hasVisitors(roomId: string): Promise<boolean> {
+    if ((await this.accessibleSockets()).length > 0) return true;
+    return this.env.ROOM_CHAT_DURABLE_OBJECT.getByName(roomId).hasEligibleVisitors();
+  }
+
+  private async accessibleSockets(): Promise<WebSocket[]> {
+    const accessible: WebSocket[] = [];
     for (const socket of this.ctx.getWebSockets()) {
       const visitor = this.visitor(socket);
-      if (visitor && (await this.valid(visitor))) return true;
-      if (visitor) socket.close(1008, "Room access ended");
+      try {
+        if (visitor && (await this.valid(visitor))) {
+          accessible.push(socket);
+          continue;
+        }
+      } catch (error) {
+        console.error("Could not validate room connection", error);
+      }
+      try {
+        socket.close(1008, "Room access ended");
+      } catch {
+        // A closed socket is no longer present even if closing it again fails.
+      }
     }
-    return this.env.ROOM_CHAT_DURABLE_OBJECT.getByName(roomId).hasEligibleVisitors();
+    return accessible;
   }
 
   async visitorDeparted(roomId: string): Promise<void> {
@@ -183,6 +213,8 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     requesterId: string,
     roomId?: string,
   ): Promise<{ success: true } | { success: false; error: string }> {
+    if (roomId && !(await this.available(roomId)))
+      return { success: false, error: "Room not found" };
     const query = this.sql.exec(`SELECT game_state FROM game_room WHERE id = 1`);
 
     const record = query.toArray()[0];
@@ -230,7 +262,7 @@ export class BigTwoRoomObject extends DurableObject<Env> {
       event.type === "LEAVE_GAME"
         ? gameState.context.players.find((player) => player.id === requesterId)
         : undefined;
-    this.broadcast(
+    await this.broadcast(
       gameStateSnapshot,
       undefined,
       departingPlayer && {
@@ -265,11 +297,12 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     return record.game_state as string;
   }
 
-  async getRoomView(viewerId: string) {
+  async getRoomView(viewerId: string, roomId?: string) {
+    if (roomId && !(await this.available(roomId))) return null;
     const stored = await this.getGameState();
     if (!stored) return null;
     const state = JSON.parse(stored) as BigTwoGameMachineSnapshot;
-    return roomView(state, viewerId, this.spectatorCount(state));
+    return roomView(state, viewerId, this.spectatorCount(state, await this.accessibleSockets()));
   }
 
   async getChatSeat(viewerId: string): Promise<{ seatName: string | null } | null> {
@@ -281,24 +314,28 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     };
   }
 
-  private spectatorCount(state: BigTwoGameMachineSnapshot, excluding?: WebSocket) {
+  private spectatorCount(
+    state: BigTwoGameMachineSnapshot,
+    sockets: WebSocket[],
+    excluding?: WebSocket,
+  ) {
     const playerIds = new Set(state.context.players.map((player) => player.id));
     return new Set(
-      this.ctx
-        .getWebSockets()
+      sockets
         .filter((socket) => socket !== excluding)
         .map((socket) => this.viewerId(socket))
         .filter((id): id is string => !!id && !playerIds.has(id)),
     ).size;
   }
 
-  private broadcast(
+  private async broadcast(
     state: BigTwoGameMachineSnapshot,
     excluding?: WebSocket,
     notice?: { playerId: string; message: string },
   ) {
-    const count = this.spectatorCount(state, excluding);
-    for (const socket of this.ctx.getWebSockets()) {
+    const sockets = await this.accessibleSockets();
+    const count = this.spectatorCount(state, sockets, excluding);
+    for (const socket of sockets) {
       if (socket === excluding) continue;
       const viewerId = this.viewerId(socket);
       if (!viewerId) continue;
@@ -335,7 +372,7 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     );
   }
 
-  redactPlayer(playerId: string) {
+  async redactPlayer(playerId: string) {
     const query = this.sql.exec(`SELECT game_state FROM game_room WHERE id = 1`);
     const record = query.toArray()[0];
     if (!record) return;
@@ -351,7 +388,7 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     const serialisedGameState = JSON.stringify(redactedState);
     this.sql.exec(`UPDATE game_room SET game_state = ? WHERE id = 1`, serialisedGameState);
 
-    this.broadcast(redactedState);
+    await this.broadcast(redactedState);
   }
 
   async fetch(request: Request) {
@@ -371,7 +408,12 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     const [client, server] = Object.values(webSocketPair);
     server.serializeAttachment({ roomId, userId: viewerId, sessionId } satisfies RoomVisitor);
     this.ctx.acceptWebSocket(server);
-    this.broadcast(JSON.parse(stored) as BigTwoGameMachineSnapshot);
+    // Recheck after acceptance so a departure cannot leave a deadline on a connected room.
+    if (!(await this.markConnected(roomId, viewerId, sessionId))) {
+      server.close(1008, "Room access ended");
+      return new Response("Room not found", { status: 404 });
+    }
+    await this.broadcast(JSON.parse(stored) as BigTwoGameMachineSnapshot);
 
     return new Response(null, {
       status: 101,
@@ -397,7 +439,10 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     ws.serializeAttachment(null);
     const stored = this.sql.exec(`SELECT game_state FROM game_room WHERE id = 1`).toArray()[0];
     if (stored)
-      this.broadcast(JSON.parse(stored.game_state as string) as BigTwoGameMachineSnapshot, ws);
+      await this.broadcast(
+        JSON.parse(stored.game_state as string) as BigTwoGameMachineSnapshot,
+        ws,
+      );
     if (visitor) await this.visitorDeparted(visitor.roomId);
   }
 

@@ -20,10 +20,12 @@ function room(playing: boolean) {
   actor.send({ type: "JOIN_GAME", playerId: "bob", playerName: "Bob" });
   if (playing) actor.send({ type: "START_GAME" });
   let stored = JSON.stringify(actor.getPersistedSnapshot());
+  const revoked = new Set<string>();
   const received = { alice: vi.fn(), bob: vi.fn() };
   const sockets = Object.entries(received).map(([id, send]) => ({
-    deserializeAttachment: () => id,
+    deserializeAttachment: () => ({ roomId: "ABCDE", userId: id, sessionId: `session-${id}` }),
     send,
+    close: vi.fn(),
   }));
   const sql = {
     exec: (query: string, value?: string) => {
@@ -33,9 +35,17 @@ function room(playing: boolean) {
   };
   const object = new BigTwoRoomObject(
     { storage: { sql }, getWebSockets: () => sockets } as unknown as DurableObjectState,
-    {} as Env,
+    {
+      BIG_TWO_DB: {
+        prepare: () => ({
+          bind: (_room: string, _deadline: number, _session: string, userId: string) => ({
+            first: async () => (revoked.has(userId) ? null : { id: "valid" }),
+          }),
+        }),
+      },
+    } as unknown as Env,
   );
-  return { object, received };
+  return { object, received, sockets, revoked };
 }
 
 it.each([true, false])(
@@ -74,4 +84,14 @@ it("confirms a persisted departure even when a disconnected viewer cannot receiv
   expect((await object.getRoomView("bob"))?.context.players.map((player) => player.id)).toEqual([
     "bob",
   ]);
+});
+
+it("closes a revoked game socket before another Player's action is broadcast", async () => {
+  const { object, sockets, received, revoked } = room(false);
+  revoked.add("alice");
+  expect(await object.gameAction({ type: "LEAVE_GAME", playerId: "bob" }, "bob")).toEqual({
+    success: true,
+  });
+  expect(received.alice).not.toHaveBeenCalled();
+  expect(sockets[0].close).toHaveBeenCalledWith(1008, "Room access ended");
 });
