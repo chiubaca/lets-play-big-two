@@ -98,6 +98,43 @@ afterEach(() => {
   sqlite.close();
 });
 
+it("rejects a ninth install rather than silently omitting an enrolled install from Turns", async () => {
+  expect(
+    (await request("/api/turn-notifications/preference", "PUT", '{"enabled":true}')).status,
+  ).toBe(200);
+  for (let index = 0; index < 8; index++) {
+    const response = await request(
+      "/api/turn-notifications/device",
+      "POST",
+      payload(0, `https://fcm.googleapis.com/fcm/send/device-${index}`),
+    );
+    expect(response.status).toBe(200);
+  }
+  const ninth = await request(
+    "/api/turn-notifications/device",
+    "POST",
+    payload(0, "https://fcm.googleapis.com/fcm/send/device-8"),
+  );
+  expect(ninth.status).toBe(409);
+  expect(((await ninth.json()) as { error: string }).error).toContain("limit 8");
+  expect(
+    (
+      sqlite.prepare("SELECT count(*) AS count FROM turnNotificationRegistration").get() as {
+        count: number;
+      }
+    ).count,
+  ).toBe(8);
+  expect(
+    (
+      await request(
+        "/api/turn-notifications/device",
+        "POST",
+        payload(0, "https://fcm.googleapis.com/fcm/send/device-0"),
+      )
+    ).status,
+  ).toBe(200);
+});
+
 it("enrolls only with live account consent and reports registration without secrets", async () => {
   expect((await request("/api/turn-notifications/device", "POST", payload())).status).toBe(409);
   expect(

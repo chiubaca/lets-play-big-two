@@ -14,7 +14,9 @@ but no alerts are sent and devices cannot enroll.
    development and deployment. Rebuild the frontend after setting it. The key
    must match the backend's public key. Rotate keys deliberately: existing
    subscriptions need explicit re-enrollment after a rotation.
-4. Apply the account migrations through `0006_turn_notification_registration.sql`
+   An account can enroll up to eight installs; additional enrollment is rejected
+   rather than silently excluding an already-enrolled install from a Turn.
+4. Apply the account migrations through `0007_turn_alarm_repair_cursor.sql`
    before enabling enrollment. Deploy the backend and frontend together.
 
 The service worker maps the two supported frontend origins to their corresponding

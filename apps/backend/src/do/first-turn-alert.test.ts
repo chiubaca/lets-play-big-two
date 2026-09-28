@@ -40,7 +40,8 @@ function room() {
     CREATE TABLE turnNotificationRegistration (endpoint_id TEXT PRIMARY KEY, endpoint TEXT,
       p256dh TEXT, auth TEXT, user_id TEXT, session_id TEXT, generation INTEGER);
     INSERT INTO user VALUES ('ada'), ('ben');
-    INSERT INTO session VALUES ('ada-session','ada',1800000600000), ('ben-session','ben',1800000600000);
+    INSERT INTO session VALUES ('ada-session','ada',1800000600000), ('ben-session','ben',1800000600000),
+      ('ada-focus','ada',1800000600000), ('ben-focus','ben',1800000600000);
     INSERT INTO room VALUES ('ABCDE','waiting',NULL,1800000000000,NULL,1);
     INSERT INTO turnNotificationPreference VALUES ('ada',1,0), ('ben',1,0);`);
   let failEnrollmentRead = false;
@@ -189,6 +190,24 @@ it("suppresses an intent while this room is focused on any tab, with no reminder
   expect(r.outbox()).toHaveLength(0);
 });
 
+it("does not let an expired focus session silence an enrolled install", async () => {
+  const r = room();
+  r.enroll("ada");
+  r.enroll("ben");
+  await r.object.setRoomFocus("ABCDE", "ada", "ada-focus", crypto.randomUUID(), true, 1);
+  await r.object.setRoomFocus("ABCDE", "ben", "ben-focus", crypto.randomUUID(), true, 1);
+  r.accounts
+    .prepare("UPDATE session SET expires_at = ? WHERE id IN ('ada-focus','ben-focus')")
+    .run(NOW);
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  expect(r.outbox()).toHaveLength(1);
+  const turn = r.firstTurn()!;
+  const captured = r.outbox()[0] as { endpoint_id: string; session_id: string; generation: number };
+  expect(await r.reload().verifyFirstTurn("ABCDE", turn.id, turn.recipient_id, captured)).toBe(
+    true,
+  );
+});
+
 it("never backfills a mid-Turn enrollment and retires pending work on the first play", async () => {
   const r = room();
   await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
@@ -311,7 +330,8 @@ it("sends encrypted backend-only Web Push at most once after provider acceptance
     );
   await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
   const push = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 201 }));
-  await r.reload().alarm();
+  const draining = r.reload();
+  await Promise.all([draining.alarm(), draining.alarm()]);
   expect(push).toHaveBeenCalledTimes(1);
   const [, init] = push.mock.calls[0];
   expect(JSON.stringify(init)).not.toContain("It’s your turn");

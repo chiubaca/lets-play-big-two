@@ -23,7 +23,7 @@ const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
 const FOCUS_TTL = 20_000;
 const TURN_TTL = 5 * 60_000;
 
-type Turn = { id: string; room_id: string; recipient_id: string; deadline: number };
+type FirstTurn = { id: string; room_id: string; recipient_id: string; deadline: number };
 type Delivery = Enrollment & { attempts: number; next_at: number };
 
 export class BigTwoRoomObject extends DurableObject<Env> {
@@ -245,6 +245,27 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     );
   }
 
+  private async verifiedFocus(roomId: string, userId: string): Promise<boolean> {
+    const rows = this.sql
+      .exec<{ tab_id: string; session_id: string }>(
+        "SELECT tab_id, session_id FROM room_focus WHERE user_id = ? AND expires_at > ?",
+        userId,
+        Date.now(),
+      )
+      .toArray();
+    let present = false;
+    for (const row of rows) {
+      if (await this.valid({ roomId, userId, sessionId: row.session_id })) present = true;
+      else
+        this.sql.exec(
+          "DELETE FROM room_focus WHERE tab_id = ? AND session_id = ?",
+          row.tab_id,
+          row.session_id,
+        );
+    }
+    return present;
+  }
+
   async setRoomFocus(
     roomId: string,
     userId: string,
@@ -285,9 +306,9 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     return true;
   }
 
-  private currentTurn(turnId: string, roomId: string, userId: string): Turn | null {
+  private currentFirstTurn(turnId: string, roomId: string, userId: string): FirstTurn | null {
     const turn = this.sql
-      .exec<Turn>(
+      .exec<FirstTurn>(
         "SELECT * FROM first_turn WHERE id = ? AND room_id = ? AND recipient_id = ? AND deadline > ?",
         turnId,
         roomId,
@@ -295,7 +316,7 @@ export class BigTwoRoomObject extends DurableObject<Env> {
         Date.now(),
       )
       .toArray()[0];
-    if (!turn || this.activeFocus(userId)) return null;
+    if (!turn) return null;
     const state = this.sql
       .exec<{ game_state: string }>("SELECT game_state FROM game_room WHERE id = 1")
       .toArray()[0];
@@ -314,7 +335,7 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     userId: string,
     enrollment: Enrollment,
   ): Promise<boolean> {
-    if (!this.currentTurn(turnId, roomId, userId)) return false;
+    if (!this.currentFirstTurn(turnId, roomId, userId)) return false;
     const captured = this.sql
       .exec(
         "SELECT 1 FROM turn_delivery WHERE turn_id = ? AND endpoint_id = ? AND session_id = ? AND generation = ? LIMIT 1",
@@ -326,13 +347,14 @@ export class BigTwoRoomObject extends DurableObject<Env> {
       .toArray()[0];
     if (!captured) return false;
     if (!(await this.available(roomId))) return false;
+    if (await this.verifiedFocus(roomId, userId)) return false;
     if (!(await registeredEndpoint(this.env, userId, enrollment))) return false;
-    return !!this.currentTurn(turnId, roomId, userId);
+    return !!this.currentFirstTurn(turnId, roomId, userId) && !this.activeFocus(userId);
   }
 
   async repairFirstTurn(roomId: string): Promise<void> {
     const turn = this.sql
-      .exec<Turn>("SELECT * FROM first_turn WHERE room_id = ? LIMIT 1", roomId)
+      .exec<FirstTurn>("SELECT * FROM first_turn WHERE room_id = ? LIMIT 1", roomId)
       .toArray()[0];
     if (!turn) return;
     if (turn.deadline <= Date.now()) {
@@ -353,7 +375,11 @@ export class BigTwoRoomObject extends DurableObject<Env> {
   }
 
   async alarm(): Promise<void> {
-    const turn = this.sql.exec<Turn>("SELECT * FROM first_turn LIMIT 1").toArray()[0];
+    return this.serial(() => this.drainFirstTurn());
+  }
+
+  private async drainFirstTurn(): Promise<void> {
+    const turn = this.sql.exec<FirstTurn>("SELECT * FROM first_turn LIMIT 1").toArray()[0];
     if (!turn) return;
     const due = this.sql
       .exec<Delivery>(
@@ -368,7 +394,11 @@ export class BigTwoRoomObject extends DurableObject<Env> {
         if (await this.verifyFirstTurn(turn.room_id, turn.id, turn.recipient_id, delivery)) {
           // The second check closes the common race where a Player focuses the room during D1 verification.
           const registration = await registeredEndpoint(this.env, turn.recipient_id, delivery);
-          if (registration && this.currentTurn(turn.id, turn.room_id, turn.recipient_id))
+          if (
+            registration &&
+            this.currentFirstTurn(turn.id, turn.room_id, turn.recipient_id) &&
+            !this.activeFocus(turn.recipient_id)
+          )
             outcome = await sendTurnPush(
               this.env,
               registration,
@@ -477,11 +507,13 @@ export class BigTwoRoomObject extends DurableObject<Env> {
       ? gameStateSnapshot.context.players[gameStateSnapshot.context.currentPlayerIndex]?.id
       : undefined;
     let enrollments: Enrollment[] = [];
-    if (recipientId && !this.activeFocus(recipientId)) {
+    if (recipientId) {
       try {
         enrollments = await turnEnrollments(this.env, recipientId);
+        await this.verifiedFocus(roomId!, recipientId);
       } catch {
         /* Eligibility is unverified: commit the deal without an alert. */
+        enrollments = [];
       }
     }
     const serialisedGameState = JSON.stringify(gameStateSnapshot);

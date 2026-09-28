@@ -21,6 +21,7 @@ import { jevBotMoveRequestSchema } from "../lib/jev-bot.schema";
 import { createRoomCode } from "../lib/room-code";
 import { parseChatInput } from "../lib/chat-input";
 import { mintTurnTicket, readTurnTicket } from "../lib/turn-ticket";
+import { MAX_TURN_INSTALLS } from "../lib/turn-push";
 
 const allowedOrigins = ["https://local.bigtwo.com", "https://big-two.chiubaca.com"];
 
@@ -272,6 +273,10 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
       FROM turnNotificationPreference p JOIN session s ON s.user_id = p.user_id
       WHERE p.user_id = ? AND s.id = ? AND s.expires_at > ? AND p.enabled = 1 AND p.generation = ?
         AND NOT EXISTS (SELECT 1 FROM accountDeletion d WHERE d.user_id = p.user_id)
+        AND (EXISTS (SELECT 1 FROM turnNotificationRegistration existing
+          WHERE existing.endpoint_id = ? AND existing.user_id = p.user_id)
+          OR (SELECT count(*) FROM turnNotificationRegistration enrolled
+            WHERE enrolled.user_id = p.user_id AND enrolled.generation = p.generation) < ?)
       ON CONFLICT(endpoint_id) DO UPDATE SET
         p256dh = excluded.p256dh, auth = excluded.auth,
         session_id = excluded.session_id, generation = excluded.generation
@@ -289,6 +294,8 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
           session.session.id,
           Date.now(),
           generation,
+          id,
+          MAX_TURN_INSTALLS,
           Date.now(),
         )
         .first();
@@ -298,7 +305,10 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
     }
     if (!result)
       return c.json(
-        { error: "Enrollment is unavailable; check account consent and this session" },
+        {
+          error:
+            "Enrollment is unavailable; check consent and session, or remove another device (limit 8)",
+        },
         409,
       );
     return c.json({ registered: true }, 200, { "Cache-Control": "no-store" });

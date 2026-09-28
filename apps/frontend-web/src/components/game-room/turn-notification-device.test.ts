@@ -122,6 +122,26 @@ it("requires server confirmation even after permission and subscription", async 
   expect(requestPermission).not.toHaveBeenCalled();
 });
 
+it("explains the device limit instead of suggesting a retry after a rejected enrollment", async () => {
+  vi.stubGlobal("Notification", { permission: "granted", requestPermission });
+  subscribe.mockResolvedValue({
+    endpoint: "https://fcm.googleapis.com/fcm/send/device-token",
+    toJSON: () => ({
+      endpoint: "https://fcm.googleapis.com/fcm/send/device-token",
+      keys: {
+        p256dh: Buffer.alloc(65, 4).toString("base64url"),
+        auth: Buffer.alloc(16, 4).toString("base64url"),
+      },
+    }),
+  });
+  post.mockResolvedValue({
+    ok: false,
+    status: 409,
+    json: async () => ({ error: "Remove another device (limit 8)" }),
+  });
+  await expect(turnNotificationDevice.enable(2)).rejects.toThrow("Remove another device (limit 8)");
+});
+
 it("removes a registered install after browser permission is revoked", async () => {
   vi.stubGlobal("Notification", { permission: "granted", requestPermission });
   const unsubscribe = vi.fn();

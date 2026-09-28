@@ -12,6 +12,8 @@ export type RegisteredEndpoint = Enrollment & {
   auth: string;
 };
 
+export const MAX_TURN_INSTALLS = 8;
+
 const liveEnrollment = `FROM turnNotificationRegistration r
   JOIN turnNotificationPreference p ON p.user_id = r.user_id
     AND p.enabled = 1 AND p.generation = r.generation
@@ -25,7 +27,7 @@ export async function turnEnrollments(env: Env, userId: string): Promise<Enrollm
   const { results } = await env.BIG_TWO_DB.prepare(`
     SELECT r.endpoint_id, r.session_id, r.generation
     ${liveEnrollment}
-    ORDER BY r.endpoint_id LIMIT 8
+    ORDER BY r.endpoint_id LIMIT ${MAX_TURN_INSTALLS}
   `)
     .bind(Date.now(), userId)
     .all<Enrollment>();

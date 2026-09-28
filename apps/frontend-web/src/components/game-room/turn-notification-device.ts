@@ -160,7 +160,13 @@ export const turnNotificationDevice: TurnNotificationDevice = {
         generation,
       },
     });
-    if (!response.ok) throw new Error("Could not register this device");
+    if (!response.ok) {
+      if (response.status === 409) {
+        const result = await response.json();
+        throw new Error(result.error);
+      }
+      throw new Error("Could not register this device");
+    }
     saveEndpointId(await hash(sub.endpoint));
   },
   async remove() {
