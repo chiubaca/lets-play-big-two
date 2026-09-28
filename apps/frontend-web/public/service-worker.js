@@ -111,6 +111,7 @@ async function staleWhileRevalidate(request, event) {
 }
 
 const TURN_CACHE = "big-two-turn-receipts";
+const processingTurns = new Set();
 
 function notificationApi() {
   if (self.location.origin === "https://local.bigtwo.com") return "https://local.api.bigtwo.com";
@@ -170,15 +171,26 @@ async function receipt(event) {
       `/__turn-receipt/${payload.roomId}/${payload.turnId}/${endpointId}`,
       self.location.origin,
     );
-    const cache = await caches.open(TURN_CACHE);
-    if (await cache.match(key.href)) return;
-    const target = await checkTurn(payload);
-    if (!target) return; // No WebKit declarative or generic fallback: verification failure shows nothing.
-    await cache.put(key.href, new Response("1"));
-    await self.registration.showNotification("It’s your turn", {
-      tag: `${payload.roomId}:${payload.turnId}`,
-      data: { ticket: target.searchParams.get("ticket") },
-    });
+    if (processingTurns.has(key.href)) return;
+    processingTurns.add(key.href);
+    try {
+      const cache = await caches.open(TURN_CACHE);
+      if (await cache.match(key.href)) return;
+      const target = await checkTurn(payload);
+      if (!target) return; // No WebKit declarative or generic fallback: verification failure shows nothing.
+      await cache.put(key.href, new Response("1"));
+      try {
+        await self.registration.showNotification("It’s your turn", {
+          tag: `${payload.roomId}:${payload.turnId}`,
+          data: { ticket: target.searchParams.get("ticket") },
+        });
+      } catch {
+        // Failed display is not a completed receipt. Allow a later provider retry.
+        await cache.delete(key.href);
+      }
+    } finally {
+      processingTurns.delete(key.href);
+    }
   } catch {
     // Malformed payload, offline verification, storage, or crypto failure must never display.
   }
@@ -211,7 +223,14 @@ async function openReturn(event) {
       ) {
         const target = new URL(result.target, self.location.origin);
         const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-        const existing = clients.find((client) => client.url === target.href);
+        const existing = clients.find((client) => {
+          try {
+            const url = new URL(client.url);
+            return url.origin === self.location.origin && url.pathname === target.pathname;
+          } catch {
+            return false;
+          }
+        });
         if (existing) return existing.focus();
       }
     }

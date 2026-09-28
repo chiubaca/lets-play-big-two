@@ -12,17 +12,19 @@ export type RegisteredEndpoint = Enrollment & {
   auth: string;
 };
 
+const liveEnrollment = `FROM turnNotificationRegistration r
+  JOIN turnNotificationPreference p ON p.user_id = r.user_id
+    AND p.enabled = 1 AND p.generation = r.generation
+  JOIN session s ON s.id = r.session_id AND s.user_id = r.user_id AND s.expires_at > ?
+  JOIN user u ON u.id = r.user_id
+  WHERE r.user_id = ? AND NOT EXISTS
+    (SELECT 1 FROM accountDeletion d WHERE d.user_id = r.user_id)`;
+
 // Snapshot only already-consenting, enrolled, live sessions. Never expand this list on a retry.
 export async function turnEnrollments(env: Env, userId: string): Promise<Enrollment[]> {
   const { results } = await env.BIG_TWO_DB.prepare(`
     SELECT r.endpoint_id, r.session_id, r.generation
-    FROM turnNotificationRegistration r
-    JOIN turnNotificationPreference p ON p.user_id = r.user_id
-      AND p.enabled = 1 AND p.generation = r.generation
-    JOIN session s ON s.id = r.session_id AND s.user_id = r.user_id AND s.expires_at > ?
-    JOIN user u ON u.id = r.user_id
-    WHERE r.user_id = ? AND NOT EXISTS
-      (SELECT 1 FROM accountDeletion d WHERE d.user_id = r.user_id)
+    ${liveEnrollment}
     ORDER BY r.endpoint_id LIMIT 8
   `)
     .bind(Date.now(), userId)
@@ -37,13 +39,7 @@ export async function registeredEndpoint(
 ): Promise<RegisteredEndpoint | null> {
   return env.BIG_TWO_DB.prepare(`
     SELECT r.endpoint_id, r.endpoint, r.p256dh, r.auth, r.session_id, r.generation
-    FROM turnNotificationRegistration r
-    JOIN turnNotificationPreference p ON p.user_id = r.user_id
-      AND p.enabled = 1 AND p.generation = r.generation
-    JOIN session s ON s.id = r.session_id AND s.user_id = r.user_id AND s.expires_at > ?
-    JOIN user u ON u.id = r.user_id
-    WHERE r.user_id = ? AND r.endpoint_id = ? AND r.session_id = ? AND r.generation = ?
-      AND NOT EXISTS (SELECT 1 FROM accountDeletion d WHERE d.user_id = r.user_id)
+    ${liveEnrollment} AND r.endpoint_id = ? AND r.session_id = ? AND r.generation = ?
   `)
     .bind(Date.now(), userId, enrollment.endpoint_id, enrollment.session_id, enrollment.generation)
     .first<RegisteredEndpoint>();

@@ -3,7 +3,8 @@ import { BigTwoRoomObject } from "./do/big-two-room-do";
 import { RoomChatObject } from "./do/room-chat-do";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { App } from "./hono/app";
-import { repairTurnAlarms, sweepRooms } from "./lib/room-expiry";
+import { sweepRooms } from "./lib/room-expiry";
+import { repairTurnAlarms } from "./lib/turn-alarm-repair";
 
 export { BigTwoRoomObject, RoomChatObject };
 

@@ -23,9 +23,7 @@ export async function mintTurnTicket(
   userId: string,
 ): Promise<string> {
   const nonce = crypto.getRandomValues(new Uint8Array(12));
-  const content = encoder.encode(
-    JSON.stringify({ roomId, userId, until: Date.now() + 30 * 24 * 60 * 60_000 }),
-  );
+  const content = encoder.encode(JSON.stringify({ roomId, userId }));
   const ciphertext = new Uint8Array(
     await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, await key(secret), content),
   );
@@ -53,19 +51,11 @@ export async function readTurnTicket(
         ),
       ),
     );
-    if (
-      !data ||
-      typeof data !== "object" ||
-      !("roomId" in data) ||
-      !("userId" in data) ||
-      !("until" in data)
-    )
+    if (!data || typeof data !== "object" || !("roomId" in data) || !("userId" in data))
       return null;
     return typeof data.roomId === "string" &&
       /^[A-Z0-9]{5}$/.test(data.roomId) &&
-      typeof data.userId === "string" &&
-      typeof data.until === "number" &&
-      data.until > Date.now()
+      typeof data.userId === "string"
       ? { roomId: data.roomId, userId: data.userId }
       : null;
   } catch {

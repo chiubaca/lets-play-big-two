@@ -23,13 +23,17 @@ async function worker() {
         status: 200,
       }),
   );
+  const clients: {
+    matchAll: () => Promise<{ url: string; focus: () => Promise<void> }[]>;
+    openWindow: typeof openWindow;
+  } = { matchAll: async () => [], openWindow };
   const self = {
     location: { origin: "https://big-two.chiubaca.com" },
     registration: {
       pushManager: { getSubscription: async () => ({ endpoint }) },
       showNotification,
     },
-    clients: { matchAll: async () => [], openWindow },
+    clients,
     addEventListener: (name: string, handler: (event: unknown) => void) =>
       listeners.set(name, handler),
   };
@@ -47,6 +51,7 @@ async function worker() {
         put: async (key: string, response: Response) => {
           entries.set(key, response);
         },
+        delete: async (key: string) => entries.delete(key),
       }),
     },
   });
@@ -60,7 +65,7 @@ async function worker() {
     });
     await work;
   }
-  return { fire, showNotification, openWindow, fetch };
+  return { fire, showNotification, openWindow, fetch, clients: self.clients };
 }
 
 it("shows only generic text after a non-cached authenticated check, once per Turn, without replacing another room", async () => {
@@ -98,6 +103,27 @@ it("never displays on malformed payload, missing enrollment, unavailable check, 
   expect(w.showNotification).not.toHaveBeenCalled();
 });
 
+it("serializes concurrent receipts and permits a new receipt after display failure", async () => {
+  const w = await worker();
+  let rejectDisplay!: (error: Error) => void;
+  w.showNotification.mockImplementationOnce(
+    () =>
+      new Promise<void>((_resolve, reject) => {
+        rejectDisplay = reject;
+      }),
+  );
+  const first = w.fire("push", { data: { json: () => payload } });
+  await vi.waitFor(() => expect(w.showNotification).toHaveBeenCalledTimes(1));
+  await w.fire("push", { data: { json: () => payload } });
+  expect(w.showNotification).toHaveBeenCalledTimes(1);
+  rejectDisplay(new Error("OS refused display"));
+  await first;
+  await w.fire("push", { data: { json: () => payload } });
+  expect(w.showNotification).toHaveBeenCalledTimes(2);
+  await w.fire("push", { data: { json: () => payload } });
+  expect(w.showNotification).toHaveBeenCalledTimes(2);
+});
+
 it("a tap under another account opens only the neutral identity gate, never a supplied room URL", async () => {
   const w = await worker();
   w.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ allowed: false })));
@@ -113,4 +139,18 @@ it("a tap under another account opens only the neutral identity gate, never a su
     notification: { data: { ticket: "//evil.example" }, close: vi.fn() },
   });
   expect(w.openWindow).toHaveBeenCalledTimes(1);
+});
+
+it("focuses an existing view of the intended room even when it has a query or fragment", async () => {
+  const w = await worker();
+  const focus = vi.fn(async () => {});
+  w.clients.matchAll = async () => [
+    { url: `https://big-two.chiubaca.com/room/${room}?foo=1#hand`, focus },
+  ];
+  w.fetch.mockResolvedValueOnce(
+    new Response(JSON.stringify({ allowed: true, target: `/room/${room}` })),
+  );
+  await w.fire("notificationclick", { notification: { data: { ticket }, close: vi.fn() } });
+  expect(focus).toHaveBeenCalledTimes(1);
+  expect(w.openWindow).not.toHaveBeenCalled();
 });
