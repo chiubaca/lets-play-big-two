@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import type { DeviceState, TurnNotificationDevice } from "./turn-notification-device";
 
 export type TurnNotificationPreference = {
   load: () => Promise<boolean>;
   save: (enabled: boolean) => Promise<boolean>;
+  device?: TurnNotificationDevice;
 };
 
 export function TurnNotificationSettings({
@@ -13,6 +15,16 @@ export function TurnNotificationSettings({
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [deviceState, setDeviceState] = useState<DeviceState>("not-enabled");
+  const [deviceReason, setDeviceReason] = useState("");
+  const [deviceError, setDeviceError] = useState(false);
+  const [retryInspection, setRetryInspection] = useState(false);
+  const [generation, setGeneration] = useState(0);
+  const [deviceBusy, setDeviceBusy] = useState(false);
+  const [checkingDevice, setCheckingDevice] = useState(false);
+  const deviceRevision = useRef(0);
+  const deviceActionInProgress = useRef(false);
+  const deviceButton = useRef<HTMLButtonElement>(null);
   const revision = useRef(0);
   const saveInProgress = useRef(false);
 
@@ -44,8 +56,115 @@ export function TurnNotificationSettings({
     };
   }, [preference]);
 
+  useEffect(() => {
+    if (!enabled || !preference.device) {
+      ++deviceRevision.current;
+      setDeviceState("not-enabled");
+      setCheckingDevice(false);
+      return;
+    }
+    let active = true;
+    function refreshDevice() {
+      if (deviceActionInProgress.current) return;
+      const current = ++deviceRevision.current;
+      setCheckingDevice(true);
+      preference.device!.inspect().then(
+        (result) => {
+          if (!active || current !== deviceRevision.current) return;
+          setCheckingDevice(false);
+          setDeviceState(result.state);
+          setDeviceReason(result.reason ?? "");
+          setGeneration(result.generation);
+          setDeviceError(false);
+          setRetryInspection(false);
+        },
+        () => {
+          if (active && current === deviceRevision.current) {
+            setCheckingDevice(false);
+            setDeviceState("not-enabled");
+            setDeviceError(true);
+            setRetryInspection(true);
+            setMessage("Could not check this device. Retry to check again.");
+          }
+        },
+      );
+    }
+    refreshDevice();
+    window.addEventListener("focus", refreshDevice);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", refreshDevice);
+    };
+  }, [enabled, preference]);
+
+  async function changeDevice(action: "enable" | "remove" | "retry") {
+    if (!preference.device || deviceBusy || checkingDevice) return;
+    deviceActionInProgress.current = true;
+    if (action === "retry") {
+      setDeviceBusy(true);
+      setMessage("Checking this device…");
+      try {
+        const state = await preference.device.inspect();
+        setDeviceState(state.state);
+        setDeviceReason(state.reason ?? "");
+        setGeneration(state.generation);
+        setDeviceError(false);
+        setRetryInspection(false);
+        setMessage(
+          `This device: ${state.state === "ready" ? "Ready" : state.state === "blocked" ? "Blocked" : state.state === "unavailable" ? "Unavailable" : "Not enabled"}.`,
+        );
+      } catch {
+        setMessage("Could not check this device. Retry to check again.");
+      } finally {
+        deviceActionInProgress.current = false;
+        setDeviceBusy(false);
+        deviceButton.current?.focus();
+      }
+      return;
+    }
+    setDeviceBusy(true);
+    setMessage(action === "enable" ? "Setting up this device…" : "Removing this device…");
+    try {
+      if (action === "enable") await preference.device.enable(generation);
+      else await preference.device.remove();
+      const state = await preference.device.inspect();
+      setDeviceState(state.state);
+      setDeviceReason(state.reason ?? "");
+      setGeneration(state.generation);
+      setDeviceError(false);
+      setRetryInspection(false);
+      setMessage(
+        action === "enable" && state.state === "ready"
+          ? "This device is Ready. Delivery is not guaranteed."
+          : "This device was removed. Your account preference is unchanged.",
+      );
+    } catch {
+      if (
+        action === "enable" &&
+        typeof Notification !== "undefined" &&
+        Notification.permission === "denied"
+      ) {
+        setDeviceState("blocked");
+        setMessage("Notifications are Blocked. Change browser permission to try again.");
+      } else {
+        if (action === "enable") setDeviceState("not-enabled");
+        setDeviceError(true);
+        setRetryInspection(false);
+        setMessage(
+          action === "enable"
+            ? "Could not set up this device. Retry to try again."
+            : "Could not confirm device removal. Try removing it again.",
+        );
+      }
+    } finally {
+      deviceActionInProgress.current = false;
+      setDeviceBusy(false);
+      deviceButton.current?.focus();
+    }
+  }
+
   async function toggle() {
-    if (enabled === null || saving) return;
+    if (enabled === null || saving || deviceBusy) return;
     ++revision.current;
     saveInProgress.current = true;
     setSaving(true);
@@ -55,7 +174,7 @@ export function TurnNotificationSettings({
       if (saved !== !enabled) throw new Error("Unexpected saved preference");
       setEnabled(saved);
       setMessage(
-        `Turn notifications ${saved ? "on" : "off"} for your account. This device is not enabled.`,
+        `Turn notifications ${saved ? "on" : "off"} for your account. ${saved ? "Set up this device separately." : "All device enrollments were removed."}`,
       );
     } catch {
       setEnabled(null);
@@ -82,7 +201,7 @@ export function TurnNotificationSettings({
           role="switch"
           aria-label="Turn notifications for my account"
           aria-checked={enabled === true}
-          disabled={enabled === null || saving}
+          disabled={enabled === null || saving || deviceBusy}
           onClick={() => void toggle()}
           className="turn-notification-switch"
         >
@@ -102,12 +221,47 @@ export function TurnNotificationSettings({
             : `Account preference: ${enabled ? "On" : "Off"}`)}
       </p>
       <div className="turn-notification-device" aria-label="This device">
-        <strong>Not enabled on this device</strong>
+        <strong>
+          {deviceState === "ready"
+            ? "Ready on this device"
+            : deviceState === "blocked"
+              ? "Blocked on this device"
+              : deviceState === "unavailable"
+                ? "Unavailable on this device"
+                : "Not enabled on this device"}
+        </strong>
         <p>
           {enabled
-            ? "Account consent is saved, but this device has not been set up. No alerts will arrive here yet."
+            ? deviceReason ||
+              (deviceState === "ready"
+                ? "Setup completed; delivery is not guaranteed."
+                : deviceState === "blocked"
+                  ? "Allow notifications in your browser settings before retrying. No permission prompt will open here."
+                  : "Account consent is saved, but this device has not been set up. No alerts will arrive here yet.")
             : "First choose for your account. Setting up each device is a separate step; no permission is requested here."}
         </p>
+        {enabled &&
+          preference.device &&
+          (deviceState === "ready" || deviceState === "not-enabled") && (
+            <button
+              ref={deviceButton}
+              type="button"
+              className="table-small-button turn-notification-device-button"
+              disabled={saving}
+              aria-disabled={deviceBusy || checkingDevice}
+              onClick={() =>
+                void changeDevice(
+                  deviceState === "ready" ? "remove" : retryInspection ? "retry" : "enable",
+                )
+              }
+            >
+              {deviceState === "ready"
+                ? "Remove this device"
+                : deviceError
+                  ? "Retry device setup"
+                  : "Enable on this device"}
+            </button>
+          )}
       </div>
     </section>
   );

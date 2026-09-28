@@ -28,6 +28,8 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",
+    "@types/better-sqlite3": "catalog:",
+    "better-sqlite3": "catalog:",
     "typescript": "~5.9.3",
     "vite": "catalog:",
     "vite-plus": "catalog:"

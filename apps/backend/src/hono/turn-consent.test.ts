@@ -49,6 +49,7 @@ vi.mock("@big-two/data-ops/database", () => ({
         }),
       }),
     }),
+    delete: () => ({ where: async () => {} }),
   }),
 }));
 

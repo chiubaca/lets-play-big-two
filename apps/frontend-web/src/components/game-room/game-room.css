@@ -1046,6 +1046,15 @@
   padding: 12px;
   background: #0b2415;
 }
+.turn-notification-device-button {
+  margin-top: 12px;
+  width: 100%;
+}
+.turn-notification-device-button:focus-visible,
+.turn-notification-switch:focus-visible {
+  outline: 3px solid #f3cf84;
+  outline-offset: 3px;
+}
 .room-loading {
   justify-content: center;
   font-family: Georgia, serif;

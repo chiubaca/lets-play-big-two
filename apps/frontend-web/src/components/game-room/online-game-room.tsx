@@ -5,6 +5,7 @@ import type { RoomGameState, GameEvent } from "@big-two/game-state-machine";
 import { honoClient } from "~/libs/hono-client";
 import { GameRoom, type GameRoomUser } from "./game-room";
 import type { ChatMessage } from "./room-chat";
+import { turnNotificationDevice } from "./turn-notification-device";
 
 export function OnlineGameRoom({ roomId, user }: { roomId: string; user: GameRoomUser }) {
   const turnNotifications = useMemo(
@@ -21,6 +22,7 @@ export function OnlineGameRoom({ roomId, user }: { roomId: string; user: GameRoo
         if (!response.ok) throw new Error("Could not save preference");
         return (await response.json()).enabled;
       },
+      device: turnNotificationDevice,
     }),
     [],
   );

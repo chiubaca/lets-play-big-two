@@ -39,7 +39,7 @@
     "better-auth-generate": "npx @better-auth/cli generate --config auth-gen/auth.ts"
   },
   "dependencies": {
-    "better-sqlite3": "^12.2.0",
+    "better-sqlite3": "catalog:",
     "drizzle-orm": "catalog:",
     "kysely": "^0.28.2",
     "kysely-d1": "^0.4.0",

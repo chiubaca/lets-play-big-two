@@ -180,6 +180,149 @@ it("keeps consent unavailable when the account read fails instead of assuming it
   expect(save).not.toHaveBeenCalled();
 });
 
+it("enrolls only after an explicit device action, announces Ready, and removes without changing consent", async () => {
+  let state: "not-enabled" | "ready" = "not-enabled";
+  const device = {
+    inspect: vi.fn(async () => ({ state, generation: 3 })),
+    enable: vi.fn(async () => {
+      state = "ready";
+    }),
+    remove: vi.fn(async () => {
+      state = "not-enabled";
+    }),
+  };
+  const save = vi.fn();
+  render(
+    <GameRoom
+      gameState={gameState}
+      send={() => {}}
+      tableLabel="Room ABCDE"
+      roomCode="ABCDE"
+      user={{ id: "solo-player", name: "You" }}
+      turnNotifications={{ load: async () => true, save, device }}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
+  const enable = await screen.findByRole("button", { name: "Enable on this device" });
+  await waitFor(() => expect(enable.getAttribute("aria-disabled")).toBe("false"));
+  expect(device.enable).not.toHaveBeenCalled();
+  fireEvent.click(enable);
+  await waitFor(() => expect(screen.getByText("Ready on this device")).toBeTruthy());
+  expect(device.enable).toHaveBeenCalledWith(3);
+  expect(within(screen.getByRole("dialog")).getByRole("status").textContent).toContain(
+    "Delivery is not guaranteed",
+  );
+  const remove = screen.getByRole("button", { name: "Remove this device" });
+  await waitFor(() => expect(document.activeElement).toBe(remove));
+  fireEvent.click(remove);
+  await waitFor(() => expect(screen.getByText("Not enabled on this device")).toBeTruthy());
+  expect(device.remove).toHaveBeenCalledOnce();
+  expect(save).not.toHaveBeenCalled();
+  expect(
+    screen
+      .getByRole("switch", { name: "Turn notifications for my account" })
+      .getAttribute("aria-checked"),
+  ).toBe("true");
+});
+
+it("shows Blocked or Unavailable without a setup action and retries failed enrollment without Ready", async () => {
+  const device = {
+    inspect: vi
+      .fn()
+      .mockResolvedValueOnce({ state: "blocked", generation: 0 })
+      .mockResolvedValueOnce({
+        state: "unavailable",
+        generation: 0,
+        reason: "Install to your Home Screen",
+      }),
+    enable: vi.fn(),
+    remove: vi.fn(),
+  };
+  const props = {
+    gameState,
+    send: () => {},
+    tableLabel: "Room ABCDE",
+    roomCode: "ABCDE",
+    user: { id: "solo-player", name: "You" },
+    turnNotifications: { load: async () => true, save: vi.fn(), device },
+  };
+  const room = render(<GameRoom {...props} />);
+  fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
+  await screen.findByText("Blocked on this device");
+  expect(screen.queryByRole("button", { name: "Enable on this device" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  room.rerender(<GameRoom {...props} />);
+  fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
+  await screen.findByText("Unavailable on this device");
+  expect(screen.getByText("Install to your Home Screen")).toBeTruthy();
+  expect(device.enable).not.toHaveBeenCalled();
+});
+
+it("refreshes revoked permission when settings regain focus without requesting it", async () => {
+  const requestPermission = vi.fn();
+  vi.stubGlobal("Notification", { permission: "denied", requestPermission });
+  const device = {
+    inspect: vi
+      .fn()
+      .mockResolvedValueOnce({ state: "ready", generation: 0 })
+      .mockResolvedValueOnce({ state: "blocked", generation: 0 }),
+    enable: vi.fn(),
+    remove: vi.fn(),
+  };
+  render(
+    <GameRoom
+      gameState={gameState}
+      send={() => {}}
+      tableLabel="Room ABCDE"
+      roomCode="ABCDE"
+      user={{ id: "solo-player", name: "You" }}
+      turnNotifications={{ load: async () => true, save: vi.fn(), device }}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
+  await screen.findByText("Ready on this device");
+  fireEvent.focus(window);
+  await screen.findByText("Blocked on this device");
+  expect(screen.queryByRole("button", { name: "Enable on this device" })).toBeNull();
+  expect(requestPermission).not.toHaveBeenCalled();
+});
+
+it("allows an explicit retry after a failed registration and announces the failure", async () => {
+  const device = {
+    inspect: vi
+      .fn()
+      .mockResolvedValueOnce({ state: "not-enabled", generation: 2 })
+      .mockResolvedValueOnce({ state: "ready", generation: 2 }),
+    enable: vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Registration failed"))
+      .mockResolvedValueOnce(undefined),
+    remove: vi.fn(),
+  };
+  render(
+    <GameRoom
+      gameState={gameState}
+      send={() => {}}
+      tableLabel="Room ABCDE"
+      roomCode="ABCDE"
+      user={{ id: "solo-player", name: "You" }}
+      turnNotifications={{ load: async () => true, save: vi.fn(), device }}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
+  const enable = await screen.findByRole("button", { name: "Enable on this device" });
+  await waitFor(() => expect(enable.getAttribute("aria-disabled")).toBe("false"));
+  fireEvent.click(enable);
+  const retry = await screen.findByRole("button", { name: "Retry device setup" });
+  expect(screen.queryByText("Ready on this device")).toBeNull();
+  expect(within(screen.getByRole("dialog")).getByRole("status").textContent).toContain(
+    "Could not set up",
+  );
+  fireEvent.click(retry);
+  await screen.findByText("Ready on this device");
+  expect(device.enable).toHaveBeenCalledTimes(2);
+});
+
 it("copies only the online room code", async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
   const originalClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
