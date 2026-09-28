@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TurnReturnRouteImport } from './routes/turn-return'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PreviewRoomCodeRouteImport } from './routes/preview-room-code'
 import { Route as AccountRouteImport } from './routes/account'
@@ -16,6 +17,11 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as OfflineIndexRouteImport } from './routes/offline/index'
 import { Route as RoomRoomIdRouteImport } from './routes/room/$roomId'
 
+const TurnReturnRoute = TurnReturnRouteImport.update({
+  id: '/turn-return',
+  path: '/turn-return',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/account': typeof AccountRoute
   '/preview-room-code': typeof PreviewRoomCodeRoute
   '/privacy': typeof PrivacyRoute
+  '/turn-return': typeof TurnReturnRoute
   '/room/$roomId': typeof RoomRoomIdRoute
   '/offline/': typeof OfflineIndexRoute
 }
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   '/account': typeof AccountRoute
   '/preview-room-code': typeof PreviewRoomCodeRoute
   '/privacy': typeof PrivacyRoute
+  '/turn-return': typeof TurnReturnRoute
   '/room/$roomId': typeof RoomRoomIdRoute
   '/offline': typeof OfflineIndexRoute
 }
@@ -69,6 +77,7 @@ export interface FileRoutesById {
   '/account': typeof AccountRoute
   '/preview-room-code': typeof PreviewRoomCodeRoute
   '/privacy': typeof PrivacyRoute
+  '/turn-return': typeof TurnReturnRoute
   '/room/$roomId': typeof RoomRoomIdRoute
   '/offline/': typeof OfflineIndexRoute
 }
@@ -79,6 +88,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/preview-room-code'
     | '/privacy'
+    | '/turn-return'
     | '/room/$roomId'
     | '/offline/'
   fileRoutesByTo: FileRoutesByTo
@@ -87,6 +97,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/preview-room-code'
     | '/privacy'
+    | '/turn-return'
     | '/room/$roomId'
     | '/offline'
   id:
@@ -95,6 +106,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/preview-room-code'
     | '/privacy'
+    | '/turn-return'
     | '/room/$roomId'
     | '/offline/'
   fileRoutesById: FileRoutesById
@@ -104,12 +116,20 @@ export interface RootRouteChildren {
   AccountRoute: typeof AccountRoute
   PreviewRoomCodeRoute: typeof PreviewRoomCodeRoute
   PrivacyRoute: typeof PrivacyRoute
+  TurnReturnRoute: typeof TurnReturnRoute
   RoomRoomIdRoute: typeof RoomRoomIdRoute
   OfflineIndexRoute: typeof OfflineIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/turn-return': {
+      id: '/turn-return'
+      path: '/turn-return'
+      fullPath: '/turn-return'
+      preLoaderRoute: typeof TurnReturnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/privacy': {
       id: '/privacy'
       path: '/privacy'
@@ -160,6 +180,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccountRoute: AccountRoute,
   PreviewRoomCodeRoute: PreviewRoomCodeRoute,
   PrivacyRoute: PrivacyRoute,
+  TurnReturnRoute: TurnReturnRoute,
   RoomRoomIdRoute: RoomRoomIdRoute,
   OfflineIndexRoute: OfflineIndexRoute,
 }

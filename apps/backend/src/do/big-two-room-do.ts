@@ -10,10 +10,21 @@ import {
 import { getGameActionAuthorizationError } from "./authorize-game-action";
 import { redactPlayerIdentity } from "./redact-player-identity";
 import { roomView } from "./room-view";
+import {
+  registeredEndpoint,
+  sendTurnPush,
+  turnEnrollments,
+  type Enrollment,
+} from "../lib/turn-push";
 
 type RoomVisitor = { roomId: string; userId: string; sessionId: string };
 const TWO_DAYS = 48 * 60 * 60 * 1000;
 const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+const FOCUS_TTL = 20_000;
+const TURN_TTL = 5 * 60_000;
+
+type Turn = { id: string; room_id: string; recipient_id: string; deadline: number };
+type Delivery = Enrollment & { attempts: number; next_at: number };
 
 export class BigTwoRoomObject extends DurableObject<Env> {
   sql: SqlStorage;
@@ -205,10 +216,211 @@ export class BigTwoRoomObject extends DurableObject<Env> {
         id INTEGER PRIMARY KEY,
         game_state TEXT
       );
+      CREATE TABLE IF NOT EXISTS room_focus(
+        tab_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, session_id TEXT NOT NULL,
+        expires_at INTEGER NOT NULL, sequence INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS first_turn(
+        id TEXT PRIMARY KEY, room_id TEXT NOT NULL, recipient_id TEXT NOT NULL,
+        deadline INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS turn_delivery(
+        turn_id TEXT NOT NULL, endpoint_id TEXT NOT NULL, session_id TEXT NOT NULL,
+        generation INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0,
+        next_at INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
+        PRIMARY KEY(turn_id, endpoint_id)
+      );
     `);
   }
 
+  private activeFocus(userId: string): boolean {
+    return (
+      this.sql
+        .exec<{ present: number }>(
+          "SELECT 1 AS present FROM room_focus WHERE user_id = ? AND expires_at > ? LIMIT 1",
+          userId,
+          Date.now(),
+        )
+        .toArray().length > 0
+    );
+  }
+
+  async setRoomFocus(
+    roomId: string,
+    userId: string,
+    sessionId: string,
+    tabId: string,
+    focused: boolean,
+    sequence: number,
+  ): Promise<boolean> {
+    if (
+      !/^[a-f0-9-]{36}$/.test(tabId) ||
+      !Number.isSafeInteger(sequence) ||
+      sequence < 0 ||
+      !(await this.valid({ roomId, userId, sessionId }))
+    )
+      return false;
+    const stored = await this.getGameState();
+    if (
+      !stored ||
+      !(JSON.parse(stored) as BigTwoGameMachineSnapshot).context.players.some(
+        (p) => p.id === userId,
+      )
+    )
+      return false;
+    this.sql.exec("DELETE FROM room_focus WHERE expires_at < ?", Date.now() - 60_000);
+    this.sql.exec(
+      `INSERT INTO room_focus (tab_id, user_id, session_id, expires_at, sequence)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(tab_id) DO UPDATE SET expires_at = excluded.expires_at,
+         sequence = excluded.sequence
+       WHERE room_focus.user_id = excluded.user_id AND room_focus.session_id = excluded.session_id
+         AND excluded.sequence > room_focus.sequence`,
+      tabId,
+      userId,
+      sessionId,
+      focused ? Date.now() + FOCUS_TTL : Date.now() - 1,
+      sequence,
+    );
+    return true;
+  }
+
+  private currentTurn(turnId: string, roomId: string, userId: string): Turn | null {
+    const turn = this.sql
+      .exec<Turn>(
+        "SELECT * FROM first_turn WHERE id = ? AND room_id = ? AND recipient_id = ? AND deadline > ?",
+        turnId,
+        roomId,
+        userId,
+        Date.now(),
+      )
+      .toArray()[0];
+    if (!turn || this.activeFocus(userId)) return null;
+    const state = this.sql
+      .exec<{ game_state: string }>("SELECT game_state FROM game_room WHERE id = 1")
+      .toArray()[0];
+    if (!state) return null;
+    const snapshot = JSON.parse(state.game_state) as BigTwoGameMachineSnapshot;
+    return snapshot.value === "ROUND_FIRST_MOVE" &&
+      snapshot.context.players[snapshot.context.currentPlayerIndex]?.id === userId
+      ? turn
+      : null;
+  }
+
+  // Invoked only from an authenticated Worker route, never with a client-asserted identity.
+  async verifyFirstTurn(
+    roomId: string,
+    turnId: string,
+    userId: string,
+    enrollment: Enrollment,
+  ): Promise<boolean> {
+    if (!this.currentTurn(turnId, roomId, userId)) return false;
+    const captured = this.sql
+      .exec(
+        "SELECT 1 FROM turn_delivery WHERE turn_id = ? AND endpoint_id = ? AND session_id = ? AND generation = ? LIMIT 1",
+        turnId,
+        enrollment.endpoint_id,
+        enrollment.session_id,
+        enrollment.generation,
+      )
+      .toArray()[0];
+    if (!captured) return false;
+    if (!(await this.available(roomId))) return false;
+    if (!(await registeredEndpoint(this.env, userId, enrollment))) return false;
+    return !!this.currentTurn(turnId, roomId, userId);
+  }
+
+  async repairFirstTurn(roomId: string): Promise<void> {
+    const turn = this.sql
+      .exec<Turn>("SELECT * FROM first_turn WHERE room_id = ? LIMIT 1", roomId)
+      .toArray()[0];
+    if (!turn) return;
+    if (turn.deadline <= Date.now()) {
+      this.sql.exec("DELETE FROM turn_delivery WHERE turn_id = ?", turn.id);
+      return;
+    }
+    const due = this.sql
+      .exec<{ next_at: number }>(
+        "SELECT next_at FROM turn_delivery WHERE turn_id = ? AND status = 'pending' ORDER BY next_at LIMIT 1",
+        turn.id,
+      )
+      .toArray()[0];
+    if (due) {
+      const alarm = await this.ctx.storage.getAlarm();
+      if (alarm === null || alarm > due.next_at)
+        await this.ctx.storage.setAlarm(Math.max(Date.now(), due.next_at));
+    }
+  }
+
+  async alarm(): Promise<void> {
+    const turn = this.sql.exec<Turn>("SELECT * FROM first_turn LIMIT 1").toArray()[0];
+    if (!turn) return;
+    const due = this.sql
+      .exec<Delivery>(
+        "SELECT * FROM turn_delivery WHERE turn_id = ? AND status = 'pending' AND next_at <= ? ORDER BY next_at LIMIT 4",
+        turn.id,
+        Date.now(),
+      )
+      .toArray();
+    for (const delivery of due) {
+      let outcome: "sent" | "retired" | "retry" = "retry";
+      try {
+        if (await this.verifyFirstTurn(turn.room_id, turn.id, turn.recipient_id, delivery)) {
+          // The second check closes the common race where a Player focuses the room during D1 verification.
+          const registration = await registeredEndpoint(this.env, turn.recipient_id, delivery);
+          if (registration && this.currentTurn(turn.id, turn.room_id, turn.recipient_id))
+            outcome = await sendTurnPush(
+              this.env,
+              registration,
+              {
+                roomId: turn.room_id,
+                turnId: turn.id,
+                endpointId: delivery.endpoint_id,
+              },
+              turn.deadline,
+            );
+          else outcome = "retired";
+        } else outcome = "retired";
+      } catch {
+        // Do not log subscription secrets or provider bodies. Bounded retry handles temporary outages.
+      }
+      if (outcome === "sent") {
+        this.sql.exec(
+          "UPDATE turn_delivery SET status = 'sent' WHERE turn_id = ? AND endpoint_id = ?",
+          turn.id,
+          delivery.endpoint_id,
+        );
+      } else if (outcome === "retired" || delivery.attempts >= 2 || Date.now() >= turn.deadline) {
+        this.sql.exec(
+          "DELETE FROM turn_delivery WHERE turn_id = ? AND endpoint_id = ?",
+          turn.id,
+          delivery.endpoint_id,
+        );
+      } else {
+        this.sql.exec(
+          "UPDATE turn_delivery SET attempts = attempts + 1, next_at = ? WHERE turn_id = ? AND endpoint_id = ?",
+          Date.now() + 15_000 * (delivery.attempts + 1),
+          turn.id,
+          delivery.endpoint_id,
+        );
+      }
+    }
+    try {
+      await this.repairFirstTurn(turn.room_id);
+    } catch {
+      /* The scheduled room sweep can restore a lost alarm. */
+    }
+  }
+
   async gameAction(
+    event: GameEvent,
+    requesterId: string,
+    roomId?: string,
+  ): Promise<{ success: true } | { success: false; error: string }> {
+    return this.serial(() => this.commitGameAction(event, requesterId, roomId));
+  }
+
+  private async commitGameAction(
     event: GameEvent,
     requesterId: string,
     roomId?: string,
@@ -256,14 +468,66 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     ) {
       return { success: false, error: "Could not leave the table. Please try again." };
     }
+    const firstDeal =
+      roomId &&
+      event.type === "START_GAME" &&
+      gameState.value === "WAITING_FOR_PLAYERS" &&
+      gameStateSnapshot.value === "ROUND_FIRST_MOVE";
+    const recipientId = firstDeal
+      ? gameStateSnapshot.context.players[gameStateSnapshot.context.currentPlayerIndex]?.id
+      : undefined;
+    let enrollments: Enrollment[] = [];
+    if (recipientId && !this.activeFocus(recipientId)) {
+      try {
+        enrollments = await turnEnrollments(this.env, recipientId);
+      } catch {
+        /* Eligibility is unverified: commit the deal without an alert. */
+      }
+    }
     const serialisedGameState = JSON.stringify(gameStateSnapshot);
-    this.sql.exec(`UPDATE game_room SET game_state = ? WHERE id = 1`, serialisedGameState);
+    this.ctx.storage.transactionSync(() => {
+      this.sql.exec(`UPDATE game_room SET game_state = ? WHERE id = 1`, serialisedGameState);
+      if (firstDeal || gameStateSnapshot.value !== "ROUND_FIRST_MOVE") {
+        this.sql.exec("DELETE FROM turn_delivery");
+        this.sql.exec("DELETE FROM first_turn");
+      }
+      if (roomId && recipientId) {
+        const id = crypto.randomUUID();
+        const deadline = Date.now() + TURN_TTL;
+        this.sql.exec(
+          "INSERT INTO first_turn (id, room_id, recipient_id, deadline) VALUES (?, ?, ?, ?)",
+          id,
+          roomId,
+          recipientId,
+          deadline,
+        );
+        if (!this.activeFocus(recipientId))
+          for (const enrollment of enrollments) {
+            this.sql.exec(
+              `INSERT INTO turn_delivery (turn_id, endpoint_id, session_id, generation, next_at)
+            VALUES (?, ?, ?, ?, ?)`,
+              id,
+              enrollment.endpoint_id,
+              enrollment.session_id,
+              enrollment.generation,
+              Date.now(),
+            );
+          }
+      }
+    });
     const departingPlayer =
       event.type === "LEAVE_GAME"
         ? gameState.context.players.find((player) => player.id === requesterId)
         : undefined;
     // Everything after the SQLite write is best-effort: a committed action cannot be retried
     // safely just because notification or room housekeeping failed.
+    if (roomId && recipientId) {
+      try {
+        await this.repairFirstTurn(roomId);
+      } catch (error) {
+        console.error("Could not schedule committed Turn", error);
+      }
+    }
     try {
       await this.broadcast(
         gameStateSnapshot,
@@ -282,7 +546,7 @@ export class BigTwoRoomObject extends DurableObject<Env> {
 
     if (roomId && gameState.value !== gameStateSnapshot.value) {
       try {
-        await this.visitorDeparted(roomId);
+        await this.updateDeadline(roomId);
       } catch (error) {
         // A persisted game action must not be reported as failed by room housekeeping.
         console.error("Could not update room inactivity deadline", error);
@@ -393,6 +657,8 @@ export class BigTwoRoomObject extends DurableObject<Env> {
 
     const serialisedGameState = JSON.stringify(redactedState);
     this.sql.exec(`UPDATE game_room SET game_state = ? WHERE id = 1`, serialisedGameState);
+    this.sql.exec("DELETE FROM turn_delivery");
+    this.sql.exec("DELETE FROM first_turn");
 
     await this.broadcast(redactedState);
   }

@@ -1,4 +1,5 @@
 import { createActor } from "xstate";
+import Database from "better-sqlite3";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 import { bigTwoGameMachine, type BigTwoGameMachineSnapshot } from "@big-two/game-state-machine";
 import { BigTwoRoomObject } from "./big-two-room-do";
@@ -25,7 +26,13 @@ function createRoomHarness() {
   const actor = createActor(bigTwoGameMachine).start();
   actor.send({ type: "JOIN_GAME", playerId: "ada", playerName: "Ada" });
   actor.send({ type: "JOIN_GAME", playerId: "bob", playerName: "Bob" });
-  let stored = JSON.stringify(actor.getPersistedSnapshot());
+  const sqlite = new Database(":memory:");
+  sqlite.exec("CREATE TABLE game_room(id INTEGER PRIMARY KEY, game_state TEXT)");
+  sqlite
+    .prepare("INSERT INTO game_room VALUES (1, ?)")
+    .run(JSON.stringify(actor.getPersistedSnapshot()));
+  const stored = () =>
+    sqlite.prepare("SELECT game_state FROM game_room WHERE id = 1").get() as { game_state: string };
   let writes = 0;
   let broadcastFails = false;
   let housekeepingFails = false;
@@ -49,6 +56,7 @@ function createRoomHarness() {
           query.includes("SELECT status, expires_at")
             ? { status: row.status, expires_at: row.expires_at }
             : { ...row },
+        all: async () => ({ results: [] }),
         run: async () => {
           if (query.startsWith("UPDATE room SET empty_since")) {
             row.empty_since = args[0] as number;
@@ -61,14 +69,18 @@ function createRoomHarness() {
   const ctx = {
     storage: {
       sql: {
-        exec: (query: string, value?: string) => {
-          if (query.startsWith("UPDATE game_room")) {
-            stored = value!;
-            writes++;
-          }
-          return { toArray: () => (query.startsWith("SELECT") ? [{ game_state: stored }] : []) };
+        exec: (query: string, ...values: unknown[]) => {
+          if (query.startsWith("UPDATE game_room")) writes++;
+          if (query.includes("CREATE TABLE")) sqlite.exec(query);
+          else if (query.startsWith("SELECT")) {
+            return { toArray: () => sqlite.prepare(query).all(...values) };
+          } else sqlite.prepare(query).run(...values);
+          return { toArray: () => [] };
         },
       },
+      transactionSync: (fn: () => void) => sqlite.transaction(fn)(),
+      getAlarm: async () => null,
+      setAlarm: async () => {},
     },
     getWebSockets: () => {
       if (broadcastFails) {
@@ -85,7 +97,7 @@ function createRoomHarness() {
   return {
     object: new BigTwoRoomObject(ctx, env),
     reload: () => new BigTwoRoomObject(ctx, env),
-    snapshot: () => JSON.parse(stored) as BigTwoGameMachineSnapshot,
+    snapshot: () => JSON.parse(stored().game_state) as BigTwoGameMachineSnapshot,
     writes: () => writes,
     row,
     chat,

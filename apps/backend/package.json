@@ -17,6 +17,7 @@
     "@big-two/data-ops": "workspace:*",
     "@big-two/game-ai": "workspace:*",
     "@big-two/game-state-machine": "workspace:*",
+    "@block65/webcrypto-web-push": "catalog:",
     "@hono/standard-validator": "catalog:",
     "better-auth": "catalog:",
     "drizzle-orm": "catalog:",

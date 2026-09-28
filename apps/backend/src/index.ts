@@ -3,7 +3,7 @@ import { BigTwoRoomObject } from "./do/big-two-room-do";
 import { RoomChatObject } from "./do/room-chat-do";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { App } from "./hono/app";
-import { sweepRooms } from "./lib/room-expiry";
+import { repairTurnAlarms, sweepRooms } from "./lib/room-expiry";
 
 export { BigTwoRoomObject, RoomChatObject };
 
@@ -18,6 +18,10 @@ export default class BigTwoBackend extends WorkerEntrypoint<Env> {
   }
 
   async scheduled() {
-    await sweepRooms(this.env);
+    try {
+      await sweepRooms(this.env);
+    } finally {
+      await repairTurnAlarms(this.env);
+    }
   }
 }

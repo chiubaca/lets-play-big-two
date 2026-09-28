@@ -109,3 +109,118 @@ async function staleWhileRevalidate(request, event) {
 
   return (await networkResponse) ?? Response.error();
 }
+
+const TURN_CACHE = "big-two-turn-receipts";
+
+function notificationApi() {
+  if (self.location.origin === "https://local.bigtwo.com") return "https://local.api.bigtwo.com";
+  if (self.location.origin === "https://big-two.chiubaca.com")
+    return "https://big-two-api.chiubaca.com";
+  return null;
+}
+
+function turnPayload(value) {
+  if (!value || typeof value !== "object") return null;
+  const { roomId, turnId, endpointId } = value;
+  return typeof roomId === "string" &&
+    /^[A-Z0-9]{5}$/.test(roomId) &&
+    typeof turnId === "string" &&
+    /^[a-f0-9-]{36}$/.test(turnId) &&
+    typeof endpointId === "string" &&
+    /^[a-f0-9]{64}$/.test(endpointId)
+    ? { roomId, turnId, endpointId }
+    : null;
+}
+
+function returnTicket(target) {
+  if (typeof target !== "string" || !/^\/turn-return\?ticket=[A-Za-z0-9_-]{30,500}$/.test(target))
+    return null;
+  const url = new URL(target, self.location.origin);
+  return url.origin === self.location.origin ? url : null;
+}
+
+async function checkTurn(payload) {
+  const api = notificationApi();
+  if (!api) return null;
+  const params = new URLSearchParams(payload);
+  const response = await fetch(`${api}/api/turn-notifications/check?${params}`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (!response.ok) return null;
+  const result = await response.json();
+  return result.eligible === true ? returnTicket(result.target) : null;
+}
+
+async function receipt(event) {
+  try {
+    const payload = turnPayload(event.data?.json());
+    if (!payload) return;
+    const subscription = await self.registration.pushManager.getSubscription();
+    if (!subscription) return;
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(subscription.endpoint),
+    );
+    const endpointId = [...new Uint8Array(digest)]
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+    if (endpointId !== payload.endpointId) return;
+    const key = new URL(
+      `/__turn-receipt/${payload.roomId}/${payload.turnId}/${endpointId}`,
+      self.location.origin,
+    );
+    const cache = await caches.open(TURN_CACHE);
+    if (await cache.match(key.href)) return;
+    const target = await checkTurn(payload);
+    if (!target) return; // No WebKit declarative or generic fallback: verification failure shows nothing.
+    await cache.put(key.href, new Response("1"));
+    await self.registration.showNotification("It’s your turn", {
+      tag: `${payload.roomId}:${payload.turnId}`,
+      data: { ticket: target.searchParams.get("ticket") },
+    });
+  } catch {
+    // Malformed payload, offline verification, storage, or crypto failure must never display.
+  }
+}
+
+self.addEventListener("push", (event) => {
+  event.waitUntil(receipt(event));
+});
+
+async function openReturn(event) {
+  try {
+    const ticket = event.notification.data?.ticket;
+    if (typeof ticket !== "string" || !/^[A-Za-z0-9_-]{30,500}$/.test(ticket)) return;
+    event.notification.close();
+    const gate = returnTicket(`/turn-return?ticket=${ticket}`);
+    if (!gate) return;
+    const api = notificationApi();
+    if (!api) return;
+    // A tap under another identity sees only the neutral gate, never a room URL.
+    const response = await fetch(`${api}/api/turn-notifications/return?ticket=${ticket}`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (response.ok) {
+      const result = await response.json();
+      if (
+        result.allowed === true &&
+        typeof result.target === "string" &&
+        /^\/room\/[A-Z0-9]{5}$/.test(result.target)
+      ) {
+        const target = new URL(result.target, self.location.origin);
+        const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+        const existing = clients.find((client) => client.url === target.href);
+        if (existing) return existing.focus();
+      }
+    }
+    return self.clients.openWindow(gate.href);
+  } catch {
+    // Unavailable verification does not navigate to a room or an untrusted URL.
+  }
+}
+
+self.addEventListener("notificationclick", (event) => {
+  event.waitUntil(openReturn(event));
+});

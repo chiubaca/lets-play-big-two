@@ -20,6 +20,7 @@ import { chooseJevBotMoveWithFallback } from "../lib/jev-bot";
 import { jevBotMoveRequestSchema } from "../lib/jev-bot.schema";
 import { createRoomCode } from "../lib/room-code";
 import { parseChatInput } from "../lib/chat-input";
+import { mintTurnTicket, readTurnTicket } from "../lib/turn-ticket";
 
 const allowedOrigins = ["https://local.bigtwo.com", "https://big-two.chiubaca.com"];
 
@@ -328,6 +329,106 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
       .bind(parsed.data.endpointId, session.user.id, session.session.id)
       .run();
     return c.json({ registered: false }, 200, { "Cache-Control": "no-store" });
+  })
+  .post("/api/turn-notifications/focus/:roomId", bodyLimit({ maxSize: 1024 }), async (c) => {
+    const session = await auth.api.getSession({ headers: c.req.raw.headers });
+    if (!session) return c.json({ error: "Unauthorized" }, 401);
+    if (!requestOriginAllowed(c.req.raw)) return c.json({ error: "Origin is not allowed" }, 403);
+    const parsed = z
+      .object({
+        tabId: z.string().uuid(),
+        focused: z.boolean(),
+        sequence: z.number().int().nonnegative().safe(),
+      })
+      .strict()
+      .safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Invalid focus" }, 400);
+    const roomId = c.req.param("roomId");
+    if (!/^[A-Z0-9]{5}$/.test(roomId)) return c.notFound();
+    const result = await c.env.BIG_TWO_ROOM_DURABLE_OBJECT.getByName(roomId).setRoomFocus(
+      roomId,
+      session.user.id,
+      session.session.id,
+      parsed.data.tabId,
+      parsed.data.focused,
+      parsed.data.sequence,
+    );
+    return result ? c.json({ ok: true }, 200, { "Cache-Control": "no-store" }) : c.notFound();
+  })
+  .get("/api/turn-notifications/check", async (c) => {
+    const deny = () => c.json({ eligible: false }, 200, { "Cache-Control": "no-store" });
+    const session = await auth.api.getSession({ headers: c.req.raw.headers });
+    if (!session) return deny();
+    const roomId = c.req.query("roomId");
+    const turnId = c.req.query("turnId");
+    const endpointId = c.req.query("endpointId");
+    if (
+      !roomId ||
+      !/^[A-Z0-9]{5}$/.test(roomId) ||
+      !turnId ||
+      !/^[a-f0-9-]{36}$/.test(turnId) ||
+      !endpointId ||
+      !/^[a-f0-9]{64}$/.test(endpointId) ||
+      !c.env.VAPID_PRIVATE_KEY
+    )
+      return deny();
+    try {
+      const registration = await c.env.BIG_TWO_DB.prepare(
+        "SELECT generation FROM turnNotificationRegistration WHERE endpoint_id = ? AND user_id = ? AND session_id = ?",
+      )
+        .bind(endpointId, session.user.id, session.session.id)
+        .first<{ generation: number }>();
+      if (!registration) return deny();
+      const eligible = await c.env.BIG_TWO_ROOM_DURABLE_OBJECT.getByName(roomId).verifyFirstTurn(
+        roomId,
+        turnId,
+        session.user.id,
+        {
+          endpoint_id: endpointId,
+          session_id: session.session.id,
+          generation: registration.generation,
+        },
+      );
+      if (!eligible) return deny();
+      const ticket = await mintTurnTicket(c.env.VAPID_PRIVATE_KEY, roomId, session.user.id);
+      return c.json({ eligible: true, target: `/turn-return?ticket=${ticket}` }, 200, {
+        "Cache-Control": "no-store",
+      });
+    } catch {
+      return deny();
+    }
+  })
+  .get("/api/turn-notifications/return", async (c) => {
+    const deny = () => c.json({ allowed: false }, 200, { "Cache-Control": "no-store" });
+    const ticket = c.req.query("ticket");
+    if (!ticket) return deny();
+    const decoded = await readTurnTicket(c.env.VAPID_PRIVATE_KEY, ticket);
+    if (!decoded) return deny();
+    const session = await auth.api.getSession({ headers: c.req.raw.headers });
+    if (!session || session.user.id !== decoded.userId) return deny();
+    try {
+      if (await accountDeletionIsPending(decoded.userId)) return deny();
+      const room = await c.env.BIG_TWO_DB.prepare(
+        "SELECT status, expires_at FROM room WHERE id = ?",
+      )
+        .bind(decoded.roomId)
+        .first<{ status: string; expires_at: number | null }>();
+      if (
+        !room ||
+        room.status === "expiring" ||
+        (room.expires_at !== null && room.expires_at <= Date.now())
+      )
+        return c.json({ allowed: true, missing: true }, 200, { "Cache-Control": "no-store" });
+      const seat = await c.env.BIG_TWO_ROOM_DURABLE_OBJECT.getByName(decoded.roomId).getChatSeat(
+        decoded.userId,
+      );
+      if (!seat?.seatName) return deny();
+      return c.json({ allowed: true, target: `/room/${decoded.roomId}` }, 200, {
+        "Cache-Control": "no-store",
+      });
+    } catch {
+      return deny();
+    }
   })
   .get("/api/rooms", async (c) => {
     const session = await auth.api.getSession({ headers: c.req.raw.headers });

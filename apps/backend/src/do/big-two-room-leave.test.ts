@@ -34,7 +34,10 @@ function room(playing: boolean) {
     },
   };
   const object = new BigTwoRoomObject(
-    { storage: { sql }, getWebSockets: () => sockets } as unknown as DurableObjectState,
+    {
+      storage: { sql, transactionSync: (fn: () => void) => fn() },
+      getWebSockets: () => sockets,
+    } as unknown as DurableObjectState,
     {
       BIG_TWO_DB: {
         prepare: () => ({

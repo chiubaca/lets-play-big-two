@@ -3,3 +3,9 @@ BETTER_AUTH_SECRET=generate-with-https://better-auth.com/docs/concepts/cli#secre
 
 GOOGLE_CLIENT_ID=example.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=secret
+
+# Generate one P-256 VAPID key pair; keep the private key only on the backend.
+# The public key must match VITE_VAPID_PUBLIC_KEY on the frontend.
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:notifications@example.com

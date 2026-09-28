@@ -6,6 +6,7 @@ import { HomeLogo } from "../../components/home-logo";
 import { OnlineGameRoom } from "../../components/game-room";
 import { authClient } from "../../libs/auth-client";
 import { useSubscribeToGameState } from "./-subscribe-to-game-state";
+import { useRoomFocus } from "./-room-focus";
 import "./room-auth.css";
 
 export const Route = createFileRoute("/room/$roomId")({
@@ -16,6 +17,7 @@ function RoomPage() {
   const { roomId } = Route.useParams();
   const { data: session, isPending } = authClient.useSession();
   useSubscribeToGameState({ roomId, viewerId: session?.user.id });
+  useRoomFocus(roomId, session?.user.id);
 
   const user = session?.user;
 
