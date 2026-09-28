@@ -1,10 +1,28 @@
 Title: Decide the online Table settings opt-in flow
-Status: open
+Status: closed
 Labels: wayfinder:prototype
 Parent: ../map.md
-Assignee: unassigned
+Assignee: chiubaca
 Blocked by: 01-supported-delivery.md
 
 ## Question
 
 How should the account-wide Turn notification control in online Table settings behave on supported and unsupported devices, with permission not yet requested, granted, denied, or later revoked? Resolve default-off consent, per-device subscription versus account-wide preference, sign-in/sign-out behavior, feedback, and accessibility using a cheap rough settings prototype for human reaction. Link the prototype in the resolution; do not implement the production UI.
+
+## Comments
+
+### Resolution
+
+Use [layout A of the throwaway interactive settings prototype](../prototype/settings-flow.html?variant=A): an account-level Turn notifications switch followed by a distinct status/action card for **this device**, alongside the existing sound control. The mock simulates state changes only; it never requests real permission or registers push. The human chose layout A over a numbered setup flow and a compact status ledger.
+
+- **Placement and meaning:** Show the control only to signed-in, seated Players in online-room Table settings; hide it in offline tables and from Spectators, even though a Spectator here might be seated in another room. The preference starts **off** for every account, applies across all of that account's online rooms, and is independent of any particular browser or app install. Explain that alerts are for the Player's turns while away from that room, not for every room event. A switch in one room reflects changes made elsewhere.
+- **Two explicit steps:** Turning on the account switch saves consent but does **not** request notification permission, subscribe this device, or claim that alerts are ready. On a capable device, the separate **Enable on this device** button explains the need for browser/OS permission, then requests it directly from that tap and enrolls the device for the current signed-in account. Even with permission already granted, signing in to an account requires a fresh explicit device-enrollment tap. A device is **Ready** only after permission, subscription, and server enrollment all succeed. A ready device can be removed individually without changing the account preference.
+- **Off and identity changes:** Turning the account switch off stops alerts account-wide and removes that account's server-side device registrations; OS/browser permission may remain granted and cannot be revoked by the app. Turning the preference back on requires explicit enrollment on each device again. On sign-out, detach/revoke this device's registration for the departing account; do not transfer an existing origin-level push subscription to the next signed-in person or auto-enroll them, including when the same person signs back in. Keep the account preference stored for later sign-in unless the user explicitly turns it off. The delivery-design ticket will specify the server-side revocation/race mechanics.
+- **Device card states:** With preference off, explain both steps without prompting. With preference on and permission not yet requested, show **Not enabled on this device** and the Enable action. With granted permission and successful enrollment, show **Ready on this device**; permission alone is not Ready. If permission is denied or later revoked, show **Blocked on this device**, explain browser/OS settings and re-enrollment, and do not repeatedly invoke a permission prompt. If subscription or server enrollment fails after permission is granted, show **Not enabled on this device** with an error and **Retry device setup**; the account remains on for other enrolled devices. If Web Push is unsupported, show **Unavailable on this device** without an enable action; in an iOS browser tab explain Home Screen installation and in-app setup. An Android TWA build without verified notification delegation/OS permission must not claim Ready or offer a misleading working path; use an unavailable/explanatory state until validated on devices. None of these device-specific failures automatically turns the account preference off.
+- **Feedback and accessibility:** Persisted account-setting changes and completed device enrollment get explicit success feedback; failed saves must not be shown as on or Ready, and offer retry without changing consent elsewhere. Do not prompt on page load, dialog open, or switch toggle. Use a keyboard-operable, clearly labeled switch with exposed on/off state, a separate labeled device action, visible focus and error text, and a polite live announcement for asynchronous status changes. Don't communicate readiness only by color or permission API state. Preserve normal dialog focus handling. Show signed-in account/device distinction in copy, not as two ambiguous identical switches.
+
+No production UI was built. Detailed subscription persistence, delivery, and revocation guarantees remain in [Decide subscription storage and reliable turn delivery](06-delivery-design.md); final cross-device acceptance scenarios remain in [Agree on turn notification acceptance and handoff](07-handoff-spec.md).
+
+### Later clarification
+
+The Android **unverified-build enrollment gate** in the device-card bullet above was superseded by [Agree on turn notification acceptance and handoff](07-handoff-spec.md). An actually incapable/non-delegated build still cannot claim Ready; a capable setup may enroll before physical-device delivery is manually verified. See the [handoff spec](../PRD.md#validation-and-release-boundaries) for the release boundary and follow-up tests.

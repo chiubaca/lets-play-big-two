@@ -1,0 +1,413 @@
+<!doctype html>
+<!-- THROWAWAY PROTOTYPE — planning artifact, never wired to notification APIs.
+     Question: how should account consent and this device's permission/enrollment read
+     alongside the existing online Table settings? Try ?variant=A, B, or C. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prototype · Turn notifications in Table settings</title>
+    <style>
+      :root {
+        font:
+          16px/1.45 system-ui,
+          sans-serif;
+        color: #f7f1e6;
+        background: #182c29;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+      }
+      button,
+      select {
+        font: inherit;
+        cursor: pointer;
+      }
+      button:focus-visible,
+      select:focus-visible {
+        outline: 3px solid #e5c47a;
+        outline-offset: 3px;
+      }
+      .room {
+        padding: 20px;
+        max-width: 850px;
+        margin: auto;
+      }
+      .room header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .room > p {
+        color: #b2c6bd;
+      }
+      .table {
+        height: 170px;
+        border: 2px solid #547565;
+        border-radius: 50%;
+        margin: 36px auto;
+        max-width: 580px;
+        display: grid;
+        place-items: center;
+        color: #aec5ae;
+      }
+      .shade {
+        position: fixed;
+        inset: 0;
+        background: #091711b8;
+        display: grid;
+        place-items: center;
+        padding: 18px;
+      }
+      .dialog {
+        box-sizing: border-box;
+        background: #f7f1e6;
+        color: #1a322e;
+        border-radius: 18px;
+        width: min(100%, 490px);
+        max-height: calc(100vh - 115px);
+        overflow: auto;
+        padding: 22px;
+        box-shadow: 0 18px 60px #05110dbb;
+      }
+      h1 {
+        font-size: 1.4rem;
+        margin: 0;
+      }
+      h2 {
+        font-size: 1.04rem;
+        margin: 0 0 6px;
+      }
+      p {
+        margin: 6px 0 12px;
+      }
+      .muted {
+        color: #52605a;
+        font-size: 0.9rem;
+      }
+      .dialog-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .section {
+        border-top: 1px solid #d5d6cc;
+        margin-top: 18px;
+        padding-top: 18px;
+      }
+      .row {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .row strong {
+        display: block;
+      }
+      .row p {
+        margin-bottom: 0;
+      }
+      .action {
+        background: #244a3d;
+        color: white;
+        border: 0;
+        border-radius: 8px;
+        padding: 9px 13px;
+      }
+      .action:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .secondary {
+        background: transparent;
+        color: #244a3d;
+        border: 1px solid #8ca599;
+        border-radius: 8px;
+        padding: 8px 12px;
+      }
+      .switch {
+        background: #68766a;
+        color: white;
+        border: 0;
+        border-radius: 30px;
+        padding: 7px 12px;
+        min-width: 70px;
+      }
+      .switch[aria-checked="true"] {
+        background: #167658;
+      }
+      .status {
+        background: #e8eee7;
+        border-radius: 10px;
+        padding: 12px;
+        margin-top: 13px;
+      }
+      .status p {
+        margin: 4px 0 10px;
+      }
+      .status strong {
+        display: block;
+      }
+      .pill {
+        display: inline-block;
+        background: #dce9e0;
+        border-radius: 50px;
+        padding: 3px 10px;
+        font-size: 0.86rem;
+      }
+      .controls {
+        position: fixed;
+        bottom: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        box-sizing: border-box;
+        width: min(100% - 16px, 780px);
+        padding: 10px;
+        border-radius: 12px;
+        background: #101e20;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        flex-wrap: wrap;
+        box-shadow: 0 4px 24px #0009;
+        font-size: 0.85rem;
+      }
+      .controls select,
+      .controls button {
+        background: #f7f1e6;
+        color: #182c29;
+        border: 0;
+        border-radius: 6px;
+        padding: 4px 8px;
+      }
+      .controls label {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .notice {
+        font-size: 0.9rem;
+        border-left: 3px solid #b48a39;
+        padding-left: 9px;
+        margin-top: 12px;
+      }
+      @media (max-width: 550px) {
+        .room {
+          padding: 14px;
+        }
+        .table {
+          height: 260px;
+        }
+        .dialog {
+          padding: 18px;
+          max-height: calc(100vh - 145px);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="room" aria-hidden="true">
+      <header><strong>BIG TWO · ONLINE ROOM</strong><span>⚙ Table settings</span></header>
+      <p>Room K7Q4 · You're seated</p>
+      <div class="table">Your cards and other Players</div>
+    </main>
+    <div class="shade">
+      <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="title">
+        <div class="dialog-head">
+          <h1 id="title">Table settings</h1>
+          <span aria-hidden="true">×</span>
+        </div>
+        <p class="muted">Make yourself comfortable. Sound starts after your first interaction.</p>
+        <div id="settings"></div>
+        <div class="section"><button type="button" class="secondary">Turn sound off</button></div>
+      </section>
+    </div>
+    <div class="controls" aria-label="Prototype controls">
+      <button id="previous" type="button" aria-label="Previous layout">←</button
+      ><strong id="variant-label"></strong
+      ><button id="next" type="button" aria-label="Next layout">→</button>
+      <label
+        >Account
+        <select id="account">
+          <option value="off">Off</option>
+          <option value="on">On</option>
+        </select></label
+      >
+      <label
+        >Device
+        <select id="device">
+          <option value="prompt">Not requested</option>
+          <option value="ready">Ready</option>
+          <option value="failed">Enrollment failed</option>
+          <option value="denied">Denied / revoked</option>
+          <option value="unsupported">Unsupported</option>
+          <option value="ios">iOS browser tab</option>
+          <option value="android">Android app unverified</option>
+        </select></label
+      >
+      <label
+        >Identity
+        <select id="identity">
+          <option value="signed-in">Signed in</option>
+          <option value="signed-out">Signed out</option>
+        </select></label
+      >
+    </div>
+    <script>
+      // In-memory simulation only. Never requests permission or contacts a server.
+      const state = { account: "off", device: "prompt", identity: "signed-in", message: "" };
+      const names = {
+        A: "Single row + device card",
+        B: "Two-step setup",
+        C: "Account and device ledger",
+      };
+      let variant = new URL(location.href).searchParams.get("variant")?.toUpperCase() || "A";
+      if (!names[variant]) variant = "A";
+      const $ = (id) => document.getElementById(id);
+      const safe = (text) =>
+        text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+      function deviceText() {
+        if (state.identity === "signed-out")
+          return [
+            "Sign in to set up alerts",
+            "This browser is detached from the previous account. Sign in to see your account preference.",
+          ];
+        if (state.account === "off")
+          return [
+            "Account alerts off",
+            "Turn on the account preference, then enable each device you want to receive alerts on.",
+          ];
+        switch (state.device) {
+          case "ready":
+            return [
+              "Ready on this device",
+              "This device is enrolled for this signed-in account. Alerts still depend on room activity and delivery.",
+            ];
+          case "failed":
+            return [
+              "Not enabled on this device",
+              "Permission is allowed, but enrollment failed. Check your connection and retry; other enrolled devices stay enabled.",
+            ];
+          case "denied":
+            return [
+              "Blocked on this device",
+              "Allow notifications in your browser and device settings, then return here to enable this device. Other enrolled devices stay enabled.",
+            ];
+          case "unsupported":
+            return [
+              "Unavailable on this device",
+              "This browser cannot receive Web Push. Your account preference still applies to other enrolled devices.",
+            ];
+          case "ios":
+            return [
+              "Install to enable here",
+              "Add this app to the Home Screen, open it there, sign in, and choose Enable on this device. Safari tabs cannot receive these alerts.",
+            ];
+          case "android":
+            return [
+              "Android app not yet verified",
+              "This app install cannot promise alerts until notification delegation and OS permission are verified on a device. Other enrolled devices can still receive them.",
+            ];
+          default:
+            return [
+              "Not enabled on this device",
+              "Choose Enable on this device to ask for notification permission and enroll this browser for your signed-in account.",
+            ];
+        }
+      }
+      function action() {
+        if (state.identity !== "signed-in" || state.account !== "on") return "";
+        if (state.device === "prompt")
+          return '<button type="button" class="action" id="enable">Enable on this device</button>';
+        if (state.device === "ready")
+          return '<button type="button" class="secondary" id="disable">Remove this device</button>';
+        if (state.device === "failed")
+          return '<button type="button" class="action" id="enable">Retry device setup</button>';
+        if (state.device === "denied")
+          return '<p class="muted">No repeated permission prompt; change browser/OS settings first.</p>';
+        return "";
+      }
+      function toggle() {
+        return `<button type="button" role="switch" aria-checked="${state.account === "on"}" aria-label="Turn notifications for my account" class="switch" id="toggle" ${state.identity === "signed-out" ? "disabled" : ""}>${state.account === "on" ? "On" : "Off"}</button>`;
+      }
+      function render() {
+        const [title, detail] = deviceText();
+        const switchRow = `<div class="row"><div><strong>Turn notifications</strong><p class="muted">When you’re seated and it’s your turn in an online room you aren’t actively viewing. Applies across your account.</p></div>${toggle()}</div>`;
+        const deviceBlock = `<div class="status" role="status"><strong>${title}</strong><p>${detail}</p>${action()}</div>`;
+        let body;
+        if (variant === "A") body = `<div class="section">${switchRow}${deviceBlock}</div>`;
+        if (variant === "B")
+          body = `<div class="section"><h2>1 · Choose for your account</h2><p class="muted">Alerts for your turns in any online room you’re away from.</p>${switchRow}</div><div class="section"><h2>2 · Set up this device</h2>${deviceBlock}</div>`;
+        if (variant === "C")
+          body = `<div class="section"><h2>Notifications</h2><p class="muted">One alert per new turn, never a reminder.</p><div class="row"><span>Account preference</span>${toggle()}</div><p class="muted">Your choice applies across all online rooms.</p><div class="row"><span>This browser or app</span><span class="pill">${title}</span></div>${deviceBlock}</div>`;
+        $("settings").innerHTML =
+          body +
+          (state.message ? `<p class="notice" role="status">${safe(state.message)}</p>` : "");
+        $("variant-label").textContent = `${variant} — ${names[variant]}`;
+        $("account").value = state.account;
+        $("device").value = state.device;
+        $("identity").value = state.identity;
+        $("toggle")?.addEventListener("click", () => {
+          state.account = state.account === "on" ? "off" : "on";
+          if (state.account === "off")
+            state.device = state.device === "ready" ? "prompt" : state.device;
+          state.message =
+            state.account === "off"
+              ? "All account registrations removed; OS permission is unchanged."
+              : "Account preference on. Enable each device separately.";
+          render();
+        });
+        $("enable")?.addEventListener("click", () => {
+          state.device = "ready";
+          state.message =
+            "Simulated permission grant and enrollment; no real permission request was made.";
+          render();
+        });
+        $("disable")?.addEventListener("click", () => {
+          state.device = "prompt";
+          state.message = "Simulated removal of this device; account preference stays on.";
+          render();
+        });
+      }
+      function setVariant(next) {
+        variant = next;
+        const url = new URL(location.href);
+        url.searchParams.set("variant", variant);
+        history.replaceState({}, "", url);
+        render();
+      }
+      function cycle(step) {
+        const keys = Object.keys(names);
+        setVariant(keys[(keys.indexOf(variant) + step + keys.length) % keys.length]);
+      }
+      $("previous").addEventListener("click", () => cycle(-1));
+      $("next").addEventListener("click", () => cycle(1));
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        if (event.target.closest("input, select, textarea, [contenteditable]")) return;
+        cycle(event.key === "ArrowRight" ? 1 : -1);
+      });
+      $("account").addEventListener("change", (event) => {
+        state.account = event.target.value;
+        if (state.account === "off" && state.device === "ready") state.device = "prompt";
+        state.message = "";
+        render();
+      });
+      $("device").addEventListener("change", (event) => {
+        state.device = event.target.value;
+        state.message = "";
+        render();
+      });
+      $("identity").addEventListener("change", (event) => {
+        state.identity = event.target.value;
+        if (state.identity === "signed-out") state.device = "prompt";
+        state.message = "";
+        render();
+      });
+      render();
+    </script>
+  </body>
+</html>

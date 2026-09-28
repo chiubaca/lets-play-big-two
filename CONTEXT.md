@@ -12,6 +12,9 @@ _Avoid_: Observer, viewer
 A room participant occupying a seat who may receive a hand and take turns.
 _Avoid_: Spectator
 
+**Turn**:
+A distinct opportunity for a seated Player to act in an ongoing game. The first turn follows a deal; later turns follow a play or pass. The same Player may get a new turn when the lead returns to them after other Players pass.
+
 **Host**:
 The first seated Player in a room, who can start and reset games. When that Player leaves the table, the next seated Player becomes Host.
 _Avoid_: Room creator
@@ -38,3 +41,6 @@ _Avoid_: Leave table
 
 **Turn notification**:
 An opt-in alert to a seated Player when their turn begins in an online room they are not actively viewing. The Player's preference applies across their online rooms, not to offline games.
+
+**Actively viewing a room**:
+A Player has a visible, focused view of that specific online room on at least one device. A background tab, another room, or the Lobby does not count; viewing the room on one device counts for the Player across all devices.
