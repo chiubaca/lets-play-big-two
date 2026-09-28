@@ -22,6 +22,13 @@ export const accountDeletionTable = sqliteTable("accountDeletion", {
     .notNull(),
 });
 
+export const turnNotificationPreferenceTable = sqliteTable("turnNotificationPreference", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => userTable.id, { onDelete: "cascade" }),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
+});
+
 export const usersToRoomsTable = sqliteTable(
   "usersToRooms",
   {

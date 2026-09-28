@@ -26,6 +26,10 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/compone
 import { createPlayEvent, isGameTurnState } from "./game-room-session";
 import { useTableAudio } from "./use-table-audio";
 import { RoomChat, type ChatMessage } from "./room-chat";
+import {
+  TurnNotificationSettings,
+  type TurnNotificationPreference,
+} from "./turn-notification-settings";
 import { WinnerArtwork } from "./winner-artwork";
 import { CasinoBackdrop, CasinoTableMark } from "~/components/casino/casino";
 import "./game-room.css";
@@ -58,6 +62,7 @@ type GameRoomProps = {
   user: GameRoomUser;
   sharedDevice?: boolean;
   hideHand?: boolean;
+  turnNotifications?: TurnNotificationPreference;
 };
 
 function ReturnToLobby() {
@@ -155,6 +160,7 @@ export const GameRoom = ({
   user,
   sharedDevice = false,
   hideHand = false,
+  turnNotifications,
 }: GameRoomProps) => {
   const [selectedCards, setSelectedCards] = useState<Card[]>([]);
   const [message, setMessage] = useState<string>();
@@ -762,6 +768,9 @@ export const GameRoom = ({
               <button className="table-small-button settings-sound-button" onClick={toggleMuted}>
                 {muted ? "Turn sound on" : "Turn sound off"}
               </button>
+              {roomCode && !spectator && turnNotifications && panel === "settings" && (
+                <TurnNotificationSettings preference={turnNotifications} />
+              )}
             </div>
           )}
           {panel === "menu" && (

@@ -9,6 +9,8 @@ import { getDb } from "@big-two/data-ops/database";
 import {
   accountDeletionTable,
   roomTable,
+  turnNotificationPreferenceTable,
+  userTable,
   usersToRoomsTable,
 } from "@big-two/data-ops/drizzle/schema";
 import { gameEventSchema, type BigTwoGameMachineSnapshot } from "@big-two/game-state-machine";
@@ -31,7 +33,7 @@ async function accountDeletionIsPending(userId: string) {
   return deletion.length > 0;
 }
 
-function chatOriginAllowed(request: Request) {
+function requestOriginAllowed(request: Request) {
   const origin = request.headers.get("Origin");
   return !origin || allowedOrigins.includes(origin);
 }
@@ -58,6 +60,66 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
   .get("/", async (c) => {
     return c.text("sup");
   })
+  .get("/api/turn-notifications/preference", async (c) => {
+    const session = await auth.api.getSession({ headers: c.req.raw.headers });
+    if (!session) return c.json({ error: "Unauthorized" }, 401);
+    if (await accountDeletionIsPending(session.user.id))
+      return c.json({ error: "Account deletion is in progress" }, 409);
+    const db = getDb();
+    const user = await db
+      .select({ id: userTable.id })
+      .from(userTable)
+      .where(eq(userTable.id, session.user.id))
+      .limit(1);
+    if (!user.length) return c.json({ error: "Account not found" }, 404);
+    const preference = await db
+      .select({ enabled: turnNotificationPreferenceTable.enabled })
+      .from(turnNotificationPreferenceTable)
+      .where(eq(turnNotificationPreferenceTable.userId, session.user.id))
+      .limit(1);
+    return c.json({ enabled: preference[0]?.enabled ?? false }, 200, {
+      "Cache-Control": "no-store",
+    });
+  })
+  .put(
+    "/api/turn-notifications/preference",
+    bodyLimit({
+      maxSize: 1024,
+      onError: (c) => c.json({ error: "Request body is too large" }, 413),
+    }),
+    async (c) => {
+      const session = await auth.api.getSession({ headers: c.req.raw.headers });
+      if (!session) return c.json({ error: "Unauthorized" }, 401);
+      if (!requestOriginAllowed(c.req.raw)) return c.json({ error: "Origin is not allowed" }, 403);
+      if (await accountDeletionIsPending(session.user.id))
+        return c.json({ error: "Account deletion is in progress" }, 409);
+      let input: unknown;
+      try {
+        input = await c.req.json();
+      } catch {
+        return c.json({ error: "Send a JSON preference" }, 400);
+      }
+      const parsed = z.object({ enabled: z.boolean() }).strict().safeParse(input);
+      if (!parsed.success) return c.json({ error: "Invalid preference" }, 400);
+      const db = getDb();
+      const user = await db
+        .select({ id: userTable.id })
+        .from(userTable)
+        .where(eq(userTable.id, session.user.id))
+        .limit(1);
+      if (!user.length) return c.json({ error: "Account not found" }, 404);
+      const saved = await db
+        .insert(turnNotificationPreferenceTable)
+        .values({ userId: session.user.id, enabled: parsed.data.enabled })
+        .onConflictDoUpdate({
+          target: turnNotificationPreferenceTable.userId,
+          set: { enabled: parsed.data.enabled },
+        })
+        .returning({ enabled: turnNotificationPreferenceTable.enabled });
+      if (!saved.length) return c.json({ error: "Could not save preference" }, 409);
+      return c.json({ enabled: saved[0].enabled }, 200, { "Cache-Control": "no-store" });
+    },
+  )
   .get("/api/rooms", async (c) => {
     const session = await auth.api.getSession({ headers: c.req.raw.headers });
     if (!session) return c.json({ error: "Unauthorized" }, 401);
@@ -178,7 +240,7 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
     return await stub.fetch(new Request(c.req.raw, { headers }));
   })
   .get("/api/room/chat/ws/:roomId", async (c) => {
-    if (!chatOriginAllowed(c.req.raw)) return c.json({ error: "Origin is not allowed" }, 403);
+    if (!requestOriginAllowed(c.req.raw)) return c.json({ error: "Origin is not allowed" }, 403);
     if (c.req.header("Upgrade")?.toLowerCase() !== "websocket") {
       return c.text("Expected Upgrade: websocket", 426);
     }
@@ -233,7 +295,7 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
   .post(
     "/api/room/chat/:roomId",
     async (c, next) => {
-      if (!chatOriginAllowed(c.req.raw)) return c.json({ error: "Origin is not allowed" }, 403);
+      if (!requestOriginAllowed(c.req.raw)) return c.json({ error: "Origin is not allowed" }, 403);
       const reader = c.req.raw.clone().body?.getReader();
       if (reader) {
         let size = 0;

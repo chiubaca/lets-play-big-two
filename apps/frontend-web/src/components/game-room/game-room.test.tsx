@@ -1,13 +1,16 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { BigTwoGameMachineSnapshot, RoomGameState } from "@big-two/game-state-machine";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 import { useState } from "react";
 
 import { GameRoom, type BotSettings } from "./game-room";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 const players = [
   { id: "solo-player", name: "You", hand: [] },
@@ -66,6 +69,115 @@ it("changes a solo opponent between Basic and Jev and marks Jev at the table", (
 
   expect(screen.getAllByText("Ada ✨[jev]")).toHaveLength(2);
   expect(adaMode.querySelectorAll("button")[1].getAttribute("aria-pressed")).toBe("true");
+});
+
+it("loads account consent for a seated online Player and confirms a save without setting up this device", async () => {
+  const load = vi.fn().mockResolvedValue(false);
+  const save = vi.fn().mockResolvedValue(true);
+  const requestPermission = vi.fn();
+  vi.stubGlobal("Notification", { requestPermission });
+  const props = {
+    gameState,
+    send: () => {},
+    tableLabel: "Room ABCDE",
+    roomCode: "ABCDE",
+    user: { id: "solo-player", name: "You" },
+    turnNotifications: { load, save },
+  };
+  const room = render(<GameRoom {...props} />);
+  fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
+  const toggle = await screen.findByRole("switch", { name: "Turn notifications for my account" });
+  expect(toggle.tagName).toBe("BUTTON");
+  await waitFor(() => expect(toggle.getAttribute("aria-checked")).toBe("false"));
+  expect(screen.getByText("Not enabled on this device")).toBeTruthy();
+  expect(requestPermission).not.toHaveBeenCalled();
+  fireEvent.click(toggle);
+  await waitFor(() => expect(toggle.getAttribute("aria-checked")).toBe("true"));
+  expect(within(screen.getByRole("dialog")).getByRole("status").textContent).toContain(
+    "Turn notifications on for your account",
+  );
+  expect(save).toHaveBeenCalledWith(true);
+  expect(requestPermission).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  room.rerender(<GameRoom {...props} />);
+  fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
+  await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
+});
+
+it("never shows failed or unconfirmed consent as on, and does not offer consent to Spectators or offline tables", async () => {
+  const load = vi.fn().mockResolvedValue(false);
+  const save = vi.fn().mockRejectedValue(new Error("Network failed"));
+  const props = {
+    gameState,
+    send: () => {},
+    tableLabel: "Room ABCDE",
+    roomCode: "ABCDE",
+    user: { id: "solo-player", name: "You" },
+    turnNotifications: { load, save },
+  };
+  const room = render(<GameRoom {...props} />);
+  fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
+  const toggle = await screen.findByRole("switch", { name: "Turn notifications for my account" });
+  await waitFor(() => expect(toggle.hasAttribute("disabled")).toBe(false));
+  fireEvent.click(toggle);
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+  await waitFor(() =>
+    expect(within(screen.getByRole("dialog")).getByRole("status").textContent).toContain(
+      "Could not confirm",
+    ),
+  );
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+  expect(toggle.hasAttribute("disabled")).toBe(true);
+  room.rerender(<GameRoom {...props} user={{ id: "visitor", name: "Visitor" }} />);
+  expect(screen.queryByRole("switch", { name: "Turn notifications for my account" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  room.rerender(<GameRoom {...props} roomCode={undefined} />);
+  fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
+  expect(screen.queryByRole("switch", { name: "Turn notifications for my account" })).toBeNull();
+});
+
+it("refreshes account consent when returning to an open settings dialog", async () => {
+  const load = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+  render(
+    <GameRoom
+      gameState={gameState}
+      send={() => {}}
+      tableLabel="Room ABCDE"
+      roomCode="ABCDE"
+      user={{ id: "solo-player", name: "You" }}
+      turnNotifications={{ load, save: vi.fn() }}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
+  const toggle = screen.getByRole("switch", { name: "Turn notifications for my account" });
+  await waitFor(() => expect(toggle.hasAttribute("disabled")).toBe(false));
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+  fireEvent.focus(window);
+  await waitFor(() => expect(toggle.getAttribute("aria-checked")).toBe("true"));
+});
+
+it("keeps consent unavailable when the account read fails instead of assuming it is off", async () => {
+  const save = vi.fn();
+  render(
+    <GameRoom
+      gameState={gameState}
+      send={() => {}}
+      tableLabel="Room ABCDE"
+      roomCode="ABCDE"
+      user={{ id: "solo-player", name: "You" }}
+      turnNotifications={{ load: () => Promise.reject(new Error("Offline")), save }}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
+  const toggle = screen.getByRole("switch", { name: "Turn notifications for my account" });
+  await waitFor(() =>
+    expect(within(screen.getByRole("dialog")).getByRole("status").textContent).toContain(
+      "Could not load",
+    ),
+  );
+  expect(toggle.hasAttribute("disabled")).toBe(true);
+  fireEvent.click(toggle);
+  expect(save).not.toHaveBeenCalled();
 });
 
 it("copies only the online room code", async () => {

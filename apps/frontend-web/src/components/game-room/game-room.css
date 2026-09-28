@@ -994,6 +994,58 @@
 .settings-sound-button {
   width: 100%;
 }
+.turn-notification-settings {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid #8f743f66;
+  padding-top: 16px;
+}
+.turn-notification-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.turn-notification-row strong,
+.turn-notification-device strong {
+  font-family: Georgia, serif;
+  font-size: 15px;
+  color: #f3cf84;
+}
+.turn-notification-row p,
+.turn-notification-device p {
+  margin: 5px 0 0;
+  line-height: 1.55;
+  color: #b9b99f;
+}
+.turn-notification-switch {
+  flex: none;
+  min-width: 68px;
+  border: 1px solid #c5a461;
+  border-radius: 999px;
+  padding: 8px 13px;
+  color: #f7dfab;
+  background: #0b2415;
+  cursor: pointer;
+}
+.turn-notification-switch[aria-checked="true"] {
+  color: #172311;
+  background: #f3cf84;
+}
+.turn-notification-switch:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+.turn-notification-feedback {
+  margin: 0;
+  color: #f3cf84;
+}
+.turn-notification-device {
+  border: 1px solid #8f743f66;
+  border-radius: 12px;
+  padding: 12px;
+  background: #0b2415;
+}
 .room-loading {
   justify-content: center;
   font-family: Georgia, serif;

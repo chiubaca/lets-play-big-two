@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { RoomGameState, GameEvent } from "@big-two/game-state-machine";
 
@@ -7,6 +7,23 @@ import { GameRoom, type GameRoomUser } from "./game-room";
 import type { ChatMessage } from "./room-chat";
 
 export function OnlineGameRoom({ roomId, user }: { roomId: string; user: GameRoomUser }) {
+  const turnNotifications = useMemo(
+    () => ({
+      load: async () => {
+        const response = await honoClient.api["turn-notifications"].preference.$get();
+        if (!response.ok) throw new Error("Could not load preference");
+        return (await response.json()).enabled;
+      },
+      save: async (enabled: boolean) => {
+        const response = await honoClient.api["turn-notifications"].preference.$put({
+          json: { enabled },
+        });
+        if (!response.ok) throw new Error("Could not save preference");
+        return (await response.json()).enabled;
+      },
+    }),
+    [],
+  );
   const {
     data: gameState,
     error,
@@ -102,6 +119,7 @@ export function OnlineGameRoom({ roomId, user }: { roomId: string; user: GameRoo
       tableLabel={roomId}
       roomCode={roomId}
       user={user}
+      turnNotifications={turnNotifications}
     />
   );
 }
