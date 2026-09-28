@@ -7,7 +7,7 @@ let sqlite: Database.Database;
 let account = "ada";
 let live = true;
 let available = true;
-const verifyFirstTurn = vi.fn(async () => true);
+const verifyTurn = vi.fn(async () => true);
 const setRoomFocus = vi.fn(async () => true);
 
 vi.mock("../lib/auth", () => ({
@@ -37,7 +37,7 @@ function env() {
     },
     BIG_TWO_ROOM_DURABLE_OBJECT: {
       getByName: () => ({
-        verifyFirstTurn,
+        verifyTurn,
         setRoomFocus,
         getChatSeat: async () => ({ seatName: "Ada" }),
       }),
@@ -54,7 +54,7 @@ beforeEach(() => {
   account = "ada";
   live = true;
   available = true;
-  verifyFirstTurn.mockReset().mockImplementation(async () => available);
+  verifyTurn.mockReset().mockImplementation(async () => available);
   setRoomFocus.mockReset().mockResolvedValue(true);
   sqlite = new Database(":memory:");
   sqlite.exec(`CREATE TABLE accountDeletion(user_id TEXT PRIMARY KEY);
@@ -77,7 +77,7 @@ it("authenticates receipt, returns only a neutral same-origin ticket, and fails 
   expect(accepted.eligible).toBe(true);
   expect(accepted.target).toMatch(/^\/turn-return\?ticket=[A-Za-z0-9_-]+$/);
   expect(accepted.target).not.toContain(ROOM);
-  expect(verifyFirstTurn).toHaveBeenCalledWith(ROOM, TURN, "ada", {
+  expect(verifyTurn).toHaveBeenCalledWith(ROOM, TURN, "ada", {
     endpoint_id: ENDPOINT,
     session_id: "ada-session",
     generation: 0,

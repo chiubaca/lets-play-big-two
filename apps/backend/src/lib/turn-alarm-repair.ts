@@ -12,7 +12,7 @@ export async function repairTurnAlarms(env: Env): Promise<void> {
     .all<{ id: string }>();
   for (const { id } of rows.results) {
     try {
-      await env.BIG_TWO_ROOM_DURABLE_OBJECT.getByName(id).repairFirstTurn(id);
+      await env.BIG_TWO_ROOM_DURABLE_OBJECT.getByName(id).repairTurn(id);
     } catch (error) {
       console.error("Turn alarm repair failed", id, error);
     }

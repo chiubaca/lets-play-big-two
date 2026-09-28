@@ -389,7 +389,7 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
         .bind(endpointId, session.user.id, session.session.id)
         .first<{ generation: number }>();
       if (!registration) return deny();
-      const eligible = await c.env.BIG_TWO_ROOM_DURABLE_OBJECT.getByName(roomId).verifyFirstTurn(
+      const eligible = await c.env.BIG_TWO_ROOM_DURABLE_OBJECT.getByName(roomId).verifyTurn(
         roomId,
         turnId,
         session.user.id,

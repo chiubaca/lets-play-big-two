@@ -26,7 +26,7 @@ it("repairs bounded pages fairly across scheduled runs without inventing Turns",
       },
     },
     BIG_TWO_ROOM_DURABLE_OBJECT: {
-      getByName: (id: string) => ({ repairFirstTurn: () => repaired(id) }),
+      getByName: (id: string) => ({ repairTurn: () => repaired(id) }),
     },
   } as unknown as Env;
   await repairTurnAlarms(env);

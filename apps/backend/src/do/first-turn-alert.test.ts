@@ -19,7 +19,7 @@ const NOW = 1_800_000_000_000;
 const ENDPOINT_ID = "a".repeat(64);
 const REGISTRATION = { endpoint_id: ENDPOINT_ID, session_id: "ada-session", generation: 0 };
 
-function room() {
+function room(playerCount = 2) {
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
   const roomDb = new Database(":memory:");
@@ -27,6 +27,7 @@ function room() {
   const actor = createActor(bigTwoGameMachine).start();
   actor.send({ type: "JOIN_GAME", playerId: "ada", playerName: "Ada" });
   actor.send({ type: "JOIN_GAME", playerId: "ben", playerName: "Ben" });
+  if (playerCount === 3) actor.send({ type: "JOIN_GAME", playerId: "cal", playerName: "Cal" });
   roomDb.exec("CREATE TABLE game_room (id INTEGER PRIMARY KEY, game_state TEXT)");
   roomDb
     .prepare("INSERT INTO game_room VALUES (1, ?)")
@@ -39,11 +40,12 @@ function room() {
     CREATE TABLE turnNotificationPreference (user_id TEXT, enabled INTEGER, generation INTEGER);
     CREATE TABLE turnNotificationRegistration (endpoint_id TEXT PRIMARY KEY, endpoint TEXT,
       p256dh TEXT, auth TEXT, user_id TEXT, session_id TEXT, generation INTEGER);
-    INSERT INTO user VALUES ('ada'), ('ben');
+    INSERT INTO user VALUES ('ada'), ('ben'), ('cal');
     INSERT INTO session VALUES ('ada-session','ada',1800000600000), ('ben-session','ben',1800000600000),
-      ('ada-focus','ada',1800000600000), ('ben-focus','ben',1800000600000);
+      ('ada-focus','ada',1800000600000), ('ben-focus','ben',1800000600000),
+      ('cal-session','cal',1800000600000);
     INSERT INTO room VALUES ('ABCDE','waiting',NULL,1800000000000,NULL,1);
-    INSERT INTO turnNotificationPreference VALUES ('ada',1,0), ('ben',1,0);`);
+    INSERT INTO turnNotificationPreference VALUES ('ada',1,0), ('ben',1,0), ('cal',1,0);`);
   let failEnrollmentRead = false;
   const db = {
     prepare(sql: string) {
@@ -97,7 +99,7 @@ function room() {
     env,
     reload: () => new BigTwoRoomObject(ctx, env),
     enroll(id = "ada") {
-      const key = id === "ada" ? ENDPOINT_ID : "b".repeat(64);
+      const key = id === "ada" ? ENDPOINT_ID : id === "ben" ? "b".repeat(64) : "c".repeat(64);
       accounts
         .prepare("INSERT INTO turnNotificationRegistration VALUES (?, ?, ?, ?, ?, ?, 0)")
         .run(
@@ -152,15 +154,13 @@ it("commits a first Turn and only the already enrolled away Player's intent, acr
   expect(r.outbox()).toHaveLength(1);
   expect(r.alarm()).toBe(NOW);
   const captured = r.outbox()[0] as { endpoint_id: string; session_id: string; generation: number };
-  expect(await r.reload().verifyFirstTurn("ABCDE", turn.id, turn.recipient_id, captured)).toBe(
-    true,
-  );
+  expect(await r.reload().verifyTurn("ABCDE", turn.id, turn.recipient_id, captured)).toBe(true);
   expect(
-    await r.reload().verifyFirstTurn("ABCDE", crypto.randomUUID(), turn.recipient_id, captured),
+    await r.reload().verifyTurn("ABCDE", crypto.randomUUID(), turn.recipient_id, captured),
   ).toBe(false);
   // A new registration cannot be admitted by the current state alone.
   expect(
-    await r.reload().verifyFirstTurn("ABCDE", turn.id, turn.recipient_id, {
+    await r.reload().verifyTurn("ABCDE", turn.id, turn.recipient_id, {
       endpoint_id: "c".repeat(64),
       session_id: captured.session_id,
       generation: 0,
@@ -186,7 +186,7 @@ it("suppresses an intent while this room is focused on any tab, with no reminder
   expect(await r.reload().setRoomFocus("ABCDE", "ada", "ada-session", tab, false, 2)).toBe(true);
   // A delayed heartbeat must not revive a tab that has already blurred.
   await r.reload().setRoomFocus("ABCDE", "ada", "ada-session", tab, true, 1);
-  await r.reload().repairFirstTurn("ABCDE");
+  await r.reload().repairTurn("ABCDE");
   expect(r.outbox()).toHaveLength(0);
 });
 
@@ -203,20 +203,17 @@ it("does not let an expired focus session silence an enrolled install", async ()
   expect(r.outbox()).toHaveLength(1);
   const turn = r.firstTurn()!;
   const captured = r.outbox()[0] as { endpoint_id: string; session_id: string; generation: number };
-  expect(await r.reload().verifyFirstTurn("ABCDE", turn.id, turn.recipient_id, captured)).toBe(
-    true,
-  );
+  expect(await r.reload().verifyTurn("ABCDE", turn.id, turn.recipient_id, captured)).toBe(true);
 });
 
-it("never backfills a mid-Turn enrollment and retires pending work on the first play", async () => {
+it("never backfills a mid-Turn enrollment and retires the old Turn on the first play", async () => {
   const r = room();
   await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
   const starter = r.snapshot().context.players[r.snapshot().context.currentPlayerIndex];
+  const turnId = r.firstTurn()!.id;
   const enrollment = r.enroll(starter.id);
   expect(r.outbox()).toHaveLength(0);
-  expect(await r.object.verifyFirstTurn("ABCDE", r.firstTurn()!.id, starter.id, enrollment)).toBe(
-    false,
-  );
+  expect(await r.object.verifyTurn("ABCDE", r.firstTurn()!.id, starter.id, enrollment)).toBe(false);
   await r
     .reload()
     .gameAction(
@@ -224,7 +221,300 @@ it("never backfills a mid-Turn enrollment and retires pending work on the first 
       starter.id,
       "ABCDE",
     );
+  expect(r.firstTurn()!.id).not.toBe(turnId);
+  expect(r.outbox()).toHaveLength(0);
+});
+
+it("replaces persisted Turn identity and intents on plays, passes, and a return to the same lead", async () => {
+  const r = room();
+  r.enroll("ada");
+  r.enroll("ben");
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  const opening = r.firstTurn()!;
+  const starter = opening.recipient_id;
+  const openingDelivery = r.outbox()[0] as typeof REGISTRATION;
+  expect(await r.reload().verifyTurn("ABCDE", opening.id, starter, openingDelivery)).toBe(true);
+
+  await r
+    .reload()
+    .gameAction(
+      { type: "PLAY_FIRST_MOVE", playerId: starter, cards: [{ value: "3", suit: "DIAMOND" }] },
+      starter,
+      "ABCDE",
+    );
+  const follower = r.firstTurn()!;
+  expect(follower.id).not.toBe(opening.id);
+  expect(follower.recipient_id).not.toBe(starter);
+  expect(r.outbox()).toMatchObject([{ turn_id: follower.id }]);
+  expect(await r.reload().verifyTurn("ABCDE", opening.id, starter, openingDelivery)).toBe(false);
+  expect(
+    await r
+      .reload()
+      .gameAction(
+        { type: "PLAY_CARDS", playerId: follower.recipient_id, cards: [] },
+        follower.recipient_id,
+        "ABCDE",
+      ),
+  ).toMatchObject({ success: false });
+  expect(r.firstTurn()).toEqual(follower);
+  expect(r.outbox()).toMatchObject([{ turn_id: follower.id }]);
+
+  const followerDelivery = r.outbox()[0] as typeof REGISTRATION;
+  await r
+    .reload()
+    .gameAction(
+      { type: "PASS_TURN", playerId: follower.recipient_id },
+      follower.recipient_id,
+      "ABCDE",
+    );
+  expect(r.snapshot().value).toBe("PLAY_NEW_ROUND");
+  const returned = r.firstTurn()!;
+  expect(returned.recipient_id).toBe(starter);
+  expect(returned.id).not.toBe(opening.id);
+  expect(r.outbox()).toMatchObject([{ turn_id: returned.id }]);
+  expect(
+    await r.reload().verifyTurn("ABCDE", follower.id, follower.recipient_id, followerDelivery),
+  ).toBe(false);
+
+  const leadCard = r.snapshot().context.players.find((p) => p.id === starter)!.hand[0];
+  await r
+    .reload()
+    .gameAction(
+      { type: "PLAY_NEW_ROUND_FIRST_MOVE", playerId: starter, cards: [leadCard] },
+      starter,
+      "ABCDE",
+    );
+  const next = r.firstTurn()!;
+  expect(next.id).not.toBe(returned.id);
+  expect(next.recipient_id).not.toBe(starter);
+  expect(r.outbox()).toMatchObject([{ turn_id: next.id }]);
+});
+
+it("creates a Turn for a follow play and for a non-final pass, then retires on a winning play", async () => {
+  const r = room(3);
+  for (const id of ["ada", "ben", "cal"]) r.enroll(id);
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  const starter = r.firstTurn()!.recipient_id;
+  await r
+    .reload()
+    .gameAction(
+      { type: "PLAY_FIRST_MOVE", playerId: starter, cards: [{ value: "3", suit: "DIAMOND" }] },
+      starter,
+      "ABCDE",
+    );
+  const follower = r.firstTurn()!;
+  const card = r
+    .snapshot()
+    .context.players.find((p) => p.id === follower.recipient_id)!
+    .hand.find((card) => card.value !== "3")!;
+  expect(
+    await r
+      .reload()
+      .gameAction(
+        { type: "PLAY_CARDS", playerId: follower.recipient_id, cards: [card] },
+        follower.recipient_id,
+        "ABCDE",
+      ),
+  ).toEqual({ success: true });
+  const third = r.firstTurn()!;
+  expect(third.id).not.toBe(follower.id);
+  expect(r.outbox()).toMatchObject([{ turn_id: third.id }]);
+  await r
+    .reload()
+    .gameAction({ type: "PASS_TURN", playerId: third.recipient_id }, third.recipient_id, "ABCDE");
+  const passed = r.firstTurn()!;
+  expect(r.snapshot().value).toBe("NEXT_PLAYER_TURN");
+  expect(passed.id).not.toBe(third.id);
+  expect(r.outbox()).toMatchObject([{ turn_id: passed.id }]);
+
+  // A legal last-card follow ends the game instead of starting another Turn.
+  const state = r.snapshot();
+  const winner = state.context.players[state.context.currentPlayerIndex];
+  winner.hand = [{ value: "2", suit: "SPADE" }];
+  state.context.cardPile = [[{ value: "3", suit: "DIAMOND" }]];
+  state.context.roundMode = "single";
+  r.roomDb.prepare("UPDATE game_room SET game_state = ? WHERE id = 1").run(JSON.stringify(state));
+  expect(
+    await r
+      .reload()
+      .gameAction(
+        { type: "PLAY_CARDS", playerId: winner.id, cards: winner.hand },
+        winner.id,
+        "ABCDE",
+      ),
+  ).toEqual({ success: true });
+  expect(r.snapshot().value).toBe("GAME_END");
   expect(r.firstTurn()).toBeUndefined();
+  expect(r.outbox()).toHaveLength(0);
+});
+
+it("a fresh deal with the same starter gets another ID, while reset, restoration and re-entry do not", async () => {
+  const r = room();
+  r.enroll("ada");
+  r.enroll("ben");
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  const first = r.firstTurn()!;
+  const oldDelivery = r.outbox()[0] as typeof REGISTRATION;
+  await r.reload().getRoomView("ada", "ABCDE");
+  await r.reload().repairTurn("ABCDE");
+  expect(r.firstTurn()).toEqual(first);
+  expect(r.outbox()).toHaveLength(1);
+  await r.reload().gameAction({ type: "RESET_GAME" }, "ada", "ABCDE");
+  expect(r.firstTurn()).toBeUndefined();
+  expect(r.outbox()).toHaveLength(0);
+  expect(await r.reload().verifyTurn("ABCDE", first.id, first.recipient_id, oldDelivery)).toBe(
+    false,
+  );
+
+  // Force the same starter independently of the shuffle: the identity must not use player index.
+  const deal = vi.spyOn(Math, "random").mockReturnValue(0.5);
+  await r.reload().gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  const second = r.firstTurn()!;
+  await r.reload().gameAction({ type: "RESET_GAME" }, "ada", "ABCDE");
+  await r.reload().gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  const third = r.firstTurn()!;
+  deal.mockRestore();
+  expect(third.recipient_id).toBe(second.recipient_id);
+  expect(third.id).not.toBe(second.id);
+  expect(r.outbox()).toMatchObject([{ turn_id: third.id }]);
+});
+
+it("does not create work for rejected or no-op actions, and never backfills after focus or enrollment changes", async () => {
+  const r = room();
+  r.enroll("ada");
+  r.enroll("ben");
+  const adaTab = crypto.randomUUID();
+  const benTab = crypto.randomUUID();
+  await r.object.setRoomFocus("ABCDE", "ada", "ada-session", adaTab, true, 1);
+  await r.object.setRoomFocus("ABCDE", "ben", "ben-session", benTab, true, 1);
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  const first = r.firstTurn()!;
+  expect(r.outbox()).toHaveLength(0);
+  await r
+    .reload()
+    .setRoomFocus(
+      "ABCDE",
+      first.recipient_id,
+      `${first.recipient_id}-session`,
+      first.recipient_id === "ada" ? adaTab : benTab,
+      false,
+      2,
+    );
+  await r.reload().repairTurn("ABCDE");
+  expect(r.outbox()).toHaveLength(0);
+  expect(await r.reload().gameAction({ type: "START_GAME" }, "ada", "ABCDE")).toEqual({
+    success: true,
+  });
+  expect(r.firstTurn()).toEqual(first);
+  expect(r.outbox()).toHaveLength(0);
+  const wrong = first.recipient_id === "ada" ? "ben" : "ada";
+  expect(
+    await r.reload().gameAction({ type: "PASS_TURN", playerId: wrong }, wrong, "ABCDE"),
+  ).toEqual({ success: true });
+  expect(r.firstTurn()).toEqual(first);
+  expect(r.outbox()).toHaveLength(0);
+});
+
+it("restoring a room snapshot without a Turn row never reconstructs notification work", async () => {
+  const r = room();
+  r.enroll("ada");
+  r.enroll("ben");
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  r.roomDb.exec("DELETE FROM turn_delivery; DELETE FROM first_turn");
+  const restored = r.reload();
+  await restored.getRoomView("ada", "ABCDE");
+  await restored.repairTurn("ABCDE");
+  await restored.alarm();
+  expect(r.firstTurn()).toBeUndefined();
+  expect(r.outbox()).toHaveLength(0);
+});
+
+it("reconnecting and re-entering the room preserves the Turn instead of scheduling another alert", async () => {
+  const r = room();
+  r.enroll("ada");
+  r.enroll("ben");
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  const turn = r.firstTurn()!;
+  const delivery = r.outbox()[0] as typeof REGISTRATION;
+  const restored = r.reload();
+  expect(
+    await restored.markConnected("ABCDE", turn.recipient_id, `${turn.recipient_id}-session`),
+  ).toBe(true);
+  expect(await restored.getRoomView(turn.recipient_id, "ABCDE")).toBeTruthy();
+  const tab = crypto.randomUUID();
+  expect(
+    await restored.setRoomFocus(
+      "ABCDE",
+      turn.recipient_id,
+      `${turn.recipient_id}-session`,
+      tab,
+      true,
+      1,
+    ),
+  ).toBe(true);
+  expect(r.firstTurn()).toEqual(turn);
+  expect(r.outbox()).toHaveLength(1);
+  await restored.alarm();
+  expect(r.outbox()).toHaveLength(0);
+  await r
+    .reload()
+    .setRoomFocus("ABCDE", turn.recipient_id, `${turn.recipient_id}-session`, tab, false, 2);
+  await r.reload().repairTurn("ABCDE");
+  expect(r.firstTurn()).toEqual(turn);
+  expect(r.outbox()).toHaveLength(0);
+  expect(await r.reload().verifyTurn("ABCDE", turn.id, turn.recipient_id, delivery)).toBe(false);
+});
+
+it("does not backfill consent added during a Turn, but captures it on the next accepted action", async () => {
+  const r = room();
+  r.enroll("ada");
+  r.enroll("ben");
+  r.accounts.prepare("UPDATE turnNotificationPreference SET enabled = 0").run();
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  const opening = r.firstTurn()!;
+  r.accounts.prepare("UPDATE turnNotificationPreference SET enabled = 1").run();
+  await r.reload().repairTurn("ABCDE");
+  expect(r.outbox()).toHaveLength(0);
+  expect(
+    await r.reload().verifyTurn("ABCDE", opening.id, opening.recipient_id, {
+      ...REGISTRATION,
+      endpoint_id: opening.recipient_id === "ada" ? ENDPOINT_ID : "b".repeat(64),
+      session_id: `${opening.recipient_id}-session`,
+    }),
+  ).toBe(false);
+  await r.reload().gameAction(
+    {
+      type: "PLAY_FIRST_MOVE",
+      playerId: opening.recipient_id,
+      cards: [{ value: "3", suit: "DIAMOND" }],
+    },
+    opening.recipient_id,
+    "ABCDE",
+  );
+  expect(r.outbox()).toMatchObject([{ turn_id: r.firstTurn()!.id }]);
+});
+
+it("suppressing a later Turn by focus cannot turn into a reminder on departure", async () => {
+  const r = room();
+  r.enroll("ada");
+  r.enroll("ben");
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  const starter = r.firstTurn()!.recipient_id;
+  const follower = starter === "ada" ? "ben" : "ada";
+  const tab = crypto.randomUUID();
+  await r.reload().setRoomFocus("ABCDE", follower, `${follower}-session`, tab, true, 1);
+  await r
+    .reload()
+    .gameAction(
+      { type: "PLAY_FIRST_MOVE", playerId: starter, cards: [{ value: "3", suit: "DIAMOND" }] },
+      starter,
+      "ABCDE",
+    );
+  const turn = r.firstTurn()!;
+  expect(turn.recipient_id).toBe(follower);
+  expect(r.outbox()).toHaveLength(0);
+  await r.reload().setRoomFocus("ABCDE", follower, `${follower}-session`, tab, false, 2);
+  await r.reload().repairTurn("ABCDE");
   expect(r.outbox()).toHaveLength(0);
 });
 
@@ -240,7 +530,7 @@ it("keeps an accepted deal successful when alarm scheduling fails; repair wakes 
   expect(r.snapshot().value).toBe("ROUND_FIRST_MOVE");
   expect(r.outbox()).toHaveLength(1);
   r.recoverAlarm();
-  await r.reload().repairFirstTurn("ABCDE");
+  await r.reload().repairTurn("ABCDE");
   expect(r.alarm()).toBe(NOW);
 });
 
@@ -266,9 +556,7 @@ it("rechecks consent, session, room and focus before delivery, then retires inel
   const push = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 201 }));
   const tab = crypto.randomUUID();
   await r.reload().setRoomFocus("ABCDE", turn.recipient_id, delivery.session_id, tab, true, 1);
-  expect(await r.reload().verifyFirstTurn("ABCDE", turn.id, turn.recipient_id, delivery)).toBe(
-    false,
-  );
+  expect(await r.reload().verifyTurn("ABCDE", turn.id, turn.recipient_id, delivery)).toBe(false);
   await r.reload().alarm();
   expect(push).not.toHaveBeenCalled();
   expect(r.outbox()).toHaveLength(0);

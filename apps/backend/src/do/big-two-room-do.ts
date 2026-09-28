@@ -23,7 +23,8 @@ const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
 const FOCUS_TTL = 20_000;
 const TURN_TTL = 5 * 60_000;
 
-type FirstTurn = { id: string; room_id: string; recipient_id: string; deadline: number };
+type OngoingTurn = { id: string; room_id: string; recipient_id: string; deadline: number };
+const ONGOING_PHASES = ["ROUND_FIRST_MOVE", "NEXT_PLAYER_TURN", "PLAY_NEW_ROUND"] as const;
 type Delivery = Enrollment & { attempts: number; next_at: number };
 
 export class BigTwoRoomObject extends DurableObject<Env> {
@@ -224,6 +225,7 @@ export class BigTwoRoomObject extends DurableObject<Env> {
         id TEXT PRIMARY KEY, room_id TEXT NOT NULL, recipient_id TEXT NOT NULL,
         deadline INTEGER NOT NULL
       );
+      -- first_turn is the existing persistent Turn slot, now used for every ongoing Turn.
       CREATE TABLE IF NOT EXISTS turn_delivery(
         turn_id TEXT NOT NULL, endpoint_id TEXT NOT NULL, session_id TEXT NOT NULL,
         generation INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0,
@@ -306,9 +308,9 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     return true;
   }
 
-  private currentFirstTurn(turnId: string, roomId: string, userId: string): FirstTurn | null {
+  private currentTurn(turnId: string, roomId: string, userId: string): OngoingTurn | null {
     const turn = this.sql
-      .exec<FirstTurn>(
+      .exec<OngoingTurn>(
         "SELECT * FROM first_turn WHERE id = ? AND room_id = ? AND recipient_id = ? AND deadline > ?",
         turnId,
         roomId,
@@ -322,20 +324,20 @@ export class BigTwoRoomObject extends DurableObject<Env> {
       .toArray()[0];
     if (!state) return null;
     const snapshot = JSON.parse(state.game_state) as BigTwoGameMachineSnapshot;
-    return snapshot.value === "ROUND_FIRST_MOVE" &&
+    return ONGOING_PHASES.some((phase) => phase === snapshot.value) &&
       snapshot.context.players[snapshot.context.currentPlayerIndex]?.id === userId
       ? turn
       : null;
   }
 
   // Invoked only from an authenticated Worker route, never with a client-asserted identity.
-  async verifyFirstTurn(
+  async verifyTurn(
     roomId: string,
     turnId: string,
     userId: string,
     enrollment: Enrollment,
   ): Promise<boolean> {
-    if (!this.currentFirstTurn(turnId, roomId, userId)) return false;
+    if (!this.currentTurn(turnId, roomId, userId)) return false;
     const captured = this.sql
       .exec(
         "SELECT 1 FROM turn_delivery WHERE turn_id = ? AND endpoint_id = ? AND session_id = ? AND generation = ? LIMIT 1",
@@ -349,12 +351,12 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     if (!(await this.available(roomId))) return false;
     if (await this.verifiedFocus(roomId, userId)) return false;
     if (!(await registeredEndpoint(this.env, userId, enrollment))) return false;
-    return !!this.currentFirstTurn(turnId, roomId, userId) && !this.activeFocus(userId);
+    return !!this.currentTurn(turnId, roomId, userId) && !this.activeFocus(userId);
   }
 
-  async repairFirstTurn(roomId: string): Promise<void> {
+  async repairTurn(roomId: string): Promise<void> {
     const turn = this.sql
-      .exec<FirstTurn>("SELECT * FROM first_turn WHERE room_id = ? LIMIT 1", roomId)
+      .exec<OngoingTurn>("SELECT * FROM first_turn WHERE room_id = ? LIMIT 1", roomId)
       .toArray()[0];
     if (!turn) return;
     if (turn.deadline <= Date.now()) {
@@ -375,11 +377,11 @@ export class BigTwoRoomObject extends DurableObject<Env> {
   }
 
   async alarm(): Promise<void> {
-    return this.serial(() => this.drainFirstTurn());
+    return this.serial(() => this.drainTurn());
   }
 
-  private async drainFirstTurn(): Promise<void> {
-    const turn = this.sql.exec<FirstTurn>("SELECT * FROM first_turn LIMIT 1").toArray()[0];
+  private async drainTurn(): Promise<void> {
+    const turn = this.sql.exec<OngoingTurn>("SELECT * FROM first_turn LIMIT 1").toArray()[0];
     if (!turn) return;
     const due = this.sql
       .exec<Delivery>(
@@ -391,12 +393,12 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     for (const delivery of due) {
       let outcome: "sent" | "retired" | "retry" = "retry";
       try {
-        if (await this.verifyFirstTurn(turn.room_id, turn.id, turn.recipient_id, delivery)) {
+        if (await this.verifyTurn(turn.room_id, turn.id, turn.recipient_id, delivery)) {
           // The second check closes the common race where a Player focuses the room during D1 verification.
           const registration = await registeredEndpoint(this.env, turn.recipient_id, delivery);
           if (
             registration &&
-            this.currentFirstTurn(turn.id, turn.room_id, turn.recipient_id) &&
+            this.currentTurn(turn.id, turn.room_id, turn.recipient_id) &&
             !this.activeFocus(turn.recipient_id)
           )
             outcome = await sendTurnPush(
@@ -436,7 +438,7 @@ export class BigTwoRoomObject extends DurableObject<Env> {
       }
     }
     try {
-      await this.repairFirstTurn(turn.room_id);
+      await this.repairTurn(turn.room_id);
     } catch {
       /* The scheduled room sweep can restore a lost alarm. */
     }
@@ -498,12 +500,29 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     ) {
       return { success: false, error: "Could not leave the table. Please try again." };
     }
-    const firstDeal =
-      roomId &&
-      event.type === "START_GAME" &&
-      gameState.value === "WAITING_FOR_PLAYERS" &&
-      gameStateSnapshot.value === "ROUND_FIRST_MOVE";
-    const recipientId = firstDeal
+    // Only a committed, accepted action that starts a Turn may allocate an identity.
+    // In particular, the final pass returns the lead to the same player index.
+    const startsTurn =
+      !!roomId &&
+      ((event.type === "START_GAME" &&
+        gameState.value === "WAITING_FOR_PLAYERS" &&
+        gameStateSnapshot.value === "ROUND_FIRST_MOVE") ||
+        (event.type === "PLAY_FIRST_MOVE" &&
+          gameState.value === "ROUND_FIRST_MOVE" &&
+          gameStateSnapshot.value === "NEXT_PLAYER_TURN") ||
+        (event.type === "PLAY_CARDS" &&
+          gameState.value === "NEXT_PLAYER_TURN" &&
+          gameStateSnapshot.value === "NEXT_PLAYER_TURN" &&
+          gameState.context.currentPlayerIndex !== gameStateSnapshot.context.currentPlayerIndex) ||
+        (event.type === "PASS_TURN" &&
+          gameState.value === "NEXT_PLAYER_TURN" &&
+          (gameStateSnapshot.value === "NEXT_PLAYER_TURN" ||
+            gameStateSnapshot.value === "PLAY_NEW_ROUND") &&
+          gameState.context.currentPlayerIndex !== gameStateSnapshot.context.currentPlayerIndex) ||
+        (event.type === "PLAY_NEW_ROUND_FIRST_MOVE" &&
+          gameState.value === "PLAY_NEW_ROUND" &&
+          gameStateSnapshot.value === "NEXT_PLAYER_TURN"));
+    const recipientId = startsTurn
       ? gameStateSnapshot.context.players[gameStateSnapshot.context.currentPlayerIndex]?.id
       : undefined;
     let enrollments: Enrollment[] = [];
@@ -519,7 +538,7 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     const serialisedGameState = JSON.stringify(gameStateSnapshot);
     this.ctx.storage.transactionSync(() => {
       this.sql.exec(`UPDATE game_room SET game_state = ? WHERE id = 1`, serialisedGameState);
-      if (firstDeal || gameStateSnapshot.value !== "ROUND_FIRST_MOVE") {
+      if (startsTurn || !ONGOING_PHASES.some((phase) => phase === gameStateSnapshot.value)) {
         this.sql.exec("DELETE FROM turn_delivery");
         this.sql.exec("DELETE FROM first_turn");
       }
@@ -555,7 +574,7 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     // safely just because notification or room housekeeping failed.
     if (roomId && recipientId) {
       try {
-        await this.repairFirstTurn(roomId);
+        await this.repairTurn(roomId);
       } catch (error) {
         console.error("Could not schedule committed Turn", error);
       }
