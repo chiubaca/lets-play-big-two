@@ -281,9 +281,13 @@ it("refreshes revoked permission when settings regain focus without requesting i
   );
   fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
   await screen.findByText("Ready on this device");
+  screen.getByRole("button", { name: "Remove this device" }).focus();
   fireEvent.focus(window);
   await screen.findByText("Blocked on this device");
   expect(screen.queryByRole("button", { name: "Enable on this device" })).toBeNull();
+  expect(document.activeElement).toBe(
+    screen.getByRole("switch", { name: "Turn notifications for my account" }),
+  );
   expect(requestPermission).not.toHaveBeenCalled();
 });
 

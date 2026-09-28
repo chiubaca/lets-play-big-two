@@ -75,6 +75,11 @@ export function TurnNotificationSettings({
       preference.device!.inspect().then(
         (result) => {
           if (!active || current !== deviceRevision.current) return;
+          if (
+            document.activeElement === deviceButton.current &&
+            (result.state === "unavailable" || (result.state === "blocked" && !result.removable))
+          )
+            returnFocusToSwitch.current = true;
           setCheckingDevice(false);
           setDeviceState(result.state);
           setRemovable(result.removable ?? false);
