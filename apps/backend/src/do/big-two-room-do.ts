@@ -262,17 +262,23 @@ export class BigTwoRoomObject extends DurableObject<Env> {
       event.type === "LEAVE_GAME"
         ? gameState.context.players.find((player) => player.id === requesterId)
         : undefined;
-    await this.broadcast(
-      gameStateSnapshot,
-      undefined,
-      departingPlayer && {
-        playerId: requesterId,
-        message:
-          gameState.value === "WAITING_FOR_PLAYERS"
-            ? `${departingPlayer.name} left the table.`
-            : `${departingPlayer.name} left the table, so the game was reset.`,
-      },
-    );
+    // Everything after the SQLite write is best-effort: a committed action cannot be retried
+    // safely just because notification or room housekeeping failed.
+    try {
+      await this.broadcast(
+        gameStateSnapshot,
+        undefined,
+        departingPlayer && {
+          playerId: requesterId,
+          message:
+            gameState.value === "WAITING_FOR_PLAYERS"
+              ? `${departingPlayer.name} left the table.`
+              : `${departingPlayer.name} left the table, so the game was reset.`,
+        },
+      );
+    } catch (error) {
+      console.error("Could not broadcast committed game action", error);
+    }
 
     if (roomId && gameState.value !== gameStateSnapshot.value) {
       try {
