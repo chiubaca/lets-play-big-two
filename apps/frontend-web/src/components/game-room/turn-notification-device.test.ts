@@ -36,6 +36,7 @@ beforeEach(() => {
   register.mockResolvedValue(worker);
   get.mockResolvedValue({ ok: true, json: async () => ({ registered: false, generation: 2 }) });
   post.mockResolvedValue({ ok: true, json: async () => ({ registered: true }) });
+  remove.mockResolvedValue({ ok: true });
   oldSubscription.current = null;
 });
 
@@ -48,14 +49,23 @@ afterEach(() => {
   else Reflect.deleteProperty(window, "isSecureContext");
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
+  localStorage.clear();
   vi.clearAllMocks();
 });
 
 it("never prompts during inspection and blocks denied permission without subscribing", async () => {
-  expect(await turnNotificationDevice.inspect()).toEqual({ state: "not-enabled", generation: 2 });
+  expect(await turnNotificationDevice.inspect()).toEqual({
+    state: "not-enabled",
+    generation: 2,
+    removable: false,
+  });
   expect(requestPermission).not.toHaveBeenCalled();
   vi.stubGlobal("Notification", { permission: "denied", requestPermission });
-  expect(await turnNotificationDevice.inspect()).toEqual({ state: "blocked", generation: 0 });
+  expect(await turnNotificationDevice.inspect()).toEqual({
+    state: "blocked",
+    generation: 2,
+    removable: false,
+  });
   await expect(turnNotificationDevice.enable(2)).rejects.toThrow();
   expect(requestPermission).not.toHaveBeenCalled();
   expect(subscribe).not.toHaveBeenCalled();
@@ -110,6 +120,46 @@ it("requires server confirmation even after permission and subscription", async 
   post.mockResolvedValue({ ok: false });
   await expect(turnNotificationDevice.enable(2)).rejects.toThrow("Could not register");
   expect(requestPermission).not.toHaveBeenCalled();
+});
+
+it("removes a registered install after browser permission is revoked", async () => {
+  vi.stubGlobal("Notification", { permission: "granted", requestPermission });
+  const unsubscribe = vi.fn();
+  const current = {
+    endpoint: "https://fcm.googleapis.com/fcm/send/device-token",
+    options: { applicationServerKey: null },
+    toJSON: () => ({
+      endpoint: "https://fcm.googleapis.com/fcm/send/device-token",
+      keys: {
+        p256dh: Buffer.alloc(65, 4).toString("base64url"),
+        auth: Buffer.alloc(16, 4).toString("base64url"),
+      },
+    }),
+    unsubscribe,
+  } as unknown as PushSubscription;
+  subscribe.mockResolvedValue(current);
+  await turnNotificationDevice.enable(2);
+  vi.stubGlobal("Notification", { permission: "denied", requestPermission });
+  get.mockResolvedValue({ ok: true, json: async () => ({ registered: true, generation: 2 }) });
+  expect(await turnNotificationDevice.inspect()).toMatchObject({
+    state: "blocked",
+    removable: true,
+  });
+  await turnNotificationDevice.remove();
+  expect(remove).toHaveBeenCalledWith({
+    json: { endpointId: expect.stringMatching(/^[a-f0-9]{64}$/) },
+  });
+  expect(unsubscribe).not.toHaveBeenCalled();
+});
+
+it("does not call a stale-key subscription Ready", async () => {
+  vi.stubGlobal("Notification", { permission: "granted", requestPermission });
+  oldSubscription.current = {
+    endpoint: "https://fcm.googleapis.com/fcm/send/device-token",
+    options: { applicationServerKey: Buffer.alloc(65, 9).buffer },
+  } as unknown as PushSubscription;
+  get.mockResolvedValue({ ok: true, json: async () => ({ registered: true, generation: 2 }) });
+  expect(await turnNotificationDevice.inspect()).toMatchObject({ state: "not-enabled" });
 });
 
 it("keeps ordinary iOS tabs and unverified WebKit surfaces unavailable", async () => {

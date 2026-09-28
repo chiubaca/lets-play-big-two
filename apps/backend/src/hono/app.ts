@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { sValidator } from "@hono/standard-validator";
 import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDb } from "@big-two/data-ops/database";
@@ -10,7 +10,6 @@ import {
   accountDeletionTable,
   roomTable,
   turnNotificationPreferenceTable,
-  turnNotificationRegistrationTable,
   userTable,
   usersToRoomsTable,
 } from "@big-two/data-ops/drizzle/schema";
@@ -186,23 +185,29 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
         .where(eq(userTable.id, session.user.id))
         .limit(1);
       if (!user.length) return c.json({ error: "Account not found" }, 404);
+      if (!parsed.data.enabled) {
+        // D1 batch is transactional: a re-on and fresh enrollment cannot be erased by a late delete.
+        await c.env.BIG_TWO_DB.batch([
+          c.env.BIG_TWO_DB.prepare(`INSERT INTO turnNotificationPreference (user_id, enabled, generation)
+            VALUES (?, 0, 0) ON CONFLICT(user_id) DO UPDATE SET enabled = 0,
+            generation = generation + CASE WHEN enabled = 1 THEN 1 ELSE 0 END`).bind(
+            session.user.id,
+          ),
+          c.env.BIG_TWO_DB.prepare(
+            "DELETE FROM turnNotificationRegistration WHERE user_id = ?",
+          ).bind(session.user.id),
+        ]);
+        return c.json({ enabled: false }, 200, { "Cache-Control": "no-store" });
+      }
       const saved = await db
         .insert(turnNotificationPreferenceTable)
-        .values({ userId: session.user.id, enabled: parsed.data.enabled })
+        .values({ userId: session.user.id, enabled: true })
         .onConflictDoUpdate({
           target: turnNotificationPreferenceTable.userId,
-          set: {
-            enabled: parsed.data.enabled,
-            generation: sql`${turnNotificationPreferenceTable.generation} + CASE WHEN ${turnNotificationPreferenceTable.enabled} = 1 AND ${parsed.data.enabled ? 0 : 1} = 1 THEN 1 ELSE 0 END`,
-          },
+          set: { enabled: true },
         })
         .returning({ enabled: turnNotificationPreferenceTable.enabled });
       if (!saved.length) return c.json({ error: "Could not save preference" }, 409);
-      if (!parsed.data.enabled) {
-        await db
-          .delete(turnNotificationRegistrationTable)
-          .where(eq(turnNotificationRegistrationTable.userId, session.user.id));
-      }
       return c.json({ enabled: saved[0].enabled }, 200, { "Cache-Control": "no-store" });
     },
   )
@@ -258,7 +263,9 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
     const { endpoint, keys, generation } = parsed.data;
     const id = await endpointId(endpoint);
     // One statement ties the registration to the live originating session and current consent generation.
-    const result = await c.env.BIG_TWO_DB.prepare(`INSERT INTO turnNotificationRegistration
+    let result: Record<string, unknown> | null;
+    try {
+      result = await c.env.BIG_TWO_DB.prepare(`INSERT INTO turnNotificationRegistration
       (endpoint_id, endpoint, p256dh, auth, user_id, session_id, generation)
       SELECT ?, ?, ?, ?, p.user_id, s.id, p.generation
       FROM turnNotificationPreference p JOIN session s ON s.user_id = p.user_id
@@ -270,17 +277,21 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
         AND turnNotificationRegistration.session_id = excluded.session_id
         AND turnNotificationRegistration.generation = excluded.generation
       RETURNING endpoint_id`)
-      .bind(
-        id,
-        endpoint,
-        keys.p256dh,
-        keys.auth,
-        session.user.id,
-        session.session.id,
-        Date.now(),
-        generation,
-      )
-      .first();
+        .bind(
+          id,
+          endpoint,
+          keys.p256dh,
+          keys.auth,
+          session.user.id,
+          session.session.id,
+          Date.now(),
+          generation,
+        )
+        .first();
+    } catch {
+      // D1 errors can contain SQL bindings, which include subscription keys.
+      return c.json({ error: "Could not register this device" }, 503);
+    }
     if (!result)
       return c.json(
         { error: "Enrollment is unavailable; check account consent and this session" },
@@ -304,14 +315,14 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
       );
     }
     const parsed = z
-      .object({ endpoint: z.string().max(2048).url() })
+      .object({ endpointId: z.string().regex(/^[a-f0-9]{64}$/) })
       .strict()
       .safeParse(body);
     if (!parsed.success) return c.json({ error: "Invalid device" }, 400);
     await c.env.BIG_TWO_DB.prepare(
       "DELETE FROM turnNotificationRegistration WHERE endpoint_id = ? AND user_id = ? AND session_id = ?",
     )
-      .bind(await endpointId(parsed.data.endpoint), session.user.id, session.session.id)
+      .bind(parsed.data.endpointId, session.user.id, session.session.id)
       .run();
     return c.json({ registered: false }, 200, { "Cache-Control": "no-store" });
   })

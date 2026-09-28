@@ -16,6 +16,7 @@ export function TurnNotificationSettings({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [deviceState, setDeviceState] = useState<DeviceState>("not-enabled");
+  const [removable, setRemovable] = useState(false);
   const [deviceReason, setDeviceReason] = useState("");
   const [deviceError, setDeviceError] = useState(false);
   const [retryInspection, setRetryInspection] = useState(false);
@@ -25,6 +26,8 @@ export function TurnNotificationSettings({
   const deviceRevision = useRef(0);
   const deviceActionInProgress = useRef(false);
   const deviceButton = useRef<HTMLButtonElement>(null);
+  const accountSwitch = useRef<HTMLButtonElement>(null);
+  const returnFocusToSwitch = useRef(false);
   const revision = useRef(0);
   const saveInProgress = useRef(false);
 
@@ -60,6 +63,7 @@ export function TurnNotificationSettings({
     if (!enabled || !preference.device) {
       ++deviceRevision.current;
       setDeviceState("not-enabled");
+      setRemovable(false);
       setCheckingDevice(false);
       return;
     }
@@ -73,6 +77,7 @@ export function TurnNotificationSettings({
           if (!active || current !== deviceRevision.current) return;
           setCheckingDevice(false);
           setDeviceState(result.state);
+          setRemovable(result.removable ?? false);
           setDeviceReason(result.reason ?? "");
           setGeneration(result.generation);
           setDeviceError(false);
@@ -97,6 +102,13 @@ export function TurnNotificationSettings({
     };
   }, [enabled, preference]);
 
+  useEffect(() => {
+    if (returnFocusToSwitch.current && deviceState === "blocked" && !removable) {
+      accountSwitch.current?.focus();
+      returnFocusToSwitch.current = false;
+    }
+  }, [deviceState, removable]);
+
   async function changeDevice(action: "enable" | "remove" | "retry") {
     if (!preference.device || deviceBusy || checkingDevice) return;
     deviceActionInProgress.current = true;
@@ -106,6 +118,7 @@ export function TurnNotificationSettings({
       try {
         const state = await preference.device.inspect();
         setDeviceState(state.state);
+        setRemovable(state.removable ?? false);
         setDeviceReason(state.reason ?? "");
         setGeneration(state.generation);
         setDeviceError(false);
@@ -129,6 +142,8 @@ export function TurnNotificationSettings({
       else await preference.device.remove();
       const state = await preference.device.inspect();
       setDeviceState(state.state);
+      setRemovable(state.removable ?? false);
+      if (state.state === "blocked" && !state.removable) returnFocusToSwitch.current = true;
       setDeviceReason(state.reason ?? "");
       setGeneration(state.generation);
       setDeviceError(false);
@@ -145,6 +160,7 @@ export function TurnNotificationSettings({
         Notification.permission === "denied"
       ) {
         setDeviceState("blocked");
+        returnFocusToSwitch.current = true;
         setMessage("Notifications are Blocked. Change browser permission to try again.");
       } else {
         if (action === "enable") setDeviceState("not-enabled");
@@ -197,6 +213,7 @@ export function TurnNotificationSettings({
           </p>
         </div>
         <button
+          ref={accountSwitch}
           type="button"
           role="switch"
           aria-label="Turn notifications for my account"
@@ -242,7 +259,9 @@ export function TurnNotificationSettings({
         </p>
         {enabled &&
           preference.device &&
-          (deviceState === "ready" || deviceState === "not-enabled") && (
+          (deviceState === "ready" ||
+            deviceState === "not-enabled" ||
+            (deviceState === "blocked" && removable)) && (
             <button
               ref={deviceButton}
               type="button"
@@ -251,11 +270,15 @@ export function TurnNotificationSettings({
               aria-disabled={deviceBusy || checkingDevice}
               onClick={() =>
                 void changeDevice(
-                  deviceState === "ready" ? "remove" : retryInspection ? "retry" : "enable",
+                  deviceState === "ready" || (deviceState === "blocked" && removable)
+                    ? "remove"
+                    : retryInspection
+                      ? "retry"
+                      : "enable",
                 )
               }
             >
-              {deviceState === "ready"
+              {deviceState === "ready" || (deviceState === "blocked" && removable)
                 ? "Remove this device"
                 : deviceError
                   ? "Retry device setup"

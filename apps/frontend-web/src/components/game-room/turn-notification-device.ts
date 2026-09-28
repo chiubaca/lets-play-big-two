@@ -3,10 +3,59 @@ import { honoClient } from "~/libs/hono-client";
 export type DeviceState = "not-enabled" | "ready" | "blocked" | "unavailable";
 
 export type TurnNotificationDevice = {
-  inspect: () => Promise<{ state: DeviceState; generation: number; reason?: string }>;
+  inspect: () => Promise<{
+    state: DeviceState;
+    generation: number;
+    reason?: string;
+    removable?: boolean;
+  }>;
   enable: (generation: number) => Promise<void>;
   remove: () => Promise<void>;
 };
+
+const storedEndpointId = "big-two-turn-device-id";
+
+function savedEndpointId() {
+  try {
+    return localStorage.getItem(storedEndpointId) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function saveEndpointId(id: string | null) {
+  try {
+    if (id) localStorage.setItem(storedEndpointId, id);
+    else localStorage.removeItem(storedEndpointId);
+  } catch {
+    /* Browser storage may be disabled; the subscription remains accessible while permission lasts. */
+  }
+}
+
+function vapidKey() {
+  const key = import.meta.env.VITE_VAPID_PUBLIC_KEY as string;
+  return Uint8Array.from(atob(key.replace(/-/g, "+").replace(/_/g, "/")), (char) =>
+    char.charCodeAt(0),
+  );
+}
+
+function matchesKey(current: PushSubscription) {
+  const key = current.options.applicationServerKey;
+  const expected = vapidKey();
+  return Boolean(
+    key &&
+    key.byteLength === expected.length &&
+    new Uint8Array(key).every((byte, index) => byte === expected[index]),
+  );
+}
+
+async function accessibleSubscription() {
+  try {
+    return (await subscription()).current;
+  } catch {
+    return null;
+  }
+}
 
 function capability(): { available: boolean; reason?: string } {
   const agent = navigator.userAgent;
@@ -57,17 +106,22 @@ export const turnNotificationDevice: TurnNotificationDevice = {
   async inspect() {
     const support = capability();
     if (!support.available) return { state: "unavailable", generation: 0, reason: support.reason };
-    if (Notification.permission === "denied") return { state: "blocked", generation: 0 };
-    const { current } = await subscription();
+    const blocked = Notification.permission === "denied";
+    const current = blocked ? await accessibleSubscription() : (await subscription()).current;
+    const id = current ? await hash(current.endpoint) : savedEndpointId();
     const response = await honoClient.api["turn-notifications"].device.$get({
-      query: { endpointId: current ? await hash(current.endpoint) : undefined },
+      query: { endpointId: id },
     });
     if (!response.ok) throw new Error("Could not check this device");
     const { registered, generation } = await response.json();
     return {
-      state:
-        Notification.permission === "granted" && current && registered ? "ready" : "not-enabled",
+      state: blocked
+        ? "blocked"
+        : Notification.permission === "granted" && current && matchesKey(current) && registered
+          ? "ready"
+          : "not-enabled",
       generation,
+      removable: Boolean(registered),
     };
   },
   async enable(generation) {
@@ -81,15 +135,8 @@ export const turnNotificationDevice: TurnNotificationDevice = {
       throw new Error("Notifications are blocked or permission was not granted");
     const { worker, current } = await subscription(true);
     if (!worker) throw new Error("Service worker unavailable");
-    const key = import.meta.env.VITE_VAPID_PUBLIC_KEY as string;
-    const applicationServerKey = Uint8Array.from(
-      atob(key.replace(/-/g, "+").replace(/_/g, "/")),
-      (char) => char.charCodeAt(0),
-    );
-    const oldKey = current?.options.applicationServerKey;
-    const sameKey =
-      oldKey &&
-      Array.from(new Uint8Array(oldKey)).join(",") === Array.from(applicationServerKey).join(",");
+    const applicationServerKey = vapidKey();
+    const sameKey = current && matchesKey(current);
     if (current && !sameKey) await current.unsubscribe();
     const sub =
       current && sameKey
@@ -106,14 +153,30 @@ export const turnNotificationDevice: TurnNotificationDevice = {
       },
     });
     if (!response.ok) throw new Error("Could not register this device");
+    saveEndpointId(await hash(sub.endpoint));
+    if (current && !sameKey && current.endpoint !== sub.endpoint) {
+      // Rotating a subscription must not leave the previous endpoint enrolled.
+      const removed = await honoClient.api["turn-notifications"].device.$delete({
+        json: { endpointId: await hash(current.endpoint) },
+      });
+      if (!removed.ok) throw new Error("Could not retire the previous subscription");
+    }
   },
   async remove() {
-    const { current } = await subscription();
-    if (!current) return;
+    const current = await accessibleSubscription();
+    const id = current ? await hash(current.endpoint) : savedEndpointId();
+    if (!id) throw new Error("No device registration to remove");
     const response = await honoClient.api["turn-notifications"].device.$delete({
-      json: { endpoint: current.endpoint },
+      json: { endpointId: id },
     });
     if (!response.ok) throw new Error("Could not remove this device");
-    await current.unsubscribe();
+    saveEndpointId(null);
+    if (current) {
+      try {
+        await current.unsubscribe();
+      } catch {
+        /* Server removal is authoritative even if the browser has already revoked the subscription. */
+      }
+    }
   },
 };

@@ -25,10 +25,15 @@ const env = {
         async first() {
           return sqlite.prepare(sql).get(...params) ?? null;
         },
-        async run() {
+        run() {
           sqlite.prepare(sql).run(...params);
         },
       };
+    },
+    batch(statements: { run: () => void }[]) {
+      return Promise.resolve(
+        sqlite.transaction(() => statements.map((statement) => statement.run()))(),
+      );
     },
   },
 } as unknown as Cloudflare.Env;
@@ -112,7 +117,11 @@ it("enrolls only with live account consent and reports registration without secr
   signIn("ben", "ben-1");
   await request("/api/turn-notifications/preference", "PUT", '{"enabled":true}');
   expect((await request("/api/turn-notifications/device", "POST", payload())).status).toBe(409);
-  await request("/api/turn-notifications/device", "DELETE", JSON.stringify({ endpoint }));
+  await request(
+    "/api/turn-notifications/device",
+    "DELETE",
+    JSON.stringify({ endpointId: await deviceId() }),
+  );
   expect(
     sqlite.prepare("SELECT count(*) AS count FROM turnNotificationRegistration").get(),
   ).toEqual({ count: 1 });
@@ -130,7 +139,11 @@ it("removes one install; switching off invalidates the generation and all old re
   expect((await request("/api/turn-notifications/device", "POST", payload(0, other))).status).toBe(
     200,
   );
-  await request("/api/turn-notifications/device", "DELETE", JSON.stringify({ endpoint }));
+  await request(
+    "/api/turn-notifications/device",
+    "DELETE",
+    JSON.stringify({ endpointId: await deviceId() }),
+  );
   expect(
     sqlite.prepare("SELECT count(*) AS count FROM turnNotificationRegistration").get(),
   ).toEqual({ count: 1 });
@@ -161,6 +174,15 @@ it("rejects bad endpoints, oversized input, expired sessions, deleting accounts 
       await request(
         "/api/turn-notifications/device",
         "POST",
+        JSON.stringify({ endpoint, generation: 0, keys: { p256dh: "bad", auth: "bad" } }),
+      )
+    ).status,
+  ).toBe(400);
+  expect(
+    (
+      await request(
+        "/api/turn-notifications/device",
+        "POST",
         payload(0, endpoint) + " ".repeat(5000),
       )
     ).status,
@@ -171,4 +193,41 @@ it("rejects bad endpoints, oversized input, expired sessions, deleting accounts 
   expect((await request("/api/turn-notifications/device", "POST", payload())).status).toBe(409);
   getSession.mockResolvedValue(null);
   expect((await request("/api/turn-notifications/device", "POST", payload())).status).toBe(401);
+});
+
+it("rolls back consent-off if its registration cleanup fails", async () => {
+  await request("/api/turn-notifications/preference", "PUT", '{"enabled":true}');
+  await request("/api/turn-notifications/device", "POST", payload());
+  sqlite.exec(`CREATE TRIGGER prevent_registration_delete BEFORE DELETE ON turnNotificationRegistration
+    BEGIN SELECT RAISE(ABORT, 'cleanup unavailable'); END;`);
+  const log = vi.spyOn(console, "error").mockImplementation(() => {});
+  const response = await request("/api/turn-notifications/preference", "PUT", '{"enabled":false}');
+  log.mockRestore();
+  expect(response.status).toBe(500);
+  expect(
+    sqlite
+      .prepare("SELECT enabled, generation FROM turnNotificationPreference WHERE user_id = ?")
+      .get("ada"),
+  ).toEqual({ enabled: 1, generation: 0 });
+  expect(
+    sqlite.prepare("SELECT count(*) AS count FROM turnNotificationRegistration").get(),
+  ).toEqual({ count: 1 });
+});
+
+it("does not return or log subscription secrets if registration storage fails", async () => {
+  await request("/api/turn-notifications/preference", "PUT", '{"enabled":true}');
+  const secret = Buffer.alloc(16, 2).toString("base64url");
+  const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+  const failure = vi.spyOn(env.BIG_TWO_DB, "prepare").mockImplementationOnce(() => {
+    throw new Error(secret);
+  });
+  try {
+    const response = await request("/api/turn-notifications/device", "POST", payload());
+    expect(response.status).toBe(503);
+    expect(await response.text()).not.toContain(secret);
+    expect(errorLog).not.toHaveBeenCalled();
+  } finally {
+    errorLog.mockRestore();
+    failure.mockRestore();
+  }
 });

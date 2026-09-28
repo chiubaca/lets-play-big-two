@@ -53,7 +53,14 @@ vi.mock("@big-two/data-ops/database", () => ({
   }),
 }));
 
-const env = {} as Cloudflare.Env;
+const env = {
+  BIG_TWO_DB: {
+    prepare: () => ({ bind: (id: string) => id }),
+    batch: async () => {
+      preferences.set(currentUser, false);
+    },
+  },
+} as unknown as Cloudflare.Env;
 const get = () => App.request("/api/turn-notifications/preference", {}, env);
 const put = (body: string, origin = "https://local.bigtwo.com") =>
   App.request(
