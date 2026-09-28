@@ -109,6 +109,7 @@ export function OnlineGameRoom({ roomId, user }: { roomId: string; user: GameRoo
     return (
       <main className="game-room room-loading" role="alert">
         {error.message} <button onClick={() => void refetch()}>Retry</button>
+        {error.message === "This room could not be found." && <a href="/">Return to lobby</a>}
       </main>
     );
   }

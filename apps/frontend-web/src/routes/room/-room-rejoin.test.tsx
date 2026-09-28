@@ -62,6 +62,13 @@ test("rejoining loads the table even when the WebSocket does not deliver an init
   expect(getRoom).toHaveBeenCalledWith({ param: { roomId: "ABCDE" } });
 });
 
+test("a return after the Turn or game ends loads the current finished table", async () => {
+  getRoom.mockResolvedValue({ ok: true, json: async () => ({ value: "GAME_END" }) });
+  renderRejoin();
+  await waitFor(() => expect(screen.getByText("Table: GAME_END")).toBeTruthy());
+  expect(getRoom).toHaveBeenCalledWith({ param: { roomId: "ABCDE" } });
+});
+
 test("WebSocket updates are not overwritten by a slower initial HTTP response", async () => {
   let resolveResponse!: (value: unknown) => void;
   getRoom.mockReturnValue(new Promise((resolve) => (resolveResponse = resolve)));
@@ -87,6 +94,7 @@ test("a missing room shows an error and offers a retry instead of connecting for
   await waitFor(() =>
     expect(screen.getByRole("alert").textContent).toContain("room could not be found"),
   );
+  expect(screen.getByRole("link", { name: "Return to lobby" }).getAttribute("href")).toBe("/");
   fireEvent.click(screen.getByRole("button", { name: "Retry" }));
   await waitFor(() => expect(screen.getByText("Table: WAITING_FOR_PLAYERS")).toBeTruthy());
 });

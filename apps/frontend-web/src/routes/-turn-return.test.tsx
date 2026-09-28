@@ -52,3 +52,39 @@ it("shows missing-room recovery rather than resurrecting a finished or expired r
   await waitFor(() => expect(screen.getByText("This room could not be found")).toBeTruthy());
   expect(screen.getByRole("link", { name: "Return to lobby" }).getAttribute("href")).toBe("/");
 });
+
+it("clears a resolved missing-room result immediately when the account or ticket changes", async () => {
+  window.history.replaceState({}, "", `/turn-return?ticket=${"b".repeat(50)}`);
+  useSession.mockReturnValue({ data: { user: { id: "ada" } }, isPending: false });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify({ allowed: true, missing: true }))),
+  );
+  const { rerender } = render(<TurnReturn />);
+  await waitFor(() => expect(screen.getByText("This room could not be found")).toBeTruthy());
+
+  useSession.mockReturnValue({ data: { user: { id: "ben" } }, isPending: true });
+  rerender(<TurnReturn />);
+  expect(screen.queryByText("This room could not be found")).toBeNull();
+  expect(screen.getByText("Checking your account…")).toBeTruthy();
+
+  useSession.mockReturnValue({ data: null, isPending: false });
+  rerender(<TurnReturn />);
+  await waitFor(() => expect(screen.getByText("Sign in to return to your turn")).toBeTruthy());
+  expect(screen.queryByText("This room could not be found")).toBeNull();
+});
+
+it("rejects an arbitrary response target without navigating to it", async () => {
+  window.history.replaceState({}, "", `/turn-return?ticket=${"c".repeat(50)}`);
+  useSession.mockReturnValue({ data: { user: { id: "ada" } }, isPending: false });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify({ allowed: true, target: "https://evil.example/room/ABCDE" })),
+    ),
+  );
+  render(<TurnReturn />);
+  await waitFor(() => expect(screen.getByText("Sign in as the original Player")).toBeTruthy());
+  expect(window.location.origin).not.toBe("https://evil.example");
+});

@@ -207,43 +207,56 @@ self.addEventListener("push", (event) => {
 });
 
 async function openReturn(event) {
+  const ticket = event.notification.data?.ticket;
+  if (typeof ticket !== "string" || !/^[A-Za-z0-9_-]{30,500}$/.test(ticket)) return;
+  event.notification.close();
+  const gate = returnTicket(`/turn-return?ticket=${ticket}`);
+  if (!gate) return;
+  const api = notificationApi();
   try {
-    const ticket = event.notification.data?.ticket;
-    if (typeof ticket !== "string" || !/^[A-Za-z0-9_-]{30,500}$/.test(ticket)) return;
-    event.notification.close();
-    const gate = returnTicket(`/turn-return?ticket=${ticket}`);
-    if (!gate) return;
-    const api = notificationApi();
-    if (!api) return;
-    // A tap under another identity sees only the neutral gate, never a room URL.
-    const response = await fetch(`${api}/api/turn-notifications/return?ticket=${ticket}`, {
-      credentials: "include",
-      cache: "no-store",
-    });
-    if (response.ok) {
-      const result = await response.json();
-      if (
-        result.allowed === true &&
-        typeof result.target === "string" &&
-        /^\/room\/[A-Z0-9]{5}$/.test(result.target)
-      ) {
-        const target = new URL(result.target, self.location.origin);
-        const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-        const existing = clients.find((client) => {
-          try {
-            const url = new URL(client.url);
-            return url.origin === self.location.origin && url.pathname === target.pathname;
-          } catch {
-            return false;
+    if (api) {
+      // A tap under another identity sees only the neutral gate, never a room URL.
+      const response = await fetch(`${api}/api/turn-notifications/return?ticket=${ticket}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (response.ok) {
+        const result = await response.json();
+        if (
+          result.allowed === true &&
+          typeof result.target === "string" &&
+          /^\/room\/[A-Z0-9]{5}$/.test(result.target)
+        ) {
+          const target = new URL(result.target, self.location.origin);
+          const clients = await self.clients.matchAll({
+            type: "window",
+            includeUncontrolled: true,
+          });
+          const existing = clients
+            .map((client) => {
+              try {
+                const url = new URL(client.url);
+                return url.origin === self.location.origin && url.pathname === target.pathname
+                  ? { client, url }
+                  : null;
+              } catch {
+                return null;
+              }
+            })
+            .find(Boolean);
+          if (existing) {
+            await existing.client.focus();
+            // Reload the same room view: its cached Turn may have ended or the room expired.
+            await existing.client.navigate(existing.url.href);
+            return;
           }
-        });
-        if (existing) return existing.focus();
+        }
       }
     }
-    return self.clients.openWindow(gate.href);
   } catch {
-    // Unavailable verification does not navigate to a room or an untrusted URL.
+    // Verification or room refresh failed. The gate will recheck before revealing a room.
   }
+  return self.clients.openWindow(gate.href);
 }
 
 self.addEventListener("notificationclick", (event) => {

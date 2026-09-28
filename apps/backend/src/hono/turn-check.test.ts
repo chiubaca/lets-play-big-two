@@ -5,6 +5,7 @@ import { App } from "./app";
 
 let sqlite: Database.Database;
 let account = "ada";
+let sessionId = "ada-session";
 let live = true;
 let available = true;
 const verifyTurn = vi.fn(async () => true);
@@ -13,8 +14,7 @@ const setRoomFocus = vi.fn(async () => true);
 vi.mock("../lib/auth", () => ({
   auth: {
     api: {
-      getSession: async () =>
-        live ? { user: { id: account }, session: { id: `${account}-session` } } : null,
+      getSession: async () => (live ? { user: { id: account }, session: { id: sessionId } } : null),
     },
   },
 }));
@@ -53,6 +53,7 @@ const CHECK = `/api/turn-notifications/check?roomId=${ROOM}&turnId=${TURN}&endpo
 
 beforeEach(() => {
   account = "ada";
+  sessionId = "ada-session";
   live = true;
   available = true;
   verifyTurn.mockReset().mockImplementation(async () => available);
@@ -113,6 +114,7 @@ it("resolves an alert's room only for its original account, including after the 
   const config = env();
   const { target } = (await (await App.request(CHECK, {}, config)).json()) as { target: string };
   available = false; // A previously displayed alert remains a route to current room state.
+  sqlite.prepare("UPDATE room SET status = 'finished'").run();
   expect(
     await (
       await App.request(
@@ -143,11 +145,32 @@ it("resolves an alert's room only for its original account, including after the 
       )
     ).json(),
   ).toEqual({ allowed: true, missing: true });
+  sqlite.prepare("DELETE FROM room").run();
+  expect(
+    await (
+      await App.request(
+        `/api/turn-notifications/return${target.slice("/turn-return".length)}`,
+        {},
+        config,
+      )
+    ).json(),
+  ).toEqual({ allowed: true, missing: true });
   expect(
     await (
       await App.request("/api/turn-notifications/return?ticket=//evil.example.com", {}, config)
     ).json(),
   ).toEqual({ allowed: false });
+});
+
+it("lets the original Player return after signing in on another live session, without reviving a revoked enrollment", async () => {
+  const config = env();
+  const { target } = (await (await App.request(CHECK, {}, config)).json()) as { target: string };
+  const tap = () =>
+    App.request(`/api/turn-notifications/return${target.slice("/turn-return".length)}`, {}, config);
+  sessionId = "ada-new-session";
+  expect(await (await tap()).json()).toEqual({ allowed: true, target: "/room/ABCDE" });
+  sqlite.prepare("DELETE FROM turnNotificationRegistration").run();
+  expect(await (await tap()).json()).toEqual({ allowed: false });
 });
 
 it("denies a previously displayed alert after device removal, re-enrollment, consent reset, expiry or deletion", async () => {

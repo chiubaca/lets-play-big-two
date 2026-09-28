@@ -31,7 +31,9 @@ async function worker(
       }),
   );
   const clients: {
-    matchAll: () => Promise<{ url: string; focus: () => Promise<void> }[]>;
+    matchAll: () => Promise<
+      { url: string; focus: () => Promise<void>; navigate: (url: string) => Promise<void> }[]
+    >;
     openWindow: typeof openWindow;
   } = { matchAll: async () => [], openWindow };
   const self = {
@@ -221,13 +223,76 @@ it("a tap under another account opens only the neutral identity gate, never a su
 it("focuses an existing view of the intended room even when it has a query or fragment", async () => {
   const w = await worker();
   const focus = vi.fn(async () => {});
+  const otherFocus = vi.fn(async () => {});
+  const navigate = vi.fn(async () => {});
+  const otherNavigate = vi.fn(async () => {});
   w.clients.matchAll = async () => [
-    { url: `https://big-two.chiubaca.com/room/${room}?foo=1#hand`, focus },
+    { url: "https://big-two.chiubaca.com/room/FGHIJ", focus: otherFocus, navigate: otherNavigate },
+    { url: `https://big-two.chiubaca.com/room/${room}?foo=1#hand`, focus, navigate },
   ];
   w.fetch.mockResolvedValueOnce(
     new Response(JSON.stringify({ allowed: true, target: `/room/${room}` })),
   );
   await w.fire("notificationclick", { notification: { data: { ticket }, close: vi.fn() } });
   expect(focus).toHaveBeenCalledTimes(1);
+  expect(navigate).toHaveBeenCalledWith(`https://big-two.chiubaca.com/room/${room}?foo=1#hand`);
+  expect(otherFocus).not.toHaveBeenCalled();
+  expect(otherNavigate).not.toHaveBeenCalled();
   expect(w.openWindow).not.toHaveBeenCalled();
+});
+
+it("opens a new neutral client instead of navigating or focusing another room", async () => {
+  const w = await worker();
+  const focus = vi.fn(async () => {});
+  const navigate = vi.fn(async () => {});
+  w.clients.matchAll = async () => [
+    { url: "https://big-two.chiubaca.com/room/FGHIJ", focus, navigate },
+  ];
+  w.fetch.mockResolvedValueOnce(
+    new Response(JSON.stringify({ allowed: true, target: `/room/${room}` })),
+  );
+  await w.fire("notificationclick", { notification: { data: { ticket }, close: vi.fn() } });
+  expect(focus).not.toHaveBeenCalled();
+  expect(navigate).not.toHaveBeenCalled();
+  expect(w.openWindow).toHaveBeenCalledWith(
+    `https://big-two.chiubaca.com/turn-return?ticket=${ticket}`,
+  );
+});
+
+it("never focuses a room from an untrusted return target or another origin", async () => {
+  const w = await worker();
+  const focus = vi.fn(async () => {});
+  w.clients.matchAll = async () => [
+    { url: `https://evil.example/room/${room}`, focus, navigate: vi.fn(async () => {}) },
+  ];
+  w.fetch.mockResolvedValueOnce(
+    new Response(JSON.stringify({ allowed: true, target: `https://evil.example/room/${room}` })),
+  );
+  await w.fire("notificationclick", { notification: { data: { ticket }, close: vi.fn() } });
+  expect(focus).not.toHaveBeenCalled();
+  expect(w.openWindow).toHaveBeenCalledWith(
+    `https://big-two.chiubaca.com/turn-return?ticket=${ticket}`,
+  );
+  w.fetch.mockResolvedValueOnce(
+    new Response(JSON.stringify({ allowed: true, target: `/room/${room}` })),
+  );
+  await w.fire("notificationclick", { notification: { data: { ticket }, close: vi.fn() } });
+  expect(focus).not.toHaveBeenCalled();
+  expect(w.openWindow).toHaveBeenCalledTimes(2);
+});
+
+it("opens only the neutral gate when verification is offline, without disturbing another room", async () => {
+  const w = await worker();
+  const focus = vi.fn(async () => {});
+  const navigate = vi.fn(async () => {});
+  w.clients.matchAll = async () => [
+    { url: "https://big-two.chiubaca.com/room/FGHIJ", focus, navigate },
+  ];
+  w.fetch.mockRejectedValueOnce(new Error("offline"));
+  await w.fire("notificationclick", { notification: { data: { ticket }, close: vi.fn() } });
+  expect(w.openWindow).toHaveBeenCalledWith(
+    `https://big-two.chiubaca.com/turn-return?ticket=${ticket}`,
+  );
+  expect(focus).not.toHaveBeenCalled();
+  expect(navigate).not.toHaveBeenCalled();
 });

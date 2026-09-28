@@ -458,12 +458,9 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
     const decoded = await readTurnTicket(c.env.VAPID_PRIVATE_KEY, ticket);
     if (!decoded) return deny();
     const session = await auth.api.getSession({ headers: c.req.raw.headers });
-    if (
-      !session ||
-      session.user.id !== decoded.userId ||
-      session.session.id !== decoded.enrollment.session_id
-    )
-      return deny();
+    // The original Player may sign in through another session after tapping. The
+    // ticket's enrolled session must still be live, but it need not be this one.
+    if (!session || session.user.id !== decoded.userId) return deny();
     try {
       if (!(await registeredEndpoint(c.env, decoded.userId, decoded.enrollment))) return deny();
       const room = await c.env.BIG_TWO_DB.prepare(

@@ -8,26 +8,29 @@ export const Route = createFileRoute("/turn-return")({ component: TurnReturn });
 
 export function TurnReturn() {
   const { data: session, isPending } = authClient.useSession();
-  const [state, setState] = useState<"checking" | "sign-in" | "missing" | "unavailable">(
-    "checking",
-  );
+  type ReturnState = "checking" | "sign-in" | "missing" | "unavailable";
+  const [resolved, setResolved] = useState<{ key: string; state: ReturnState } | null>(null);
   const ticket =
     typeof window === "undefined"
       ? null
       : new URLSearchParams(window.location.search).get("ticket");
+  const key = `${session?.user.id ?? ""}:${ticket ?? ""}`;
+  const state: ReturnState = isPending
+    ? "checking"
+    : !session
+      ? "sign-in"
+      : resolved?.key === key
+        ? resolved.state
+        : "checking";
 
   useEffect(() => {
     if (isPending) return;
-    if (!session) {
-      setState("sign-in");
-      return;
-    }
+    if (!session) return;
     if (!ticket || !/^[A-Za-z0-9_-]{30,500}$/.test(ticket)) {
-      setState("unavailable");
+      setResolved({ key, state: "unavailable" });
       return;
     }
     let disposed = false;
-    setState("checking");
     void fetch(
       `${import.meta.env.VITE_BACKEND_URL}/api/turn-notifications/return?ticket=${ticket}`,
       {
@@ -42,7 +45,7 @@ export function TurnReturn() {
       .then((result: unknown) => {
         if (disposed) return;
         if (!result || typeof result !== "object") {
-          setState("unavailable");
+          setResolved({ key, state: "unavailable" });
           return;
         }
         if (
@@ -54,22 +57,24 @@ export function TurnReturn() {
         ) {
           window.location.replace(result.target);
         } else
-          setState(
-            "allowed" in result &&
+          setResolved({
+            key,
+            state:
+              "allowed" in result &&
               result.allowed === true &&
               "missing" in result &&
               result.missing === true
-              ? "missing"
-              : "sign-in",
-          );
+                ? "missing"
+                : "sign-in",
+          });
       })
       .catch(() => {
-        if (!disposed) setState("unavailable");
+        if (!disposed) setResolved({ key, state: "unavailable" });
       });
     return () => {
       disposed = true;
     };
-  }, [ticket, session?.user.id, isPending]);
+  }, [ticket, session?.user.id, isPending, key]);
 
   return (
     <main className="room-auth-page">
