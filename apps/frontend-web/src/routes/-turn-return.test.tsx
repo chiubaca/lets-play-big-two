@@ -6,8 +6,9 @@ import { TurnReturn } from "./turn-return";
 const useSession = vi.fn();
 const signOut = vi.fn();
 vi.mock("../libs/auth-client", () => ({
-  authClient: { useSession: () => useSession(), signOut: () => signOut() },
+  authClient: { useSession: () => useSession() },
 }));
+vi.mock("../libs/turn-sign-out", () => ({ signOutAndDetachTurnDevice: () => signOut() }));
 vi.mock("../components/auth-panel", () => ({ AuthPanel: () => <button>Sign in</button> }));
 vi.mock("@tanstack/react-router", () => ({
   createFileRoute: () => () => ({}),

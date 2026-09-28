@@ -21,7 +21,7 @@ import { jevBotMoveRequestSchema } from "../lib/jev-bot.schema";
 import { createRoomCode } from "../lib/room-code";
 import { parseChatInput } from "../lib/chat-input";
 import { mintTurnTicket, readTurnTicket } from "../lib/turn-ticket";
-import { MAX_TURN_INSTALLS } from "../lib/turn-push";
+import { MAX_TURN_INSTALLS, registeredEndpoint } from "../lib/turn-push";
 
 const allowedOrigins = ["https://local.bigtwo.com", "https://big-two.chiubaca.com"];
 
@@ -133,7 +133,31 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
       credentials: true,
     }),
   )
-  .on(["POST", "GET"], "/api/auth/*", (c) => {
+  .on(["POST", "GET"], "/api/auth/*", async (c) => {
+    const emailIdentityChange =
+      c.req.method === "POST" &&
+      ["/api/auth/sign-in/email", "/api/auth/sign-up/email"].includes(c.req.path);
+    const socialCallback = c.req.method === "GET" && c.req.path === "/api/auth/callback/google";
+    if (emailIdentityChange || socialCallback) {
+      // A sign-in can replace this origin's cookie without revoking the old session.
+      const previous = await auth.api.getSession({ headers: c.req.raw.headers });
+      const response = await auth.handler(c.req.raw);
+      const location = response.headers.get("Location");
+      const socialSucceeded =
+        socialCallback &&
+        response.status >= 300 &&
+        response.status < 400 &&
+        !!location &&
+        !new URL(location, c.req.url).searchParams.has("error");
+      if (previous && ((emailIdentityChange && response.ok) || socialSucceeded)) {
+        await c.env.BIG_TWO_DB.prepare(
+          "DELETE FROM turnNotificationRegistration WHERE user_id = ? AND session_id = ?",
+        )
+          .bind(previous.user.id, previous.session.id)
+          .run();
+      }
+      return response;
+    }
     return auth.handler(c.req.raw);
   })
   .get("/", async (c) => {
@@ -268,8 +292,8 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
     let result: Record<string, unknown> | null;
     try {
       result = await c.env.BIG_TWO_DB.prepare(`INSERT INTO turnNotificationRegistration
-      (endpoint_id, endpoint, p256dh, auth, user_id, session_id, generation)
-      SELECT ?, ?, ?, ?, p.user_id, s.id, p.generation
+      (endpoint_id, endpoint, p256dh, auth, user_id, session_id, generation, enrollment_id)
+      SELECT ?, ?, ?, ?, p.user_id, s.id, p.generation, ?
       FROM turnNotificationPreference p JOIN session s ON s.user_id = p.user_id
       WHERE p.user_id = ? AND s.id = ? AND s.expires_at > ? AND p.enabled = 1 AND p.generation = ?
         AND NOT EXISTS (SELECT 1 FROM accountDeletion d WHERE d.user_id = p.user_id)
@@ -278,10 +302,11 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
           OR (SELECT count(*) FROM turnNotificationRegistration enrolled
             WHERE enrolled.user_id = p.user_id AND enrolled.generation = p.generation) < ?)
       ON CONFLICT(endpoint_id) DO UPDATE SET
-        p256dh = excluded.p256dh, auth = excluded.auth,
-        session_id = excluded.session_id, generation = excluded.generation
-      WHERE turnNotificationRegistration.user_id = excluded.user_id
-        AND ((turnNotificationRegistration.session_id = excluded.session_id
+        p256dh = excluded.p256dh, auth = excluded.auth, user_id = excluded.user_id,
+        session_id = excluded.session_id, generation = excluded.generation,
+        enrollment_id = excluded.enrollment_id
+      WHERE ((turnNotificationRegistration.user_id = excluded.user_id
+          AND turnNotificationRegistration.session_id = excluded.session_id
           AND turnNotificationRegistration.generation = excluded.generation)
           OR NOT EXISTS (SELECT 1 FROM session prior WHERE prior.id = turnNotificationRegistration.session_id AND prior.expires_at > ?))
       RETURNING endpoint_id`)
@@ -290,6 +315,7 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
           endpoint,
           keys.p256dh,
           keys.auth,
+          crypto.randomUUID(),
           session.user.id,
           session.session.id,
           Date.now(),
@@ -384,23 +410,40 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
       return deny();
     try {
       const registration = await c.env.BIG_TWO_DB.prepare(
-        "SELECT generation FROM turnNotificationRegistration WHERE endpoint_id = ? AND user_id = ? AND session_id = ?",
+        "SELECT generation, enrollment_id FROM turnNotificationRegistration WHERE endpoint_id = ? AND user_id = ? AND session_id = ?",
       )
         .bind(endpointId, session.user.id, session.session.id)
-        .first<{ generation: number }>();
+        .first<{ generation: number; enrollment_id: string }>();
       if (!registration) return deny();
+      const enrollment = {
+        endpoint_id: endpointId,
+        session_id: session.session.id,
+        generation: registration.generation,
+        enrollment_id: registration.enrollment_id,
+      };
       const eligible = await c.env.BIG_TWO_ROOM_DURABLE_OBJECT.getByName(roomId).verifyTurn(
         roomId,
         turnId,
         session.user.id,
-        {
-          endpoint_id: endpointId,
-          session_id: session.session.id,
-          generation: registration.generation,
-        },
+        enrollment,
       );
       if (!eligible) return deny();
-      const ticket = await mintTurnTicket(c.env.VAPID_PRIVATE_KEY, roomId, session.user.id);
+      const ticket = await mintTurnTicket(
+        c.env.VAPID_PRIVATE_KEY,
+        roomId,
+        session.user.id,
+        enrollment,
+      );
+      // The ticket is minted asynchronously; do not approve an alert from a stale verification.
+      if (
+        !(await c.env.BIG_TWO_ROOM_DURABLE_OBJECT.getByName(roomId).verifyTurn(
+          roomId,
+          turnId,
+          session.user.id,
+          enrollment,
+        ))
+      )
+        return deny();
       return c.json({ eligible: true, target: `/turn-return?ticket=${ticket}` }, 200, {
         "Cache-Control": "no-store",
       });
@@ -415,9 +458,14 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
     const decoded = await readTurnTicket(c.env.VAPID_PRIVATE_KEY, ticket);
     if (!decoded) return deny();
     const session = await auth.api.getSession({ headers: c.req.raw.headers });
-    if (!session || session.user.id !== decoded.userId) return deny();
+    if (
+      !session ||
+      session.user.id !== decoded.userId ||
+      session.session.id !== decoded.enrollment.session_id
+    )
+      return deny();
     try {
-      if (await accountDeletionIsPending(decoded.userId)) return deny();
+      if (!(await registeredEndpoint(c.env, decoded.userId, decoded.enrollment))) return deny();
       const room = await c.env.BIG_TWO_DB.prepare(
         "SELECT status, expires_at FROM room WHERE id = ?",
       )

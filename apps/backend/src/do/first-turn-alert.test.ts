@@ -31,7 +31,12 @@ vi.mock("cloudflare:workers", () => ({
 
 const NOW = 1_800_000_000_000;
 const ENDPOINT_ID = "a".repeat(64);
-const REGISTRATION = { endpoint_id: ENDPOINT_ID, session_id: "ada-session", generation: 0 };
+const REGISTRATION = {
+  endpoint_id: ENDPOINT_ID,
+  session_id: "ada-session",
+  generation: 0,
+  enrollment_id: "enrolled",
+};
 
 function room(playerCount = 2) {
   vi.useFakeTimers();
@@ -53,7 +58,8 @@ function room(playerCount = 2) {
     CREATE TABLE accountDeletion (user_id TEXT);
     CREATE TABLE turnNotificationPreference (user_id TEXT, enabled INTEGER, generation INTEGER);
     CREATE TABLE turnNotificationRegistration (endpoint_id TEXT PRIMARY KEY, endpoint TEXT,
-      p256dh TEXT, auth TEXT, user_id TEXT, session_id TEXT, generation INTEGER);
+      p256dh TEXT, auth TEXT, user_id TEXT, session_id TEXT, generation INTEGER,
+      enrollment_id TEXT NOT NULL DEFAULT 'enrolled');
     INSERT INTO user VALUES ('ada'), ('ben'), ('cal');
     INSERT INTO session VALUES ('ada-session','ada',1800000600000), ('ben-session','ben',1800000600000),
       ('ada-focus','ada',1800000600000), ('ben-focus','ben',1800000600000),
@@ -85,7 +91,7 @@ function room(playerCount = 2) {
       sql: {
         exec: (sql: string, ...values: unknown[]) => {
           if (sql.includes("CREATE TABLE")) roomDb.exec(sql);
-          else if (sql.startsWith("SELECT"))
+          else if (sql.startsWith("SELECT") || sql.startsWith("PRAGMA"))
             return { toArray: () => roomDb.prepare(sql).all(...values) };
           else roomDb.prepare(sql).run(...values);
           return { toArray: () => [] };
@@ -115,7 +121,9 @@ function room(playerCount = 2) {
     enroll(id = "ada") {
       const key = id === "ada" ? ENDPOINT_ID : id === "ben" ? "b".repeat(64) : "c".repeat(64);
       accounts
-        .prepare("INSERT INTO turnNotificationRegistration VALUES (?, ?, ?, ?, ?, ?, 0)")
+        .prepare(
+          "INSERT INTO turnNotificationRegistration (endpoint_id, endpoint, p256dh, auth, user_id, session_id, generation) VALUES (?, ?, ?, ?, ?, ?, 0)",
+        )
         .run(
           key,
           "https://fcm.googleapis.com/fcm/send/example",
@@ -191,7 +199,7 @@ it("commits a first Turn and only the already enrolled away Player's intent, acr
   );
   expect(r.outbox()).toHaveLength(1);
   expect(r.alarm()).toBe(NOW);
-  const captured = r.outbox()[0] as { endpoint_id: string; session_id: string; generation: number };
+  const captured = r.outbox()[0] as typeof REGISTRATION;
   expect(await r.reload().verifyTurn("ABCDE", turn.id, turn.recipient_id, captured)).toBe(true);
   expect(
     await r.reload().verifyTurn("ABCDE", crypto.randomUUID(), turn.recipient_id, captured),
@@ -202,6 +210,7 @@ it("commits a first Turn and only the already enrolled away Player's intent, acr
       endpoint_id: "c".repeat(64),
       session_id: captured.session_id,
       generation: 0,
+      enrollment_id: captured.enrollment_id,
     }),
   ).toBe(false);
 });
@@ -240,7 +249,7 @@ it("does not let an expired focus session silence an enrolled install", async ()
   await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
   expect(r.outbox()).toHaveLength(1);
   const turn = r.firstTurn()!;
-  const captured = r.outbox()[0] as { endpoint_id: string; session_id: string; generation: number };
+  const captured = r.outbox()[0] as typeof REGISTRATION;
   expect(await r.reload().verifyTurn("ABCDE", turn.id, turn.recipient_id, captured)).toBe(true);
 });
 
@@ -590,7 +599,7 @@ it("rechecks consent, session, room and focus before delivery, then retires inel
   r.enroll("ben");
   await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
   const turn = r.firstTurn()!;
-  const delivery = r.outbox()[0] as { endpoint_id: string; session_id: string; generation: number };
+  const delivery = r.outbox()[0] as typeof REGISTRATION;
   const push = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 201 }));
   const tab = crypto.randomUUID();
   await r.reload().setRoomFocus("ABCDE", turn.recipient_id, delivery.session_id, tab, true, 1);
@@ -605,7 +614,14 @@ it("rechecks consent, session, room and focus before delivery, then retires inel
 });
 
 it("never sends when consent is revoked or the originating session expires after the deal", async () => {
-  for (const revoke of ["consent", "session", "deletion", "room"] as const) {
+  for (const revoke of [
+    "consent",
+    "session",
+    "deletion",
+    "room",
+    "registration",
+    "generation",
+  ] as const) {
     const r = room();
     r.enroll("ada");
     r.enroll("ben");
@@ -622,6 +638,16 @@ it("never sends when consent is revoked or the originating session expires after
     if (revoke === "deletion")
       r.accounts.prepare("INSERT INTO accountDeletion VALUES (?)").run(turn.recipient_id);
     if (revoke === "room") r.accounts.prepare("UPDATE room SET status = 'expiring'").run();
+    if (revoke === "registration")
+      r.accounts
+        .prepare("DELETE FROM turnNotificationRegistration WHERE user_id = ?")
+        .run(turn.recipient_id);
+    if (revoke === "generation")
+      r.accounts
+        .prepare(
+          "UPDATE turnNotificationPreference SET generation = generation + 1 WHERE user_id = ?",
+        )
+        .run(turn.recipient_id);
     const push = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response(null, { status: 201 }));
@@ -630,6 +656,72 @@ it("never sends when consent is revoked or the originating session expires after
     expect(r.outbox()).toHaveLength(0);
     vi.restoreAllMocks();
   }
+});
+
+it("never revives queued work after removal and explicit re-enrollment of the same install", async () => {
+  const r = room();
+  r.enroll("ada");
+  r.enroll("ben");
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  const turn = r.firstTurn()!;
+  const delivery = r.outbox()[0] as typeof REGISTRATION;
+  r.accounts
+    .prepare("DELETE FROM turnNotificationRegistration WHERE endpoint_id = ?")
+    .run(delivery.endpoint_id);
+  r.accounts
+    .prepare("INSERT INTO turnNotificationRegistration VALUES (?, ?, ?, ?, ?, ?, 0, ?)")
+    .run(
+      delivery.endpoint_id,
+      "https://fcm.googleapis.com/fcm/send/example",
+      "key",
+      "auth",
+      turn.recipient_id,
+      delivery.session_id,
+      "new-enrollment",
+    );
+  expect(await r.reload().verifyTurn("ABCDE", turn.id, turn.recipient_id, delivery)).toBe(false);
+  const push = vi.spyOn(globalThis, "fetch");
+  await r.reload().alarm();
+  expect(push).not.toHaveBeenCalled();
+  expect(r.outbox()).toHaveLength(0);
+});
+
+it("upgrades legacy room queues without treating old intents as new enrollments", async () => {
+  const r = room();
+  r.roomDb.exec(`DROP TABLE turn_delivery;
+    CREATE TABLE turn_delivery (turn_id TEXT, endpoint_id TEXT, session_id TEXT,
+      generation INTEGER, attempts INTEGER DEFAULT 0, next_at INTEGER,
+      status TEXT DEFAULT 'pending', PRIMARY KEY (turn_id, endpoint_id));`);
+  r.enroll("ada");
+  r.enroll("ben");
+  await r.reload().gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  expect(r.outbox()).toMatchObject([{ enrollment_id: "enrolled" }]);
+});
+
+it("does not send when deletion starts while an eligible push is being encrypted", async () => {
+  const r = room();
+  r.enroll("ada");
+  r.enroll("ben");
+  await enablePush(r);
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  const turn = r.firstTurn()!;
+  const push = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 201 }));
+  // The first eligibility read succeeds; deletion is committed before the push can leave the Worker.
+  const db = r.env.BIG_TWO_DB;
+  const original = db.prepare.bind(db);
+  const prepare = vi.spyOn(db, "prepare");
+  let reads = 0;
+  prepare.mockImplementation((sql: string) => {
+    if (sql.includes("SELECT r.endpoint_id, r.endpoint, r.p256dh")) {
+      reads++;
+      if (reads === 3)
+        r.accounts.prepare("INSERT INTO accountDeletion VALUES (?)").run(turn.recipient_id);
+    }
+    return original(sql);
+  });
+  await r.reload().alarm();
+  expect(push).not.toHaveBeenCalled();
+  expect(r.outbox()).toHaveLength(0);
 });
 
 it("sends encrypted backend-only Web Push at most once after provider acceptance", async () => {
@@ -656,7 +748,9 @@ it("tracks two installs independently across provider failure, alarm repair, and
       const endpoint = `https://fcm.googleapis.com/fcm/send/${user}-${install}`;
       const endpointId = createHash("sha256").update(endpoint).digest("hex");
       r.accounts
-        .prepare("INSERT INTO turnNotificationRegistration VALUES (?, ?, ?, ?, ?, ?, 0)")
+        .prepare(
+          "INSERT INTO turnNotificationRegistration (endpoint_id, endpoint, p256dh, auth, user_id, session_id, generation) VALUES (?, ?, ?, ?, ?, ?, 0)",
+        )
         .run(endpointId, endpoint, "key", "auth", user, `${user}-session`);
     }
   }
@@ -748,6 +842,28 @@ it("retires invalid endpoints without retrying and bounds unavailable-provider r
   expect(s.outbox()).toHaveLength(0);
 });
 
+it("does not delete a newly enrolled install when an older provider request returns 410", async () => {
+  const r = room();
+  r.enroll("ada");
+  r.enroll("ben");
+  await enablePush(r);
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  const delivery = r.outbox()[0] as typeof REGISTRATION;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+    r.accounts
+      .prepare("UPDATE turnNotificationRegistration SET enrollment_id = ? WHERE endpoint_id = ?")
+      .run("replacement", delivery.endpoint_id);
+    return new Response(null, { status: 410 });
+  });
+  await r.reload().alarm();
+  expect(
+    r.accounts
+      .prepare("SELECT enrollment_id FROM turnNotificationRegistration WHERE endpoint_id = ?")
+      .get(delivery.endpoint_id),
+  ).toEqual({ enrollment_id: "replacement" });
+  expect(r.outbox()).toHaveLength(0);
+});
+
 it("drains at most four installs per alarm and retires permanent provider failures", async () => {
   const r = room();
   r.enroll("ada");
@@ -758,7 +874,9 @@ it("drains at most four installs per alarm and retires permanent provider failur
   ] as const) {
     for (const id of ids) {
       r.accounts
-        .prepare("INSERT INTO turnNotificationRegistration VALUES (?, ?, ?, ?, ?, ?, 0)")
+        .prepare(
+          "INSERT INTO turnNotificationRegistration (endpoint_id, endpoint, p256dh, auth, user_id, session_id, generation) VALUES (?, ?, ?, ?, ?, ?, 0)",
+        )
         .run(
           id.repeat(64),
           `https://fcm.googleapis.com/fcm/send/${id}`,

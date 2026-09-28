@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AuthPanel } from "../components/auth-panel";
 import { authClient } from "../libs/auth-client";
+import { signOutAndDetachTurnDevice } from "../libs/turn-sign-out";
 
 export const Route = createFileRoute("/turn-return")({ component: TurnReturn });
 
@@ -83,7 +84,9 @@ export function TurnReturn() {
         <>
           <h1>Sign in as the original Player</h1>
           <p>This account cannot open this notification.</p>
-          <button onClick={() => void authClient.signOut()}>Sign out to switch accounts</button>
+          <button onClick={() => void signOutAndDetachTurnDevice()}>
+            Sign out to switch accounts
+          </button>
         </>
       ) : null}
       {state === "missing" ? (

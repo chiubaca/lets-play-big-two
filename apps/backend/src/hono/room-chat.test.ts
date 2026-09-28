@@ -243,23 +243,25 @@ it("routes authenticated upgrades and sends through the live chat object across 
       storage: {
         sql: {
           exec: (query: string) =>
-            query.includes("SELECT game_state")
-              ? {
-                  toArray: () =>
-                    live
-                      ? [
-                          {
-                            game_state: JSON.stringify({
-                              value: phase,
-                              context: {
-                                players: seat ? [{ id: "ada", name: seat, hand: [] }] : [],
-                              },
-                            }),
-                          },
-                        ]
-                      : [],
-                }
-              : undefined,
+            query.startsWith("PRAGMA")
+              ? { toArray: () => [{ name: "enrollment_id" }] }
+              : query.includes("SELECT game_state")
+                ? {
+                    toArray: () =>
+                      live
+                        ? [
+                            {
+                              game_state: JSON.stringify({
+                                value: phase,
+                                context: {
+                                  players: seat ? [{ id: "ada", name: seat, hand: [] }] : [],
+                                },
+                              }),
+                            },
+                          ]
+                        : [],
+                  }
+                : undefined,
         },
       },
     } as unknown as DurableObjectState,

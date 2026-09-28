@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 import { RoomSignIn } from "./$roomId";
 import { authClient } from "../../libs/auth-client";
@@ -29,13 +29,15 @@ test("direct room visits offer the existing sign-in and sign-up forms", () => {
   expect(screen.getByLabelText("Username")).toBeTruthy();
 });
 
-test("Google sign-in returns visitors to the same room", () => {
+test("Google sign-in returns visitors to the same room", async () => {
   window.history.replaceState({}, "", "/room/ABCDE");
   render(<RoomSignIn />);
 
   fireEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
-  expect(authClient.signIn.social).toHaveBeenCalledWith({
-    provider: "google",
-    callbackURL: window.location.href,
-  });
+  await waitFor(() =>
+    expect(authClient.signIn.social).toHaveBeenCalledWith({
+      provider: "google",
+      callbackURL: window.location.href,
+    }),
+  );
 });

@@ -5,6 +5,7 @@ import { useId, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { authClient } from "~/libs/auth-client";
+import { forgetTurnNotificationInstall } from "~/components/game-room/turn-notification-device";
 import "./auth-panel.css";
 
 type AuthView = "signIn" | "signUp";
@@ -39,6 +40,7 @@ export function AuthPanel({ returnToCurrentPage = false }: { returnToCurrentPage
               })
             : await authClient.signIn.email({ email: value.email, password: value.password });
         if (response.error) setAuthError(response.error.message ?? "We couldn’t sign you in.");
+        else await forgetTurnNotificationInstall();
       } catch {
         setAuthError("Something went wrong. Please try again.");
       }
@@ -205,12 +207,12 @@ export function AuthPanel({ returnToCurrentPage = false }: { returnToCurrentPage
         type="button"
         variant="lacquer"
         className="h-11 w-full"
-        onClick={() =>
-          authClient.signIn.social({
+        onClick={() => {
+          void authClient.signIn.social({
             provider: "google",
             callbackURL: returnToCurrentPage ? window.location.href : window.location.origin,
-          })
-        }
+          });
+        }}
       >
         <svg aria-hidden="true" viewBox="0 0 24 24">
           <path

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
-import { turnNotificationDevice } from "./turn-notification-device";
+import { forgetTurnNotificationInstall, turnNotificationDevice } from "./turn-notification-device";
 
 const { get, post, remove } = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), remove: vi.fn() }));
 vi.mock("~/libs/hono-client", () => ({
@@ -226,4 +226,27 @@ it("keeps ordinary iOS tabs and unverified WebKit surfaces unavailable", async (
   });
   expect(get).not.toHaveBeenCalled();
   expect(requestPermission).not.toHaveBeenCalled();
+});
+
+it("forgets the old subscription and closes only Turn alerts when the identity changes", async () => {
+  const unsubscribe = vi.fn(async () => true);
+  const turnClose = vi.fn();
+  const otherClose = vi.fn();
+  oldSubscription.current = {
+    endpoint: "https://fcm.googleapis.com/fcm/send/device",
+    unsubscribe,
+  } as unknown as PushSubscription;
+  getRegistration.mockResolvedValue({
+    ...worker,
+    getNotifications: async () => [
+      { tag: `ABCDE:${"a".repeat(36)}`, close: turnClose },
+      { tag: "chat", close: otherClose },
+    ],
+  });
+  localStorage.setItem("big-two-turn-device-id", "a".repeat(64));
+  await forgetTurnNotificationInstall();
+  expect(unsubscribe).toHaveBeenCalledOnce();
+  expect(turnClose).toHaveBeenCalledOnce();
+  expect(otherClose).not.toHaveBeenCalled();
+  expect(localStorage.getItem("big-two-turn-device-id")).toBeNull();
 });

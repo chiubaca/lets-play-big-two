@@ -8,6 +8,7 @@ import { getDb } from "@big-two/data-ops/database";
 import * as schema from "@big-two/data-ops/drizzle/schema";
 
 import { env } from "cloudflare:workers";
+import { revokeTurnsForDeletion } from "./turn-deletion";
 
 export const auth = betterAuth({
   database: drizzleAdapter(drizzle(env.BIG_TWO_DB), {
@@ -35,10 +36,7 @@ export const auth = betterAuth({
       enabled: true,
       beforeDelete: async (user) => {
         const db = getDb();
-        await db
-          .insert(schema.accountDeletionTable)
-          .values({ userId: user.id })
-          .onConflictDoNothing();
+        await revokeTurnsForDeletion(env.BIG_TWO_DB, user.id);
 
         // Scan the canonical room list as well as deleting the reverse index. Some rooms predate
         // membership tracking, and room state and D1 cannot be updated in one transaction.

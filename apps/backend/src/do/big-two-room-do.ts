@@ -228,11 +228,17 @@ export class BigTwoRoomObject extends DurableObject<Env> {
       -- first_turn is the existing persistent Turn slot, now used for every ongoing Turn.
       CREATE TABLE IF NOT EXISTS turn_delivery(
         turn_id TEXT NOT NULL, endpoint_id TEXT NOT NULL, session_id TEXT NOT NULL,
-        generation INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0,
+        generation INTEGER NOT NULL, enrollment_id TEXT NOT NULL DEFAULT '',
+        attempts INTEGER NOT NULL DEFAULT 0,
         next_at INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
         PRIMARY KEY(turn_id, endpoint_id)
       );
     `);
+    // Existing room objects may have queued work from before per-enrollment identities.
+    // Those intents fail closed; only a new Turn can capture a new enrollment.
+    const columns = this.sql.exec<{ name: string }>("PRAGMA table_info(turn_delivery)").toArray();
+    if (!columns.some(({ name }) => name === "enrollment_id"))
+      this.sql.exec("ALTER TABLE turn_delivery ADD COLUMN enrollment_id TEXT NOT NULL DEFAULT ''");
   }
 
   private activeFocus(userId: string): boolean {
@@ -340,11 +346,12 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     if (!this.currentTurn(turnId, roomId, userId)) return false;
     const captured = this.sql
       .exec(
-        "SELECT 1 FROM turn_delivery WHERE turn_id = ? AND endpoint_id = ? AND session_id = ? AND generation = ? LIMIT 1",
+        "SELECT 1 FROM turn_delivery WHERE turn_id = ? AND endpoint_id = ? AND session_id = ? AND generation = ? AND enrollment_id = ? LIMIT 1",
         turnId,
         enrollment.endpoint_id,
         enrollment.session_id,
         enrollment.generation,
+        enrollment.enrollment_id,
       )
       .toArray()[0];
     if (!captured) return false;
@@ -421,6 +428,7 @@ export class BigTwoRoomObject extends DurableObject<Env> {
                 endpointId: delivery.endpoint_id,
               },
               turn.deadline,
+              () => this.verifyTurn(turn.room_id, turn.id, turn.recipient_id, delivery),
             );
           else outcome = "retired";
         } else outcome = "retired";
@@ -571,12 +579,13 @@ export class BigTwoRoomObject extends DurableObject<Env> {
         if (!this.activeFocus(recipientId))
           for (const enrollment of enrollments) {
             this.sql.exec(
-              `INSERT INTO turn_delivery (turn_id, endpoint_id, session_id, generation, next_at)
-            VALUES (?, ?, ?, ?, ?)`,
+              `INSERT INTO turn_delivery (turn_id, endpoint_id, session_id, generation, enrollment_id, next_at)
+            VALUES (?, ?, ?, ?, ?, ?)`,
               id,
               enrollment.endpoint_id,
               enrollment.session_id,
               enrollment.generation,
+              enrollment.enrollment_id,
               Date.now(),
             );
           }

@@ -2,14 +2,19 @@ import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 import { App } from "./app";
+import { revokeTurnsForDeletion } from "../lib/turn-deletion";
 
 let sqlite: Database.Database;
 let user = "ada";
 let sessionId = "ada-1";
 const getSession = vi.fn();
+const authHandler = vi.fn(async () => new Response("ok"));
 
 vi.mock("../lib/auth", () => ({
-  auth: { api: { getSession: (...args: unknown[]) => getSession(...args) } },
+  auth: {
+    api: { getSession: (...args: unknown[]) => getSession(...args) },
+    handler: () => authHandler(),
+  },
 }));
 vi.mock("@big-two/data-ops/database", () => ({ getDb: () => drizzle(sqlite) }));
 
@@ -81,7 +86,7 @@ beforeEach(() => {
     CREATE TABLE session (id text PRIMARY KEY, user_id text NOT NULL REFERENCES user(id), expires_at integer NOT NULL);
     CREATE TABLE accountDeletion (user_id text PRIMARY KEY);
     CREATE TABLE turnNotificationPreference (user_id text PRIMARY KEY REFERENCES user(id), enabled integer NOT NULL DEFAULT 0, generation integer NOT NULL DEFAULT 0);
-    CREATE TABLE turnNotificationRegistration (endpoint_id text PRIMARY KEY, endpoint text NOT NULL, p256dh text NOT NULL, auth text NOT NULL, user_id text NOT NULL REFERENCES user(id), session_id text NOT NULL REFERENCES session(id) ON DELETE CASCADE, generation integer NOT NULL);`);
+    CREATE TABLE turnNotificationRegistration (endpoint_id text PRIMARY KEY, endpoint text NOT NULL, p256dh text NOT NULL, auth text NOT NULL, user_id text NOT NULL REFERENCES user(id), session_id text NOT NULL REFERENCES session(id) ON DELETE CASCADE, generation integer NOT NULL, enrollment_id text NOT NULL DEFAULT 'enrolled');`);
   sqlite.prepare("INSERT INTO user (id) VALUES (?), (?)").run("ada", "ben");
   for (const [id, owner] of [
     ["ada-1", "ada"],
@@ -95,6 +100,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   getSession.mockReset();
+  authHandler.mockClear();
   sqlite.close();
 });
 
@@ -172,10 +178,24 @@ it("enrolls only with live account consent and reports registration without secr
 it("removes one install; switching off invalidates the generation and all old registrations", async () => {
   await request("/api/turn-notifications/preference", "PUT", '{"enabled":true}');
   expect((await request("/api/turn-notifications/device", "POST", payload())).status).toBe(200);
+  const firstId = sqlite
+    .prepare("SELECT enrollment_id FROM turnNotificationRegistration WHERE endpoint_id = ?")
+    .get(await deviceId());
   const other = "https://fcm.googleapis.com/fcm/send/other";
   expect((await request("/api/turn-notifications/device", "POST", payload(0, other))).status).toBe(
     200,
   );
+  await request(
+    "/api/turn-notifications/device",
+    "DELETE",
+    JSON.stringify({ endpointId: await deviceId() }),
+  );
+  expect((await request("/api/turn-notifications/device", "POST", payload())).status).toBe(200);
+  expect(
+    sqlite
+      .prepare("SELECT enrollment_id FROM turnNotificationRegistration WHERE endpoint_id = ?")
+      .get(await deviceId()),
+  ).not.toEqual(firstId);
   await request(
     "/api/turn-notifications/device",
     "DELETE",
@@ -267,6 +287,114 @@ it("allows an explicit re-enrollment for the same account after the originating 
   expect(
     await (await request(`/api/turn-notifications/device?endpointId=${await deviceId()}`)).json(),
   ).toEqual({ generation: 0, registered: true });
+});
+
+it("detaches an expired install across accounts only after an explicit enrollment", async () => {
+  await request("/api/turn-notifications/preference", "PUT", '{"enabled":true}');
+  await request("/api/turn-notifications/device", "POST", payload());
+  signIn("ben", "ben-1");
+  await request("/api/turn-notifications/preference", "PUT", '{"enabled":true}');
+  expect(
+    await (await request(`/api/turn-notifications/device?endpointId=${await deviceId()}`)).json(),
+  ).toEqual({ generation: 0, registered: false });
+  expect((await request("/api/turn-notifications/device", "POST", payload())).status).toBe(409);
+  sqlite.prepare("UPDATE session SET expires_at = 0 WHERE id = ?").run("ada-1");
+  expect((await request("/api/turn-notifications/device", "POST", payload())).status).toBe(200);
+  expect(
+    sqlite
+      .prepare("SELECT user_id, session_id FROM turnNotificationRegistration WHERE endpoint_id = ?")
+      .get(await deviceId()),
+  ).toEqual({ user_id: "ben", session_id: "ben-1" });
+});
+
+it("removes a signed-out session's registration without touching other installs or consent", async () => {
+  await request("/api/turn-notifications/preference", "PUT", '{"enabled":true}');
+  await request("/api/turn-notifications/device", "POST", payload());
+  signIn("ada", "ada-2");
+  await request(
+    "/api/turn-notifications/device",
+    "POST",
+    payload(0, "https://fcm.googleapis.com/fcm/send/second"),
+  );
+  sqlite.prepare("DELETE FROM session WHERE id = ?").run("ada-1"); // Better Auth sign-out
+  expect(sqlite.prepare("SELECT session_id FROM turnNotificationRegistration").all()).toEqual([
+    { session_id: "ada-2" },
+  ]);
+  expect(
+    sqlite.prepare("SELECT enabled FROM turnNotificationPreference WHERE user_id = ?").get("ada"),
+  ).toEqual({ enabled: 1 });
+});
+
+it("detaches only after a successful identity change, including OAuth callback and sign-up", async () => {
+  await request("/api/turn-notifications/preference", "PUT", '{"enabled":true}');
+  await request("/api/turn-notifications/device", "POST", payload());
+  signIn("ada", "ada-2");
+  await request(
+    "/api/turn-notifications/device",
+    "POST",
+    payload(0, "https://fcm.googleapis.com/fcm/send/second"),
+  );
+  signIn("ada", "ada-1");
+  authHandler.mockResolvedValueOnce(new Response("bad password", { status: 401 }));
+  expect((await request("/api/auth/sign-in/email", "POST", "{}")).status).toBe(401);
+  expect(
+    sqlite.prepare("SELECT count(*) AS count FROM turnNotificationRegistration").get(),
+  ).toEqual({ count: 2 });
+  expect((await request("/api/auth/sign-in/email", "POST", "{}")).status).toBe(200);
+  expect(sqlite.prepare("SELECT session_id FROM turnNotificationRegistration").all()).toEqual([
+    { session_id: "ada-2" },
+  ]);
+  expect(authHandler).toHaveBeenCalledTimes(2);
+  signIn("ada", "ada-2");
+  expect((await request("/api/auth/sign-in/social", "POST", "{}")).status).toBe(200);
+  expect(
+    sqlite.prepare("SELECT count(*) AS count FROM turnNotificationRegistration").get(),
+  ).toEqual({ count: 1 });
+  authHandler.mockResolvedValueOnce(
+    new Response(null, {
+      status: 302,
+      headers: { Location: "https://local.bigtwo.com/?error=cancelled" },
+    }),
+  );
+  await request("/api/auth/callback/google");
+  expect(
+    sqlite.prepare("SELECT count(*) AS count FROM turnNotificationRegistration").get(),
+  ).toEqual({ count: 1 });
+  authHandler.mockResolvedValueOnce(
+    new Response(null, { status: 302, headers: { Location: "https://local.bigtwo.com/" } }),
+  );
+  await request("/api/auth/callback/google");
+  expect(sqlite.prepare("SELECT * FROM turnNotificationRegistration").all()).toEqual([]);
+  await request(
+    "/api/turn-notifications/device",
+    "POST",
+    payload(0, "https://fcm.googleapis.com/fcm/send/second"),
+  );
+  expect((await request("/api/auth/sign-up/email", "POST", "{}")).status).toBe(200);
+  expect(sqlite.prepare("SELECT * FROM turnNotificationRegistration").all()).toEqual([]);
+});
+
+it("marks deletion and clears registrations atomically before room cleanup", async () => {
+  await request("/api/turn-notifications/preference", "PUT", '{"enabled":true}');
+  await request("/api/turn-notifications/device", "POST", payload());
+  await revokeTurnsForDeletion(env.BIG_TWO_DB, "ada");
+  expect(sqlite.prepare("SELECT user_id FROM accountDeletion").all()).toEqual([{ user_id: "ada" }]);
+  expect(sqlite.prepare("SELECT * FROM turnNotificationRegistration").all()).toEqual([]);
+  expect((await request("/api/turn-notifications/device", "POST", payload())).status).toBe(409);
+  await revokeTurnsForDeletion(env.BIG_TWO_DB, "ada"); // retry is safe
+  expect(sqlite.prepare("SELECT user_id FROM accountDeletion").all()).toEqual([{ user_id: "ada" }]);
+});
+
+it("does not start deletion if registration cleanup cannot be committed", async () => {
+  await request("/api/turn-notifications/preference", "PUT", '{"enabled":true}');
+  await request("/api/turn-notifications/device", "POST", payload());
+  sqlite.exec(`CREATE TRIGGER prevent_delete BEFORE DELETE ON turnNotificationRegistration
+    BEGIN SELECT RAISE(ABORT, 'unavailable'); END;`);
+  await expect(revokeTurnsForDeletion(env.BIG_TWO_DB, "ada")).rejects.toThrow();
+  expect(sqlite.prepare("SELECT * FROM accountDeletion").all()).toEqual([]);
+  expect(
+    sqlite.prepare("SELECT count(*) AS count FROM turnNotificationRegistration").get(),
+  ).toEqual({ count: 1 });
 });
 
 it("does not return or log subscription secrets if registration storage fails", async () => {

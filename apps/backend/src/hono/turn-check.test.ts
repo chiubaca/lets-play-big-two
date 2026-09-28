@@ -48,6 +48,7 @@ function env() {
 const ROOM = "ABCDE";
 const TURN = "11111111-1111-4111-8111-111111111111";
 const ENDPOINT = "a".repeat(64);
+const ENROLLMENT = "e".repeat(32);
 const CHECK = `/api/turn-notifications/check?roomId=${ROOM}&turnId=${TURN}&endpointId=${ENDPOINT}`;
 
 beforeEach(() => {
@@ -58,9 +59,15 @@ beforeEach(() => {
   setRoomFocus.mockReset().mockResolvedValue(true);
   sqlite = new Database(":memory:");
   sqlite.exec(`CREATE TABLE accountDeletion(user_id TEXT PRIMARY KEY);
-    CREATE TABLE turnNotificationRegistration(endpoint_id TEXT, user_id TEXT, session_id TEXT, generation INTEGER);
+    CREATE TABLE user(id TEXT PRIMARY KEY);
+    CREATE TABLE session(id TEXT PRIMARY KEY, user_id TEXT, expires_at INTEGER);
+    CREATE TABLE turnNotificationPreference(user_id TEXT, enabled INTEGER, generation INTEGER);
+    CREATE TABLE turnNotificationRegistration(endpoint_id TEXT, endpoint TEXT, p256dh TEXT, auth TEXT, user_id TEXT, session_id TEXT, generation INTEGER, enrollment_id TEXT);
     CREATE TABLE room(id TEXT, status TEXT, expires_at INTEGER);
-    INSERT INTO turnNotificationRegistration VALUES ('${ENDPOINT}', 'ada','ada-session',0);
+    INSERT INTO user VALUES ('ada');
+    INSERT INTO session VALUES ('ada-session', 'ada', 9999999999999);
+    INSERT INTO turnNotificationPreference VALUES ('ada', 1, 0);
+    INSERT INTO turnNotificationRegistration VALUES ('${ENDPOINT}', 'https://fcm.googleapis.com/fcm/send/test', 'key', 'auth', 'ada','ada-session',0,'${ENROLLMENT}');
     INSERT INTO room VALUES ('ABCDE','playing',NULL);`);
 });
 afterEach(() => {
@@ -81,6 +88,7 @@ it("authenticates receipt, returns only a neutral same-origin ticket, and fails 
     endpoint_id: ENDPOINT,
     session_id: "ada-session",
     generation: 0,
+    enrollment_id: ENROLLMENT,
   });
   account = "ben";
   expect(await (await App.request(CHECK, {}, config)).json()).toEqual({ eligible: false });
@@ -93,6 +101,12 @@ it("authenticates receipt, returns only a neutral same-origin ticket, and fails 
   live = true;
   sqlite.prepare("DELETE FROM turnNotificationRegistration").run();
   expect(await (await App.request(CHECK, {}, config)).json()).toEqual({ eligible: false });
+});
+
+it("denies receipt if enrollment is revoked while a ticket is being minted", async () => {
+  verifyTurn.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+  expect(await (await App.request(CHECK, {}, env())).json()).toEqual({ eligible: false });
+  expect(verifyTurn).toHaveBeenCalledTimes(2);
 });
 
 it("resolves an alert's room only for its original account, including after the Turn ends", async () => {
@@ -134,6 +148,36 @@ it("resolves an alert's room only for its original account, including after the 
       await App.request("/api/turn-notifications/return?ticket=//evil.example.com", {}, config)
     ).json(),
   ).toEqual({ allowed: false });
+});
+
+it("denies a previously displayed alert after device removal, re-enrollment, consent reset, expiry or deletion", async () => {
+  const config = env();
+  const { target } = (await (await App.request(CHECK, {}, config)).json()) as { target: string };
+  const tap = () =>
+    App.request(`/api/turn-notifications/return${target.slice("/turn-return".length)}`, {}, config);
+  expect(await (await tap()).json()).toEqual({ allowed: true, target: "/room/ABCDE" });
+
+  sqlite.prepare("DELETE FROM turnNotificationRegistration").run();
+  expect(await (await tap()).json()).toEqual({ allowed: false });
+  sqlite
+    .prepare(
+      "INSERT INTO turnNotificationRegistration VALUES (?, 'https://fcm.googleapis.com/fcm/send/test', 'key', 'auth', 'ada', 'ada-session', 0, ?)",
+    )
+    .run(ENDPOINT, "f".repeat(32));
+  expect(await (await tap()).json()).toEqual({ allowed: false });
+  sqlite.prepare("UPDATE turnNotificationRegistration SET enrollment_id = ?").run(ENROLLMENT);
+
+  sqlite.prepare("UPDATE turnNotificationPreference SET enabled = 0, generation = 1").run();
+  expect(await (await tap()).json()).toEqual({ allowed: false });
+  sqlite.prepare("UPDATE turnNotificationPreference SET enabled = 1").run();
+  expect(await (await tap()).json()).toEqual({ allowed: false });
+
+  sqlite.prepare("UPDATE turnNotificationPreference SET generation = 0").run();
+  sqlite.prepare("UPDATE session SET expires_at = 0").run();
+  expect(await (await tap()).json()).toEqual({ allowed: false });
+  sqlite.prepare("UPDATE session SET expires_at = 9999999999999").run();
+  sqlite.prepare("INSERT INTO accountDeletion VALUES ('ada')").run();
+  expect(await (await tap()).json()).toEqual({ allowed: false });
 });
 
 it("accepts room focus only through an authenticated, origin-checked and seat-checked API", async () => {

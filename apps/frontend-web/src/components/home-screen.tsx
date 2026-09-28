@@ -21,7 +21,7 @@ import { useScrollOverlap } from "~/components/use-scroll-overlap";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { authClient } from "~/libs/auth-client";
+import { signOutAndDetachTurnDevice } from "~/libs/turn-sign-out";
 import { honoClient } from "~/libs/hono-client";
 import "./home-screen.css";
 
@@ -97,7 +97,7 @@ export function HomeScreen({
               variant="ghost"
               size="icon"
               aria-label="Sign out"
-              onClick={() => void authClient.signOut()}
+              onClick={() => void signOutAndDetachTurnDevice()}
             >
               <LogOut />
             </Button>

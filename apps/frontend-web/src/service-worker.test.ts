@@ -10,7 +10,11 @@ const ticket = "a".repeat(50);
 const payload = { roomId: room, turnId: turn, endpointId: "" };
 const script = readFileSync(new URL("../public/service-worker.js", import.meta.url), "utf8");
 
-async function worker(entries = new Map<string, Response>(), subscriptionEndpoint = endpoint) {
+async function worker(
+  entries = new Map<string, Response>(),
+  subscriptionEndpoint = endpoint,
+  onCachePut?: () => void,
+) {
   const hash = await webcrypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(subscriptionEndpoint),
@@ -53,6 +57,7 @@ async function worker(entries = new Map<string, Response>(), subscriptionEndpoin
         match: async (key: string) => entries.get(key),
         put: async (key: string, response: Response) => {
           entries.set(key, response);
+          onCachePut?.();
         },
         delete: async (key: string) => entries.delete(key),
       }),
@@ -120,7 +125,7 @@ it("delivers once to each enrolled install without sharing device receipts", asy
     await install.fire("push", { data: { json: () => notice } });
     await install.fire("push", { data: { json: () => notice } });
     expect(install.showNotification).toHaveBeenCalledTimes(1);
-    expect(install.fetch).toHaveBeenCalledTimes(1);
+    expect(install.fetch).toHaveBeenCalledTimes(2);
   }
 });
 
@@ -136,6 +141,42 @@ it("never displays on malformed payload, missing enrollment, unavailable check, 
     new Response(JSON.stringify({ eligible: true, target: "https://evil.example" })),
   );
   await w.fire("push", { data: { json: () => payload } });
+  expect(w.showNotification).not.toHaveBeenCalled();
+});
+
+it("does not display when a queued receipt is rejected after an account change", async () => {
+  const w = await worker();
+  let finishCheck!: (response: Response) => void;
+  w.fetch.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishCheck = resolve;
+      }),
+  );
+  const pending = w.fire("push", { data: { json: () => payload } });
+  await vi.waitFor(() => expect(w.fetch).toHaveBeenCalledOnce());
+  finishCheck(new Response(JSON.stringify({ eligible: false })));
+  await pending;
+  expect(w.showNotification).not.toHaveBeenCalled();
+});
+
+it("fails closed if revocation races receipt cache I/O after the first check", async () => {
+  let revoked = false;
+  const w = await worker(new Map(), endpoint, () => {
+    revoked = true;
+  });
+  w.fetch.mockImplementation(
+    async () =>
+      new Response(
+        JSON.stringify(
+          revoked
+            ? { eligible: false }
+            : { eligible: true, target: `/turn-return?ticket=${ticket}` },
+        ),
+      ),
+  );
+  await w.fire("push", { data: { json: () => payload } });
+  expect(w.fetch).toHaveBeenCalledTimes(2);
   expect(w.showNotification).not.toHaveBeenCalled();
 });
 

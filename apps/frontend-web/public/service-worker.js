@@ -176,10 +176,16 @@ async function receipt(event) {
     try {
       const cache = await caches.open(TURN_CACHE);
       if (await cache.match(key.href)) return;
-      const target = await checkTurn(payload);
+      let target = await checkTurn(payload);
       if (!target) return; // No WebKit declarative or generic fallback: verification failure shows nothing.
       await cache.put(key.href, new Response("1"));
       try {
+        // Cache I/O can outlive consent, deletion or a session. Recheck just before display.
+        target = await checkTurn(payload);
+        if (!target) {
+          await cache.delete(key.href);
+          return;
+        }
         await self.registration.showNotification("It’s your turn", {
           tag: `${payload.roomId}:${payload.turnId}`,
           data: { ticket: target.searchParams.get("ticket") },

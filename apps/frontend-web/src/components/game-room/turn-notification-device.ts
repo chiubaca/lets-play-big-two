@@ -187,3 +187,22 @@ export const turnNotificationDevice: TurnNotificationDevice = {
     }
   },
 };
+
+export async function forgetTurnNotificationInstall() {
+  saveEndpointId(null);
+  const current = await accessibleSubscription();
+  try {
+    await current?.unsubscribe();
+  } catch {
+    /* The originating session still gates delivery if unsubscribe fails. */
+  }
+  try {
+    const worker = await navigator.serviceWorker.getRegistration("/");
+    const notices = await worker?.getNotifications();
+    for (const notice of notices ?? []) {
+      if (/^[A-Z0-9]{5}:[a-f0-9-]{36}$/.test(notice.tag)) notice.close();
+    }
+  } catch {
+    /* The return gate remains identity-checked even if an old alert stays visible. */
+  }
+}

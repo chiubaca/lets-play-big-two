@@ -37,6 +37,7 @@ export const turnNotificationRegistrationTable = sqliteTable(
     endpoint: text("endpoint").notNull(),
     p256dh: text("p256dh").notNull(),
     auth: text("auth").notNull(),
+    enrollmentId: text("enrollment_id").notNull(),
     userId: text("user_id")
       .notNull()
       .references(() => userTable.id, { onDelete: "cascade" }),

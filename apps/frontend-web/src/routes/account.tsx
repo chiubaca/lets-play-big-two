@@ -7,6 +7,7 @@ import { LegalPage } from "~/components/legal-page";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { authClient } from "~/libs/auth-client";
+import { forgetTurnNotificationInstall } from "~/components/game-room/turn-notification-device";
 import "~/components/home-screen.css";
 
 export const Route = createFileRoute("/account")({
@@ -36,7 +37,10 @@ function AccountPage() {
         );
       }
     },
-    onSuccess: () => void navigate({ to: "/" }),
+    onSuccess: () => {
+      void forgetTurnNotificationInstall();
+      void navigate({ to: "/" });
+    },
   });
 
   return (

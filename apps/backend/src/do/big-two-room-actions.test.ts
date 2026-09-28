@@ -72,7 +72,7 @@ function createRoomHarness() {
         exec: (query: string, ...values: unknown[]) => {
           if (query.startsWith("UPDATE game_room")) writes++;
           if (query.includes("CREATE TABLE")) sqlite.exec(query);
-          else if (query.startsWith("SELECT")) {
+          else if (query.startsWith("SELECT") || query.startsWith("PRAGMA")) {
             return { toArray: () => sqlite.prepare(query).all(...values) };
           } else sqlite.prepare(query).run(...values);
           return { toArray: () => [] };
