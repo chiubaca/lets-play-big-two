@@ -115,11 +115,12 @@ export const turnNotificationDevice: TurnNotificationDevice = {
     if (!response.ok) throw new Error("Could not check this device");
     const { registered, generation } = await response.json();
     return {
-      state: blocked
-        ? "blocked"
-        : Notification.permission === "granted" && current && matchesKey(current) && registered
-          ? "ready"
-          : "not-enabled",
+      state:
+        blocked || (registered && Notification.permission !== "granted")
+          ? "blocked"
+          : Notification.permission === "granted" && current && matchesKey(current) && registered
+            ? "ready"
+            : "not-enabled",
       generation,
       removable: Boolean(registered),
     };
@@ -137,7 +138,14 @@ export const turnNotificationDevice: TurnNotificationDevice = {
     if (!worker) throw new Error("Service worker unavailable");
     const applicationServerKey = vapidKey();
     const sameKey = current && matchesKey(current);
-    if (current && !sameKey) await current.unsubscribe();
+    if (current && !sameKey) {
+      // Retire the old registration before replacing the browser subscription, even if replacement fails.
+      const removed = await honoClient.api["turn-notifications"].device.$delete({
+        json: { endpointId: await hash(current.endpoint) },
+      });
+      if (!removed.ok) throw new Error("Could not retire the previous subscription");
+      await current.unsubscribe();
+    }
     const sub =
       current && sameKey
         ? current
@@ -154,13 +162,6 @@ export const turnNotificationDevice: TurnNotificationDevice = {
     });
     if (!response.ok) throw new Error("Could not register this device");
     saveEndpointId(await hash(sub.endpoint));
-    if (current && !sameKey && current.endpoint !== sub.endpoint) {
-      // Rotating a subscription must not leave the previous endpoint enrolled.
-      const removed = await honoClient.api["turn-notifications"].device.$delete({
-        json: { endpointId: await hash(current.endpoint) },
-      });
-      if (!removed.ok) throw new Error("Could not retire the previous subscription");
-    }
   },
   async remove() {
     const current = await accessibleSubscription();

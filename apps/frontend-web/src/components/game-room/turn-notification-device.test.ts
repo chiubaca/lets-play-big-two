@@ -102,7 +102,7 @@ it("does not subscribe after permission denial and does not report revoked permi
   expect(subscribe).not.toHaveBeenCalled();
   expect(post).not.toHaveBeenCalled();
   get.mockResolvedValue({ ok: true, json: async () => ({ registered: true, generation: 2 }) });
-  expect(await turnNotificationDevice.inspect()).toMatchObject({ state: "not-enabled" });
+  expect(await turnNotificationDevice.inspect()).toMatchObject({ state: "blocked" });
 });
 
 it("requires server confirmation even after permission and subscription", async () => {
@@ -160,6 +160,31 @@ it("does not call a stale-key subscription Ready", async () => {
   } as unknown as PushSubscription;
   get.mockResolvedValue({ ok: true, json: async () => ({ registered: true, generation: 2 }) });
   expect(await turnNotificationDevice.inspect()).toMatchObject({ state: "not-enabled" });
+});
+
+it("retires an old-key registration before a replacement subscription attempt", async () => {
+  vi.stubGlobal("Notification", { permission: "granted", requestPermission });
+  const unsubscribe = vi.fn().mockResolvedValue(true);
+  oldSubscription.current = {
+    endpoint: "https://fcm.googleapis.com/fcm/send/old",
+    options: { applicationServerKey: Buffer.alloc(65, 9).buffer },
+    unsubscribe,
+  } as unknown as PushSubscription;
+  subscribe.mockRejectedValueOnce(new Error("Could not subscribe"));
+  await expect(turnNotificationDevice.enable(2)).rejects.toThrow("Could not subscribe");
+  expect(remove).toHaveBeenCalledOnce();
+  expect(unsubscribe).toHaveBeenCalledOnce();
+  expect(post).not.toHaveBeenCalled();
+});
+
+it("treats reset permission on a registered install as Blocked without prompting", async () => {
+  localStorage.setItem("big-two-turn-device-id", "a".repeat(64));
+  get.mockResolvedValue({ ok: true, json: async () => ({ registered: true, generation: 1 }) });
+  expect(await turnNotificationDevice.inspect()).toMatchObject({
+    state: "blocked",
+    removable: true,
+  });
+  expect(requestPermission).not.toHaveBeenCalled();
 });
 
 it("keeps ordinary iOS tabs and unverified WebKit surfaces unavailable", async () => {

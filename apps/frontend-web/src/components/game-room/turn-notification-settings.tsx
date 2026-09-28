@@ -103,7 +103,10 @@ export function TurnNotificationSettings({
   }, [enabled, preference]);
 
   useEffect(() => {
-    if (returnFocusToSwitch.current && deviceState === "blocked" && !removable) {
+    if (
+      returnFocusToSwitch.current &&
+      (deviceState === "unavailable" || (deviceState === "blocked" && !removable))
+    ) {
       accountSwitch.current?.focus();
       returnFocusToSwitch.current = false;
     }
@@ -119,6 +122,8 @@ export function TurnNotificationSettings({
         const state = await preference.device.inspect();
         setDeviceState(state.state);
         setRemovable(state.removable ?? false);
+        if (state.state === "unavailable" || (state.state === "blocked" && !state.removable))
+          returnFocusToSwitch.current = true;
         setDeviceReason(state.reason ?? "");
         setGeneration(state.generation);
         setDeviceError(false);
@@ -143,14 +148,17 @@ export function TurnNotificationSettings({
       const state = await preference.device.inspect();
       setDeviceState(state.state);
       setRemovable(state.removable ?? false);
-      if (state.state === "blocked" && !state.removable) returnFocusToSwitch.current = true;
+      if (state.state === "unavailable" || (state.state === "blocked" && !state.removable))
+        returnFocusToSwitch.current = true;
       setDeviceReason(state.reason ?? "");
       setGeneration(state.generation);
       setDeviceError(false);
       setRetryInspection(false);
       setMessage(
-        action === "enable" && state.state === "ready"
-          ? "This device is Ready. Delivery is not guaranteed."
+        action === "enable"
+          ? state.state === "ready"
+            ? "This device is Ready. Delivery is not guaranteed."
+            : "Device setup could not be confirmed."
           : "This device was removed. Your account preference is unchanged.",
       );
     } catch {

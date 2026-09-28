@@ -351,6 +351,34 @@ it("announces an explicit permission denial and moves focus from the removed set
   );
 });
 
+it("returns focus to the account switch if a device retry discovers Unavailable", async () => {
+  const device = {
+    inspect: vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Offline"))
+      .mockResolvedValueOnce({ state: "unavailable", generation: 0, reason: "Unsupported here" }),
+    enable: vi.fn(),
+    remove: vi.fn(),
+  };
+  render(
+    <GameRoom
+      gameState={gameState}
+      send={() => {}}
+      tableLabel="Room ABCDE"
+      roomCode="ABCDE"
+      user={{ id: "solo-player", name: "You" }}
+      turnNotifications={{ load: async () => true, save: vi.fn(), device }}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Retry device setup" }));
+  await screen.findByText("Unavailable on this device");
+  expect(document.activeElement).toBe(
+    screen.getByRole("switch", { name: "Turn notifications for my account" }),
+  );
+  expect(device.enable).not.toHaveBeenCalled();
+});
+
 it("allows an explicit retry after a failed registration and announces the failure", async () => {
   const device = {
     inspect: vi

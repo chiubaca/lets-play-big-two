@@ -272,10 +272,12 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
       WHERE p.user_id = ? AND s.id = ? AND s.expires_at > ? AND p.enabled = 1 AND p.generation = ?
         AND NOT EXISTS (SELECT 1 FROM accountDeletion d WHERE d.user_id = p.user_id)
       ON CONFLICT(endpoint_id) DO UPDATE SET
-        p256dh = excluded.p256dh, auth = excluded.auth
+        p256dh = excluded.p256dh, auth = excluded.auth,
+        session_id = excluded.session_id, generation = excluded.generation
       WHERE turnNotificationRegistration.user_id = excluded.user_id
-        AND turnNotificationRegistration.session_id = excluded.session_id
-        AND turnNotificationRegistration.generation = excluded.generation
+        AND ((turnNotificationRegistration.session_id = excluded.session_id
+          AND turnNotificationRegistration.generation = excluded.generation)
+          OR NOT EXISTS (SELECT 1 FROM session prior WHERE prior.id = turnNotificationRegistration.session_id AND prior.expires_at > ?))
       RETURNING endpoint_id`)
         .bind(
           id,
@@ -286,6 +288,7 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
           session.session.id,
           Date.now(),
           generation,
+          Date.now(),
         )
         .first();
     } catch {

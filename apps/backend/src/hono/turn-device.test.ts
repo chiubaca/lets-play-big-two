@@ -214,6 +214,24 @@ it("rolls back consent-off if its registration cleanup fails", async () => {
   ).toEqual({ count: 1 });
 });
 
+it("allows an explicit re-enrollment for the same account after the originating session expires", async () => {
+  await request("/api/turn-notifications/preference", "PUT", '{"enabled":true}');
+  await request("/api/turn-notifications/device", "POST", payload());
+  sqlite.prepare("UPDATE session SET expires_at = 0 WHERE id = ?").run("ada-1");
+  signIn("ada", "ada-2");
+  expect((await request("/api/turn-notifications/device", "POST", payload())).status).toBe(200);
+  expect(
+    sqlite
+      .prepare(
+        "SELECT session_id AS sessionId FROM turnNotificationRegistration WHERE endpoint_id = ?",
+      )
+      .get(await deviceId()),
+  ).toEqual({ sessionId: "ada-2" });
+  expect(
+    await (await request(`/api/turn-notifications/device?endpointId=${await deviceId()}`)).json(),
+  ).toEqual({ generation: 0, registered: true });
+});
+
 it("does not return or log subscription secrets if registration storage fails", async () => {
   await request("/api/turn-notifications/preference", "PUT", '{"enabled":true}');
   const secret = Buffer.alloc(16, 2).toString("base64url");
