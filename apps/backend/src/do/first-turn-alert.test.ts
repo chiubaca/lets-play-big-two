@@ -1,8 +1,22 @@
 import Database from "better-sqlite3";
+import { createHash } from "node:crypto";
 import { createActor } from "xstate";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 import { bigTwoGameMachine, type BigTwoGameMachineSnapshot } from "@big-two/game-state-machine";
 import { BigTwoRoomObject } from "./big-two-room-do";
+import { App } from "../hono/app";
+
+let checkingAccount: string | null = null;
+vi.mock("../lib/auth", () => ({
+  auth: {
+    api: {
+      getSession: async () =>
+        checkingAccount
+          ? { user: { id: checkingAccount }, session: { id: `${checkingAccount}-session` } }
+          : null,
+    },
+  },
+}));
 
 vi.mock("cloudflare:workers", () => ({
   DurableObject: class {
@@ -128,6 +142,9 @@ function room(playerCount = 2) {
     recoverAlarm: () => {
       failAlarm = false;
     },
+    clearAlarm: () => {
+      alarm = null;
+    },
     failEnrollmentRead: () => {
       failEnrollmentRead = true;
     },
@@ -135,7 +152,28 @@ function room(playerCount = 2) {
   };
 }
 
+async function enablePush(r: ReturnType<typeof room>) {
+  const signing = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+    "sign",
+    "verify",
+  ]);
+  r.env.VAPID_PRIVATE_KEY = (await crypto.subtle.exportKey("jwk", signing.privateKey)).d!;
+  r.env.VAPID_PUBLIC_KEY = Buffer.from(
+    await crypto.subtle.exportKey("raw", signing.publicKey),
+  ).toString("base64url");
+  const receiving = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, [
+    "deriveBits",
+  ]);
+  r.accounts
+    .prepare("UPDATE turnNotificationRegistration SET p256dh = ?, auth = ?")
+    .run(
+      Buffer.from(await crypto.subtle.exportKey("raw", receiving.publicKey)).toString("base64url"),
+      Buffer.alloc(16, 8).toString("base64url"),
+    );
+}
+
 afterEach(() => {
+  checkingAccount = null;
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -598,24 +636,7 @@ it("sends encrypted backend-only Web Push at most once after provider acceptance
   const r = room();
   r.enroll("ada");
   r.enroll("ben");
-  const signing = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
-    "sign",
-    "verify",
-  ]);
-  const privateKey = await crypto.subtle.exportKey("jwk", signing.privateKey);
-  r.env.VAPID_PRIVATE_KEY = privateKey.d!;
-  r.env.VAPID_PUBLIC_KEY = Buffer.from(
-    await crypto.subtle.exportKey("raw", signing.publicKey),
-  ).toString("base64url");
-  const receiving = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, [
-    "deriveBits",
-  ]);
-  r.accounts
-    .prepare("UPDATE turnNotificationRegistration SET p256dh = ?, auth = ?")
-    .run(
-      Buffer.from(await crypto.subtle.exportKey("raw", receiving.publicKey)).toString("base64url"),
-      Buffer.alloc(16, 8).toString("base64url"),
-    );
+  await enablePush(r);
   await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
   const push = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 201 }));
   const draining = r.reload();
@@ -624,6 +645,253 @@ it("sends encrypted backend-only Web Push at most once after provider acceptance
   const [, init] = push.mock.calls[0];
   expect(JSON.stringify(init)).not.toContain("It’s your turn");
   expect(r.outbox()).toMatchObject([{ status: "sent" }]);
+  await r.reload().alarm();
+  expect(push).toHaveBeenCalledTimes(1);
+});
+
+it("tracks two installs independently across provider failure, alarm repair, and reload", async () => {
+  const r = room();
+  for (const user of ["ada", "ben"]) {
+    for (const install of ["first", "second"]) {
+      const endpoint = `https://fcm.googleapis.com/fcm/send/${user}-${install}`;
+      const endpointId = createHash("sha256").update(endpoint).digest("hex");
+      r.accounts
+        .prepare("INSERT INTO turnNotificationRegistration VALUES (?, ?, ?, ?, ?, ?, 0)")
+        .run(endpointId, endpoint, "key", "auth", user, `${user}-session`);
+    }
+  }
+  await enablePush(r);
+  expect(await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE")).toEqual({
+    success: true,
+  });
+  expect(r.outbox()).toHaveLength(2);
+  const push = vi
+    .spyOn(globalThis, "fetch")
+    .mockResolvedValueOnce(new Response(null, { status: 201 }))
+    .mockResolvedValueOnce(new Response(null, { status: 503 }))
+    .mockResolvedValue(new Response(null, { status: 201 }));
+  await r.reload().alarm();
+  expect(r.outbox()).toMatchObject([
+    { status: "sent" },
+    { status: "pending", attempts: 1, next_at: NOW + 15_000 },
+  ]);
+  r.clearAlarm();
+  await r.reload().repairTurn("ABCDE");
+  expect(r.alarm()).toBe(NOW + 15_000);
+  vi.setSystemTime(NOW + 15_000);
+  await r.reload().alarm();
+  await r.reload().alarm();
+  expect(push).toHaveBeenCalledTimes(3);
+  expect(r.outbox()).toMatchObject([{ status: "sent" }, { status: "sent" }]);
+});
+
+it("authenticates a worker check against the persisted per-install Turn intent", async () => {
+  const r = room();
+  r.enroll("ada");
+  r.enroll("ben");
+  r.env.VAPID_PRIVATE_KEY = "ticket-signing-secret";
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  const turn = r.firstTurn()!;
+  const [{ endpoint_id: endpointId }] = r.outbox() as { endpoint_id: string }[];
+  r.env.BIG_TWO_ROOM_DURABLE_OBJECT = {
+    getByName: () => r.reload(),
+  } as unknown as Env["BIG_TWO_ROOM_DURABLE_OBJECT"];
+  const check = () =>
+    App.request(
+      `/api/turn-notifications/check?roomId=ABCDE&turnId=${turn.id}&endpointId=${endpointId}`,
+      {},
+      r.env,
+    );
+  checkingAccount = turn.recipient_id;
+  expect(await (await check()).json()).toMatchObject({ eligible: true });
+  checkingAccount = turn.recipient_id === "ada" ? "ben" : "ada";
+  expect(await (await check()).json()).toEqual({ eligible: false });
+  checkingAccount = turn.recipient_id;
+  r.accounts
+    .prepare("UPDATE turnNotificationPreference SET enabled = 0 WHERE user_id = ?")
+    .run(checkingAccount);
+  expect(await (await check()).json()).toEqual({ eligible: false });
+  r.accounts
+    .prepare("UPDATE turnNotificationPreference SET enabled = 1 WHERE user_id = ?")
+    .run(checkingAccount);
+  vi.setSystemTime(NOW + 5 * 60_000);
+  expect(await (await check()).json()).toEqual({ eligible: false });
+});
+
+it("retires invalid endpoints without retrying and bounds unavailable-provider retries before deadline", async () => {
+  const r = room();
+  r.enroll("ada");
+  r.enroll("ben");
+  await enablePush(r);
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  const push = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 410 }));
+  await r.reload().alarm();
+  expect(r.outbox()).toHaveLength(0);
+  expect(
+    r.accounts
+      .prepare("SELECT * FROM turnNotificationRegistration WHERE user_id = ?")
+      .all(r.firstTurn()!.recipient_id),
+  ).toHaveLength(0);
+  await r.reload().alarm();
+  expect(push).toHaveBeenCalledTimes(1);
+
+  const s = room();
+  s.enroll("ada");
+  s.enroll("ben");
+  await s.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  expect(s.outbox()).toHaveLength(1);
+  // Missing VAPID keys are a transient service outage; retries are still bounded.
+  for (const time of [NOW, NOW + 15_000, NOW + 45_000]) {
+    vi.setSystemTime(time);
+    await s.reload().alarm();
+  }
+  expect(s.outbox()).toHaveLength(0);
+});
+
+it("drains at most four installs per alarm and retires permanent provider failures", async () => {
+  const r = room();
+  r.enroll("ada");
+  r.enroll("ben");
+  for (const [user, ids] of [
+    ["ada", "cdefg"],
+    ["ben", "hijkl"],
+  ] as const) {
+    for (const id of ids) {
+      r.accounts
+        .prepare("INSERT INTO turnNotificationRegistration VALUES (?, ?, ?, ?, ?, ?, 0)")
+        .run(
+          id.repeat(64),
+          `https://fcm.googleapis.com/fcm/send/${id}`,
+          "key",
+          "auth",
+          user,
+          `${user}-session`,
+        );
+    }
+  }
+  await enablePush(r);
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  const count = r.outbox().length;
+  expect(count).toBe(6);
+  const push = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 400 }));
+  await r.reload().alarm();
+  expect(push).toHaveBeenCalledTimes(Math.min(4, count));
+  expect(r.outbox()).toHaveLength(Math.max(0, count - 4));
+  await r.reload().alarm();
+  expect(push).toHaveBeenCalledTimes(count);
+  expect(r.outbox()).toHaveLength(0);
+  expect(
+    r.accounts.prepare("SELECT count(*) AS count FROM turnNotificationRegistration").get(),
+  ).toMatchObject({ count: 12 }); // 400 is permanent for this Turn, not a dead subscription.
+});
+
+it("bounds retries for provider network failures while preserving an accepted action", async () => {
+  const r = room();
+  r.enroll("ada");
+  r.enroll("ben");
+  await enablePush(r);
+  expect(await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE")).toEqual({
+    success: true,
+  });
+  const push = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("provider offline"));
+  for (const time of [NOW, NOW + 15_000, NOW + 45_000]) {
+    vi.setSystemTime(time);
+    await r.reload().alarm();
+  }
+  expect(push).toHaveBeenCalledTimes(3);
+  expect(r.outbox()).toHaveLength(0);
+});
+
+it("does not retry a provider failure after the Turn ends", async () => {
+  const r = room();
+  r.enroll("ada");
+  r.enroll("ben");
+  await enablePush(r);
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  const push = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 503 }));
+  await r.reload().alarm();
+  expect(r.outbox()).toMatchObject([{ attempts: 1, status: "pending" }]);
+  expect(await r.reload().gameAction({ type: "RESET_GAME" }, "ada", "ABCDE")).toEqual({
+    success: true,
+  });
+  vi.setSystemTime(NOW + 15_000);
+  await r.reload().alarm();
+  expect(push).toHaveBeenCalledTimes(1);
+  expect(r.outbox()).toHaveLength(0);
+});
+
+it("serializes redaction with an in-flight alarm so it cannot retire a Turn before a send", async () => {
+  const r = room();
+  r.enroll("ada");
+  r.enroll("ben");
+  await enablePush(r);
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  const turn = r.firstTurn()!;
+  let finishSend!: (response: Response) => void;
+  const push = vi.spyOn(globalThis, "fetch").mockImplementation(
+    () =>
+      new Promise<Response>((resolve) => {
+        finishSend = resolve;
+      }),
+  );
+  const draining = r.object.alarm();
+  await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
+  const redacting = r.object.redactPlayer(turn.recipient_id);
+  expect(r.firstTurn()).toEqual(turn);
+  finishSend(new Response(null, { status: 201 }));
+  await draining;
+  await redacting;
+  expect(r.firstTurn()).toBeUndefined();
+  expect(r.outbox()).toHaveLength(0);
+  await r.object.alarm();
+  expect(push).toHaveBeenCalledTimes(1);
+});
+
+it("never schedules or sends a retry beyond the original Turn deadline", async () => {
+  const r = room();
+  r.enroll("ada");
+  r.enroll("ben");
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  const deadline = NOW + 5 * 60_000;
+  vi.setSystemTime(deadline - 1000);
+  await r.reload().alarm(); // unavailable provider, next retry would be after deadline
+  expect(r.outbox()).toHaveLength(0);
+  r.clearAlarm();
+  await r.reload().repairTurn("ABCDE");
+  expect(r.alarm()).toBeNull();
+  vi.setSystemTime(deadline);
+  await r.reload().alarm();
+  expect(r.outbox()).toHaveLength(0);
+});
+
+it("bounds a delayed provider request to the remaining Turn lifetime", async () => {
+  const r = room();
+  r.enroll("ada");
+  r.enroll("ben");
+  await enablePush(r);
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  const deadline = NOW + 5 * 60_000;
+  vi.setSystemTime(deadline - 750);
+  const timeout = vi.spyOn(AbortSignal, "timeout");
+  let finishSend!: (response: Response) => void;
+  const push = vi.spyOn(globalThis, "fetch").mockImplementation(
+    () =>
+      new Promise<Response>((resolve) => {
+        finishSend = resolve;
+      }),
+  );
+  const draining = r.reload().alarm();
+  await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
+  expect(push).toHaveBeenCalledTimes(1);
+  const timeoutMs = timeout.mock.calls[0][0];
+  expect(timeoutMs).toBeGreaterThan(0);
+  expect(timeoutMs).toBeLessThanOrEqual(750);
+  expect((push.mock.calls[0][1] as RequestInit).signal).toBeInstanceOf(AbortSignal);
+  expect(new Headers(push.mock.calls[0][1]?.headers).get("TTL")).toBe("0");
+  vi.setSystemTime(deadline);
+  finishSend(new Response(null, { status: 503 }));
+  await draining;
+  expect(r.outbox()).toHaveLength(0);
   await r.reload().alarm();
   expect(push).toHaveBeenCalledTimes(1);
 });

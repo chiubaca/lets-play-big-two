@@ -53,12 +53,12 @@ export async function sendTurnPush(
   notice: { roomId: string; turnId: string; endpointId: string },
   deadline: number,
 ): Promise<"sent" | "retired" | "retry"> {
+  if (Date.now() >= deadline) return "retired";
   if (!env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY || !env.VAPID_SUBJECT) return "retry";
   // Endpoint is stored only after allowlist validation at enrollment. Never accept a URL from a push.
   const payload = await buildPushPayload(
     {
       data: JSON.stringify(notice),
-      options: { ttl: Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) },
     },
     {
       endpoint: registration.endpoint,
@@ -71,9 +71,16 @@ export async function sendTurnPush(
       privateKey: env.VAPID_PRIVATE_KEY,
     },
   );
+  if (Date.now() >= deadline) return "retired";
   const response = await fetch(registration.endpoint, {
     ...payload,
-    signal: AbortSignal.timeout(5000),
+    // buildPushPayload substitutes 60 seconds for ttl: 0; use the actual remaining
+    // lifetime after encryption and round down to avoid provider queuing past expiry.
+    headers: {
+      ...payload.headers,
+      ttl: String(Math.max(0, Math.floor((deadline - Date.now()) / 1000))),
+    },
+    signal: AbortSignal.timeout(Math.min(5000, Math.max(1, deadline - Date.now()))),
   });
   if (response.ok) return "sent";
   if (response.status === 404 || response.status === 410) {
@@ -84,5 +91,7 @@ export async function sendTurnPush(
       .run();
     return "retired";
   }
-  return response.status === 429 || response.status >= 500 ? "retry" : "retired";
+  return response.status === 408 || response.status === 429 || response.status >= 500
+    ? "retry"
+    : "retired";
 }

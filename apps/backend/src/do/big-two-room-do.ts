@@ -361,8 +361,15 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     if (!turn) return;
     if (turn.deadline <= Date.now()) {
       this.sql.exec("DELETE FROM turn_delivery WHERE turn_id = ?", turn.id);
+      this.sql.exec("DELETE FROM first_turn WHERE id = ?", turn.id);
       return;
     }
+    // A retry that cannot begin before expiry is not useful, even if its alarm was lost.
+    this.sql.exec(
+      "DELETE FROM turn_delivery WHERE turn_id = ? AND status = 'pending' AND next_at >= ?",
+      turn.id,
+      turn.deadline,
+    );
     const due = this.sql
       .exec<{ next_at: number }>(
         "SELECT next_at FROM turn_delivery WHERE turn_id = ? AND status = 'pending' ORDER BY next_at LIMIT 1",
@@ -383,6 +390,10 @@ export class BigTwoRoomObject extends DurableObject<Env> {
   private async drainTurn(): Promise<void> {
     const turn = this.sql.exec<OngoingTurn>("SELECT * FROM first_turn LIMIT 1").toArray()[0];
     if (!turn) return;
+    if (turn.deadline <= Date.now()) {
+      await this.repairTurn(turn.room_id);
+      return;
+    }
     const due = this.sql
       .exec<Delivery>(
         "SELECT * FROM turn_delivery WHERE turn_id = ? AND status = 'pending' AND next_at <= ? ORDER BY next_at LIMIT 4",
@@ -416,13 +427,18 @@ export class BigTwoRoomObject extends DurableObject<Env> {
       } catch {
         // Do not log subscription secrets or provider bodies. Bounded retry handles temporary outages.
       }
+      const nextAttemptAt = Date.now() + 15_000 * (delivery.attempts + 1);
       if (outcome === "sent") {
         this.sql.exec(
           "UPDATE turn_delivery SET status = 'sent' WHERE turn_id = ? AND endpoint_id = ?",
           turn.id,
           delivery.endpoint_id,
         );
-      } else if (outcome === "retired" || delivery.attempts >= 2 || Date.now() >= turn.deadline) {
+      } else if (
+        outcome === "retired" ||
+        delivery.attempts >= 2 ||
+        nextAttemptAt >= turn.deadline
+      ) {
         this.sql.exec(
           "DELETE FROM turn_delivery WHERE turn_id = ? AND endpoint_id = ?",
           turn.id,
@@ -431,7 +447,7 @@ export class BigTwoRoomObject extends DurableObject<Env> {
       } else {
         this.sql.exec(
           "UPDATE turn_delivery SET attempts = attempts + 1, next_at = ? WHERE turn_id = ? AND endpoint_id = ?",
-          Date.now() + 15_000 * (delivery.attempts + 1),
+          nextAttemptAt,
           turn.id,
           delivery.endpoint_id,
         );
@@ -693,7 +709,11 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     );
   }
 
-  async redactPlayer(playerId: string) {
+  async redactPlayer(playerId: string): Promise<void> {
+    return this.serial(() => this.commitRedaction(playerId));
+  }
+
+  private async commitRedaction(playerId: string): Promise<void> {
     const query = this.sql.exec(`SELECT game_state FROM game_room WHERE id = 1`);
     const record = query.toArray()[0];
     if (!record) return;

@@ -10,11 +10,14 @@ const ticket = "a".repeat(50);
 const payload = { roomId: room, turnId: turn, endpointId: "" };
 const script = readFileSync(new URL("../public/service-worker.js", import.meta.url), "utf8");
 
-async function worker() {
-  const hash = await webcrypto.subtle.digest("SHA-256", new TextEncoder().encode(endpoint));
-  payload.endpointId = Buffer.from(hash).toString("hex");
+async function worker(entries = new Map<string, Response>(), subscriptionEndpoint = endpoint) {
+  const hash = await webcrypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(subscriptionEndpoint),
+  );
+  const endpointId = Buffer.from(hash).toString("hex");
+  payload.endpointId = endpointId;
   const listeners = new Map<string, (event: unknown) => void>();
-  const entries = new Map<string, Response>();
   const showNotification = vi.fn(async () => {});
   const openWindow = vi.fn(async () => {});
   const fetch = vi.fn(
@@ -30,7 +33,7 @@ async function worker() {
   const self = {
     location: { origin: "https://big-two.chiubaca.com" },
     registration: {
-      pushManager: { getSubscription: async () => ({ endpoint }) },
+      pushManager: { getSubscription: async () => ({ endpoint: subscriptionEndpoint }) },
       showNotification,
     },
     clients,
@@ -65,7 +68,7 @@ async function worker() {
     });
     await work;
   }
-  return { fire, showNotification, openWindow, fetch, clients: self.clients };
+  return { fire, showNotification, openWindow, fetch, clients: self.clients, endpointId };
 }
 
 it("shows only generic text after a non-cached authenticated check, once per Turn, without replacing another room", async () => {
@@ -86,6 +89,39 @@ it("shows only generic text after a non-cached authenticated check, once per Tur
     tag: `FGHIJ:${turn}`,
     data: { ticket },
   });
+});
+
+it("persists per-room/per-Turn receipts across worker reloads and ignores duplicates without another check", async () => {
+  const entries = new Map<string, Response>();
+  const first = await worker(entries);
+  await first.fire("push", { data: { json: () => payload } });
+  const reloaded = await worker(entries);
+  await reloaded.fire("push", { data: { json: () => payload } });
+  expect(reloaded.fetch).not.toHaveBeenCalled();
+  expect(reloaded.showNotification).not.toHaveBeenCalled();
+  const nextTurn = "22222222-2222-4222-8222-222222222222";
+  await reloaded.fire("push", { data: { json: () => ({ ...payload, turnId: nextTurn }) } });
+  await reloaded.fire("push", { data: { json: () => ({ ...payload, roomId: "FGHIJ" }) } });
+  expect(reloaded.showNotification).toHaveBeenNthCalledWith(1, "It’s your turn", {
+    tag: `${room}:${nextTurn}`,
+    data: { ticket },
+  });
+  expect(reloaded.showNotification).toHaveBeenNthCalledWith(2, "It’s your turn", {
+    tag: `FGHIJ:${turn}`,
+    data: { ticket },
+  });
+});
+
+it("delivers once to each enrolled install without sharing device receipts", async () => {
+  const first = await worker();
+  const second = await worker(new Map(), "https://fcm.googleapis.com/fcm/send/second");
+  for (const install of [first, second]) {
+    const notice = { ...payload, endpointId: install.endpointId };
+    await install.fire("push", { data: { json: () => notice } });
+    await install.fire("push", { data: { json: () => notice } });
+    expect(install.showNotification).toHaveBeenCalledTimes(1);
+    expect(install.fetch).toHaveBeenCalledTimes(1);
+  }
 });
 
 it("never displays on malformed payload, missing enrollment, unavailable check, or stale account", async () => {
