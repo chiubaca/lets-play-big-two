@@ -7,7 +7,7 @@ at <https://big-two.chiubaca.com>.
 
 - Play package: `com.chiubaca.bigtwocrew`
 - App name: `Big Two Crew`
-- Version: `1.0.0` (`versionCode` 1)
+- Version: `1.0.1` (`versionCode` 2; not yet uploaded to Play)
 - Minimum Android version: Android 6 / API 23
 - Target Android version: Android 16 / API 36
 
@@ -80,6 +80,58 @@ Outputs (ignored by Git):
 
 For every update, increase both `appVersion` and `appVersionCode` in `twa-manifest.json`, regenerate,
 and build with the same upload key.
+
+## Turn notification delegation
+
+`twa-manifest.json` has `enableNotifications: true`. Bubblewrap generates an exported/enabled
+`DelegationService`, the `POST_NOTIFICATIONS` permission and
+`NotificationPermissionRequestActivity` for Android 13+. The native permission request is triggered
+by the site's explicit **Enable on this device** action through `Notification.requestPermission()`;
+account consent alone does not prompt. Keep the generated notification icons and regenerate after
+configuration changes rather than editing the generated manifest alone.
+
+**Release manifest inspected after regeneration (2026-09-29):**
+`./gradlew :app:assembleRelease --offline` succeeded with the Bubblewrap JDK 17 and SDK. In
+`app/build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml`,
+the release has `targetSdkVersion="36"`, `android.permission.POST_NOTIFICATIONS`, the
+`com.chiubaca.bigtwocrew.DelegationService` with the
+`TRUSTED_WEB_ACTIVITY_SERVICE` action and `android:enabled`/`android:exported` pointing to
+`@bool/enableNotification`, and `NotificationPermissionRequestActivity`. In
+`app/build/generated/res/resValues/release/values/gradleResValues.xml`,
+`enableNotification` is `true`. The merged launcher also has an HTTPS `VIEW` intent with
+`android:autoVerify="true"` for `@string/hostName` (`big-two.chiubaca.com`). These generated
+build outputs are ignored by Git: inspect them again after each regeneration and release build.
+
+If running Gradle directly rather than through Bubblewrap, set `JAVA_HOME` to its managed JDK 17
+and `ANDROID_HOME` to its managed Android SDK (see `~/.bubblewrap/config.json`). A successful
+build/manifest inspection is **not** proof of device delegation, verified links, or delivery.
+
+### Device follow-up (not yet verified)
+
+On an Android 13+ physical device with a compatible browser and the deployed VAPID key/API:
+
+1. Sideload the **newly built** upload-key-signed APK (not an older disabled-delegation APK).
+   Confirm the app opens without a Custom Tab toolbar. Check
+   `adb shell pm get-app-links com.chiubaca.bigtwocrew` for the verified production domain and the live
+   `https://big-two.chiubaca.com/.well-known/assetlinks.json` for the upload fingerprint.
+2. Sign in, turn on account-wide Turn notifications, then tap **Enable on this device**. On
+   Android 13+, grant the OS notification prompt; verify **Ready on this device** only after the
+   browser subscription and server registration succeed. Deny/revoke notification permission and
+   confirm **Blocked** (or **Unavailable** when Web Push is unsupported), not Ready. Check Android
+   app notification settings and the browser's site permission if the prompt does not appear.
+3. Install the **new** bundle from the Play internal track (not the existing `1.0.0` test build),
+   repeat the verified-link and enrollment checks, and confirm which Play signing certificate
+   signed the installed APK. The Play fingerprint must be in the live asset links response.
+4. Later, test actual first-Turn delivery while away, including notification attribution and
+   safe return behavior, on both sideloaded and Play-installed variants. Record outcomes before
+   claiming device delivery works. This physical-device delivery test is follow-up work, not a
+   prerequisite for browser enrollment or the web release.
+
+The shared card's **Ready** means capability, permission, browser subscription and server
+registration were confirmed; it explicitly does not promise OS delivery. A non-delegated build,
+failed app-link verification (Custom Tab fallback), or revoked native permission must not be
+treated as a verified Android notification installation. Do not infer these native conditions
+from a web-only Ready state; check the actual installed variant during device follow-up.
 
 ## Play App Signing certificates
 

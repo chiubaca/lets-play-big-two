@@ -182,6 +182,22 @@ it("does not call a stale-key subscription Ready", async () => {
   expect(await turnNotificationDevice.inspect()).toMatchObject({ state: "not-enabled" });
 });
 
+it("reports Ready only when permission, matching subscription and server registration all hold", async () => {
+  vi.stubGlobal("Notification", { permission: "granted", requestPermission });
+  const endpoint = "https://fcm.googleapis.com/fcm/send/device-token";
+  oldSubscription.current = {
+    endpoint,
+    options: { applicationServerKey: Uint8Array.from(Buffer.alloc(65, 4)).buffer },
+  } as PushSubscription;
+  get.mockResolvedValue({ ok: true, json: async () => ({ registered: true, generation: 2 }) });
+  expect(await turnNotificationDevice.inspect()).toMatchObject({ state: "ready", generation: 2 });
+
+  get.mockResolvedValue({ ok: true, json: async () => ({ registered: false, generation: 2 }) });
+  expect(await turnNotificationDevice.inspect()).toMatchObject({ state: "not-enabled" });
+  get.mockRejectedValue(new Error("Registration check failed"));
+  await expect(turnNotificationDevice.inspect()).rejects.toThrow();
+});
+
 it("retires an old-key registration before a replacement subscription attempt", async () => {
   vi.stubGlobal("Notification", { permission: "granted", requestPermission });
   const unsubscribe = vi.fn().mockResolvedValue(true);
@@ -226,6 +242,20 @@ it("keeps ordinary iOS tabs and unverified WebKit surfaces unavailable", async (
   });
   expect(get).not.toHaveBeenCalled();
   expect(requestPermission).not.toHaveBeenCalled();
+});
+
+it("keeps an Android surface without Web Push unavailable even with permission and a saved registration", async () => {
+  Object.defineProperty(navigator, "userAgent", {
+    configurable: true,
+    value: "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/125",
+  });
+  vi.stubGlobal("Notification", { permission: "granted", requestPermission });
+  Reflect.deleteProperty(window, "PushManager");
+  localStorage.setItem("big-two-turn-device-id", "a".repeat(64));
+  expect(await turnNotificationDevice.inspect()).toMatchObject({ state: "unavailable" });
+  await expect(turnNotificationDevice.enable(2)).rejects.toThrow("unavailable");
+  expect(get).not.toHaveBeenCalled();
+  expect(post).not.toHaveBeenCalled();
 });
 
 it("forgets the old subscription and closes only Turn alerts when the identity changes", async () => {
