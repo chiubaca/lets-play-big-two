@@ -95,8 +95,11 @@ referrer and this release-specific launch marker (held only for the current brow
 avoid reporting Ready in the old `1.0.0` wrapper, whose delegation service is disabled. It also
 rejects a reported browser display mode, which indicates a Custom Tab fallback. A direct deep
 link that has no marker may stay Unavailable until the updated app is reopened from its icon.
-These web signals are conservative, **not native attestation**: they cannot independently prove
-the installed APK's signing, delegation service or actual OS delivery. Validate those on device.
+These web signals are conservative, **not native attestation**: if an older wrapper does not expose
+an app referrer, the page cannot reliably distinguish it from a normal Android browser tab. Nor
+can the page independently inspect the installed APK's signing, delegation service or OS
+permission. A delegated browser should reflect native denial through `Notification.permission`,
+but this still needs physical-device verification; do not claim OS delivery from Ready.
 
 **Release manifest inspected after regeneration (2026-09-29):**
 `./gradlew :app:assembleRelease --offline` succeeded with the Bubblewrap JDK 17 and SDK. In
