@@ -49,7 +49,7 @@ export function PassAndPlay({ onBack }: { onBack: () => void }) {
             onInteractOutside={(event) => event.preventDefault()}
           >
             <Smartphone className="mx-auto h-10 w-10 text-gold" aria-hidden="true" />
-            <DialogTitle className="font-display text-3xl">Hand to {current?.name}</DialogTitle>
+            <DialogTitle className="font-heading text-3xl">Hand to {current?.name}</DialogTitle>
             <DialogDescription>
               Cards are hidden. Pass the device, then press Ready when it’s yours.
             </DialogDescription>

@@ -1,21 +1,9 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import {
-  ArrowRight,
-  Bot,
-  Loader2,
-  LockKeyhole,
-  LogIn,
-  LogOut,
-  Plus,
-  Sparkles,
-  UsersRound,
-  Wifi,
-  X,
-} from "lucide-react";
+import { ArrowRight, Bot, Loader2, LogIn, LogOut, Plus, UsersRound, Wifi, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { AuthPanel } from "~/components/auth-panel";
-import { CasinoBackdrop, CasinoKicker, CasinoPanel } from "~/components/casino/casino";
+import { CasinoBackdrop, CasinoPanel } from "~/components/casino/casino";
 import { HomeLogo } from "~/components/home-logo";
 import { useScrollOverlap } from "~/components/use-scroll-overlap";
 import { Button } from "~/components/ui/button";
@@ -157,9 +145,8 @@ export function HomeScreen({
                     <Wifi aria-hidden="true" />
                   </span>
                   <div>
-                    <CasinoKicker>03 · Online multiplayer</CasinoKicker>
-                    <h2 id="online-title">A private table, wherever they are.</h2>
-                    <p>Create a room, share the code, and play together in real time.</p>
+                    <h2 id="online-title">Play with the crew</h2>
+                    <p>Create a room and play together in real time.</p>
                   </div>
                 </div>
 
@@ -251,19 +238,12 @@ export function HomeScreen({
                   </div>
                 ) : (
                   <div className="home-online-signin">
-                    <div>
-                      <LockKeyhole aria-hidden="true" />
-                      <span>
-                        <strong>Account optional</strong>Only online rooms need a sign-in.
-                      </span>
-                    </div>
                     <Button
                       variant="gold"
                       className="h-12 px-6 text-base"
                       disabled={sessionPending}
                       onClick={() => setAuthOpen(true)}
                     >
-                      {sessionPending ? <Loader2 className="animate-spin" /> : <Sparkles />}
                       Sign in for multiplayer
                     </Button>
                   </div>

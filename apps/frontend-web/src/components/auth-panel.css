@@ -40,9 +40,8 @@
   color: var(--casino-gold);
   background: var(--casino-panel-gradient);
   box-shadow: inset 0 -2px var(--casino-gold-deep);
-  font:
-    23px Georgia,
-    serif;
+  font-family: var(--font-heading);
+  font-size: 23px;
 }
 .auth-panel-form {
   display: grid;

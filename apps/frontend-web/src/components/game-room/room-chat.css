@@ -55,7 +55,7 @@
 }
 .room-chat-heading h2 {
   margin: 0;
-  font-family: "Source Serif 4", Georgia, serif;
+  font-family: var(--font-heading);
   font-size: 19px;
   font-weight: 600;
 }

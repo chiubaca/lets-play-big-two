@@ -7,7 +7,7 @@
   --jev-muted: #859c91;
   --jev-signal: #a7ff83;
   --jev-gold: #f0bd58;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--font-mono);
 }
 
 .jev-devtools {

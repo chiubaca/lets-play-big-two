@@ -42,8 +42,9 @@
   color: inherit;
   text-align: right;
   text-decoration: none;
-  font-family: var(--font-heading);
-  font-size: 15px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .home-account-profile:hover {
@@ -180,12 +181,11 @@
 
 .home-mode-copy strong {
   color: #ffebbf;
-  font-family: var(--font-sans);
-  font-size: clamp(17px, 2vw, 24px);
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  line-height: 1.1;
-  text-transform: uppercase;
+  font-family: var(--font-heading);
+  font-size: clamp(22px, 2.6vw, 30px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
 }
 
 .home-mode-copy > span {
@@ -236,14 +236,13 @@
 }
 
 .home-online-heading h2 {
-  margin: 4px 0;
+  margin: 4px 0 6px;
   color: #ffebbf;
-  font-family: var(--font-sans);
-  font-size: clamp(17px, 2vw, 24px);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  line-height: 1.2;
-  text-transform: uppercase;
+  font-family: var(--font-heading);
+  font-size: clamp(24px, 3vw, 34px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
 }
 
 .home-online-heading p:last-child {
@@ -260,26 +259,6 @@
   justify-content: center;
   gap: 17px;
   padding-left: 106px;
-}
-
-.home-online-signin > div {
-  display: flex;
-  align-items: center;
-  gap: 13px;
-  color: var(--casino-gold);
-}
-
-.home-online-signin > div > span {
-  display: grid;
-  color: #aeb49c;
-  font-size: 11px;
-}
-
-.home-online-signin strong {
-  color: var(--casino-cream);
-  font-family: var(--font-heading);
-  font-size: 15px;
-  font-weight: 500;
 }
 
 .home-online-actions {

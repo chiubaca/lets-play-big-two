@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
-@import "@fontsource/source-serif-4";
+@import "@fontsource-variable/fraunces";
 @import "@fontsource/ibm-plex-mono";
 
 @custom-variant dark (&:is(.dark *));
@@ -13,9 +13,9 @@
    ============================================ */
 
 @theme inline {
-  /* Fonts — Mahjong Guide Editorial System */
+  /* Fonts — Playful Elegant Casino: primary UI, secondary display, tertiary data */
   --font-sans: "Inter Variable", system-ui, sans-serif;
-  --font-heading: "Source Serif 4", Georgia, serif;
+  --font-heading: "Fraunces Variable", Georgia, serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 
   /* Base colors */
@@ -170,11 +170,16 @@
   h4,
   .font-display {
     font-family: var(--font-heading);
-    font-weight: 500;
-    letter-spacing: -0.02em;
+    font-weight: 560;
+    letter-spacing: -0.015em;
+    font-optical-sizing: auto;
+    font-variation-settings:
+      "opsz" auto,
+      "SOFT" 50,
+      "WONK" 1;
   }
 
-  /* Mono font for data/numbers */
+  /* Tertiary — mono for data, codes, kickers and uppercase micro-labels. */
   .font-mono {
     font-family: var(--font-mono);
     font-feature-settings: "zero", "ss02";
