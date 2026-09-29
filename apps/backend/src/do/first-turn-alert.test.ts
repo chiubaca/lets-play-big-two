@@ -38,7 +38,7 @@ const REGISTRATION = {
   enrollment_id: "enrolled",
 };
 
-function room(playerCount = 2) {
+function room(playerCount = 2, legacyFocusSchema = false) {
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
   const roomDb = new Database(":memory:");
@@ -48,6 +48,13 @@ function room(playerCount = 2) {
   actor.send({ type: "JOIN_GAME", playerId: "ben", playerName: "Ben" });
   if (playerCount === 3) actor.send({ type: "JOIN_GAME", playerId: "cal", playerName: "Cal" });
   roomDb.exec("CREATE TABLE game_room (id INTEGER PRIMARY KEY, game_state TEXT)");
+  if (legacyFocusSchema) {
+    roomDb.exec(`CREATE TABLE room_focus (
+      tab_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, session_id TEXT NOT NULL,
+      expires_at INTEGER NOT NULL
+    );
+    INSERT INTO room_focus VALUES ('old-tab', 'ada', 'ada-session', ${NOW + 10_000})`);
+  }
   roomDb
     .prepare("INSERT INTO game_room VALUES (1, ?)")
     .run(JSON.stringify(actor.getPersistedSnapshot()));
@@ -184,6 +191,20 @@ afterEach(() => {
   checkingAccount = null;
   vi.useRealTimers();
   vi.restoreAllMocks();
+});
+
+it("upgrades an existing room focus table before accepting focus updates", async () => {
+  const r = room(2, true);
+  expect(
+    r.roomDb.prepare("SELECT sequence, expires_at FROM room_focus WHERE tab_id = 'old-tab'").get(),
+  ).toEqual({ sequence: 0, expires_at: NOW + 10_000 });
+  const tab = crypto.randomUUID();
+  expect(await r.object.setRoomFocus("ABCDE", "ada", "ada-session", tab, true, 1)).toBe(true);
+  expect(await r.reload().setRoomFocus("ABCDE", "ada", "ada-session", tab, false, 2)).toBe(true);
+  await r.reload().setRoomFocus("ABCDE", "ada", "ada-session", tab, true, 1);
+  expect(
+    r.roomDb.prepare("SELECT sequence, expires_at FROM room_focus WHERE tab_id = ?").get(tab),
+  ).toEqual({ sequence: 2, expires_at: NOW - 1 });
 });
 
 it("commits a first Turn and only the already enrolled away Player's intent, across reload", async () => {

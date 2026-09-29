@@ -234,6 +234,9 @@ export class BigTwoRoomObject extends DurableObject<Env> {
         PRIMARY KEY(turn_id, endpoint_id)
       );
     `);
+    const focusColumns = this.sql.exec<{ name: string }>("PRAGMA table_info(room_focus)").toArray();
+    if (!focusColumns.some(({ name }) => name === "sequence"))
+      this.sql.exec("ALTER TABLE room_focus ADD COLUMN sequence INTEGER NOT NULL DEFAULT 0");
     // Existing room objects may have queued work from before per-enrollment identities.
     // Those intents fail closed; only a new Turn can capture a new enrollment.
     const columns = this.sql.exec<{ name: string }>("PRAGMA table_info(turn_delivery)").toArray();
