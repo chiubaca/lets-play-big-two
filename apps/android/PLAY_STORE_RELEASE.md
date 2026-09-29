@@ -97,7 +97,7 @@ not declared. Personal data is not sold or used for targeted advertising.
 
 ## Play Console status
 
-- Internal release `1 (1.0.0)` is active for the `Testers` email list.
+- Internal release `2 (1.0.1)` is active for the `Testers` email list (submitted 2026-09-29).
 - Store listing, app access, target audience, content rating, and Data safety changes are saved in
   Publishing overview but have not been sent for review.
 - App content shows no outstanding declarations.
