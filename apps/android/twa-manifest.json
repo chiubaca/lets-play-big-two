@@ -13,7 +13,7 @@
   "navigationDividerColorDark": "#030e09",
   "backgroundColor": "#030e09",
   "enableNotifications": true,
-  "startUrl": "/",
+  "startUrl": "/?twa-notifications=2",
   "iconUrl": "https://big-two.chiubaca.com/android-chrome-512x512.png",
   "maskableIconUrl": "https://big-two.chiubaca.com/icon-maskable-512x512.png",
   "splashScreenFadeOutDuration": 300,

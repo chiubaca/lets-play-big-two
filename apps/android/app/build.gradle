@@ -23,7 +23,7 @@ plugins {
 def twaManifest = [
     applicationId: 'com.chiubaca.bigtwocrew',
     hostName: 'big-two.chiubaca.com', // The domain being opened in the TWA.
-    launchUrl: '/', // The start path for the TWA. Must be relative to the domain.
+    launchUrl: '/?twa-notifications=2', // The start path for the TWA. Must be relative to the domain.
     name: 'Big Two Crew', // The application name.
     launcherName: 'Big Two Crew', // The name shown on the Android Launcher.
     themeColor: '#030E09', // The color used for the status bar.

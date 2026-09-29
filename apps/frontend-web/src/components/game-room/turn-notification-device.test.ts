@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
-import { forgetTurnNotificationInstall, turnNotificationDevice } from "./turn-notification-device";
+import {
+  forgetTurnNotificationInstall,
+  recordAndroidWrapperLaunch,
+  turnNotificationDevice,
+} from "./turn-notification-device";
 
 const { get, post, remove } = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), remove: vi.fn() }));
 vi.mock("~/libs/hono-client", () => ({
@@ -12,6 +16,8 @@ vi.mock("~/libs/hono-client", () => ({
 const originalWorker = Object.getOwnPropertyDescriptor(navigator, "serviceWorker");
 const originalAgent = Object.getOwnPropertyDescriptor(navigator, "userAgent");
 const originalContext = Object.getOwnPropertyDescriptor(window, "isSecureContext");
+const originalReferrer = Object.getOwnPropertyDescriptor(document, "referrer");
+const originalMatchMedia = window.matchMedia;
 const oldSubscription = { current: null as null | PushSubscription };
 const requestPermission = vi.fn();
 const subscribe = vi.fn();
@@ -47,9 +53,13 @@ afterEach(() => {
   else Reflect.deleteProperty(navigator, "userAgent");
   if (originalContext) Object.defineProperty(window, "isSecureContext", originalContext);
   else Reflect.deleteProperty(window, "isSecureContext");
+  if (originalReferrer) Object.defineProperty(document, "referrer", originalReferrer);
+  else Reflect.deleteProperty(document, "referrer");
+  window.matchMedia = originalMatchMedia;
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   localStorage.clear();
+  sessionStorage.clear();
   vi.clearAllMocks();
 });
 
@@ -256,6 +266,44 @@ it("keeps an Android surface without Web Push unavailable even with permission a
   await expect(turnNotificationDevice.enable(2)).rejects.toThrow("unavailable");
   expect(get).not.toHaveBeenCalled();
   expect(post).not.toHaveBeenCalled();
+});
+
+it("fails closed for old Android wrappers and Custom Tab fallbacks, even with a registered subscription", async () => {
+  Object.defineProperty(navigator, "userAgent", {
+    configurable: true,
+    value: "Mozilla/5.0 (Linux; Android 13) Chrome/125",
+  });
+  Object.defineProperty(document, "referrer", {
+    configurable: true,
+    value: "android-app://com.chiubaca.bigtwocrew/",
+  });
+  vi.stubGlobal("Notification", { permission: "granted", requestPermission });
+  const endpoint = "https://fcm.googleapis.com/fcm/send/device-token";
+  oldSubscription.current = {
+    endpoint,
+    options: { applicationServerKey: Uint8Array.from(Buffer.alloc(65, 4)).buffer },
+  } as PushSubscription;
+  get.mockResolvedValue({ ok: true, json: async () => ({ registered: true, generation: 2 }) });
+  expect(await turnNotificationDevice.inspect()).toMatchObject({ state: "unavailable" });
+  await expect(turnNotificationDevice.enable(2)).rejects.toThrow("unavailable");
+  expect(get).not.toHaveBeenCalled();
+
+  history.replaceState(null, "", "/?twa-notifications=2");
+  recordAndroidWrapperLaunch();
+  Object.defineProperty(document, "referrer", {
+    configurable: true,
+    value: "https://big-two.chiubaca.com/",
+  });
+  history.replaceState(null, "", "/room/ABCDE");
+  expect(await turnNotificationDevice.inspect()).toMatchObject({ state: "ready" });
+  history.replaceState(null, "", "/");
+  expect(await turnNotificationDevice.inspect()).toMatchObject({ state: "ready" });
+
+  vi.stubGlobal("Notification", { permission: "denied", requestPermission });
+  expect(await turnNotificationDevice.inspect()).toMatchObject({ state: "blocked" });
+
+  window.matchMedia = () => ({ matches: true }) as MediaQueryList;
+  expect(await turnNotificationDevice.inspect()).toMatchObject({ state: "unavailable" });
 });
 
 it("forgets the old subscription and closes only Turn alerts when the identity changes", async () => {

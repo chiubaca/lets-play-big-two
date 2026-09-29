@@ -90,6 +90,14 @@ by the site's explicit **Enable on this device** action through `Notification.re
 account consent alone does not prompt. Keep the generated notification icons and regenerate after
 configuration changes rather than editing the generated manifest alone.
 
+The `1.0.1` wrapper launches at `/?twa-notifications=2`. The web card uses the Android app
+referrer and this release-specific launch marker (held only for the current browser session) to
+avoid reporting Ready in the old `1.0.0` wrapper, whose delegation service is disabled. It also
+rejects a reported browser display mode, which indicates a Custom Tab fallback. A direct deep
+link that has no marker may stay Unavailable until the updated app is reopened from its icon.
+These web signals are conservative, **not native attestation**: they cannot independently prove
+the installed APK's signing, delegation service or actual OS delivery. Validate those on device.
+
 **Release manifest inspected after regeneration (2026-09-29):**
 `./gradlew :app:assembleRelease --offline` succeeded with the Bubblewrap JDK 17 and SDK. In
 `app/build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml`,
@@ -127,11 +135,11 @@ On an Android 13+ physical device with a compatible browser and the deployed VAP
    claiming device delivery works. This physical-device delivery test is follow-up work, not a
    prerequisite for browser enrollment or the web release.
 
-The shared card's **Ready** means capability, permission, browser subscription and server
-registration were confirmed; it explicitly does not promise OS delivery. A non-delegated build,
-failed app-link verification (Custom Tab fallback), or revoked native permission must not be
-treated as a verified Android notification installation. Do not infer these native conditions
-from a web-only Ready state; check the actual installed variant during device follow-up.
+The shared card's **Ready** means the detectable capability and permission checks, browser
+subscription and server registration succeeded; it explicitly does not promise OS delivery. A
+non-delegated build, failed app-link verification (Custom Tab fallback), or revoked native
+permission must not be treated as a verified Android notification installation. Check the actual
+installed variant during device follow-up.
 
 ## Play App Signing certificates
 

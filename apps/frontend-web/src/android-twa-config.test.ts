@@ -11,7 +11,9 @@ it("keeps notification delegation in the Bubblewrap source and generated wrapper
   const config = JSON.parse(android("twa-manifest.json"));
   expect(config.enableNotifications).toBe(true);
   expect(config.appVersionCode).toBeGreaterThan(1); // The Play internal track already has version 1.
+  expect(config.startUrl).toBe("/?twa-notifications=2");
   expect(android("app/build.gradle")).toMatch(/enableNotifications: true/);
+  expect(android("app/build.gradle")).toContain("launchUrl: '/?twa-notifications=2'");
   expect(android("app/src/main/AndroidManifest.xml")).toContain(
     "android.permission.POST_NOTIFICATIONS",
   );

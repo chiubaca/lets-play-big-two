@@ -14,6 +14,44 @@ export type TurnNotificationDevice = {
 };
 
 const storedEndpointId = "big-two-turn-device-id";
+const androidTwaSession = "big-two-android-twa-notifications";
+
+function androidWrapperCapability(): { available: boolean; reason?: string } {
+  if (!/Android/.test(navigator.userAgent)) return { available: true };
+  const referrer = document.referrer;
+  let wrapper = referrer.startsWith("android-app://");
+  let supported = false;
+  try {
+    const previous = sessionStorage.getItem(androidTwaSession);
+    wrapper ||= previous !== null;
+    // Only this regenerated wrapper launches with the capability marker. The old Play build
+    // must not inherit a browser subscription's Ready state through its Custom Tab.
+    if (
+      referrer.startsWith("android-app://com.chiubaca.bigtwocrew/") &&
+      new URL(location.href).searchParams.get("twa-notifications") === "2"
+    ) {
+      sessionStorage.setItem(androidTwaSession, "2");
+      supported = true;
+    } else {
+      supported = previous === "2";
+    }
+  } catch {
+    // No persistent evidence of a capable wrapper: fail closed for app referrers.
+  }
+  if (wrapper && (!supported || window.matchMedia?.("(display-mode: browser)").matches)) {
+    return {
+      available: false,
+      reason:
+        "This Android app installation cannot confirm notification delegation. Reopen the updated app from its icon and check verified app links.",
+    };
+  }
+  return { available: true };
+}
+
+// Capture the launcher URL before the router navigates away from /.
+export function recordAndroidWrapperLaunch() {
+  androidWrapperCapability();
+}
 
 function savedEndpointId() {
   try {
@@ -59,6 +97,8 @@ async function accessibleSubscription() {
 
 function capability(): { available: boolean; reason?: string } {
   const agent = navigator.userAgent;
+  const wrapper = androidWrapperCapability();
+  if (!wrapper.available) return wrapper;
   if (/iPad|iPhone|iPod/.test(agent) || (/Macintosh/.test(agent) && navigator.maxTouchPoints > 1)) {
     return {
       available: false,

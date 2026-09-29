@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { HeadContent, Scripts, createRootRouteWithContext } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { TanStackDevtools } from "@tanstack/react-devtools";
@@ -9,6 +9,7 @@ import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 
 import { Toaster } from "~/components/ui/sonner";
 import { JevDevtoolsProvider } from "~/components/game-room/jev-devtools-context";
+import { recordAndroidWrapperLaunch } from "~/components/game-room/turn-notification-device";
 
 import appCss from "../styles.css?url";
 
@@ -112,6 +113,9 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 });
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    recordAndroidWrapperLaunch();
+  }, []);
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <head>
