@@ -17,6 +17,18 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+it("defaults every solo opponent to Jev, including after a rematch", () => {
+  requestJevBotMoveMock.mockResolvedValue({ cards: null, source: "fallback" });
+  const { result } = renderHook(() => useOfflineGame());
+  act(() => result.current.start());
+
+  expect(result.current.botPlayers).toHaveLength(3);
+  expect(result.current.botPlayers.every((player) => player.botStrategy === "jev")).toBe(true);
+
+  act(() => result.current.send({ type: "RESET_GAME" }));
+  expect(result.current.botPlayers.every((player) => player.botStrategy === "jev")).toBe(true);
+});
+
 describe("pass-and-play turns", () => {
   it("requires readiness on the first turn, after plays and passes, and after a rematch", () => {
     const { result } = renderHook(() => useOfflineGame());
@@ -270,8 +282,10 @@ describe("human Jev suggestions", () => {
 
   it("records a different move even if Jev answers after the player acts", async () => {
     let resolveDecision!: (decision: Awaited<ReturnType<typeof requestJevBotMove>>) => void;
-    requestJevBotMoveMock.mockImplementation(
-      () => new Promise((resolve) => (resolveDecision = resolve)),
+    requestJevBotMoveMock.mockImplementation((_state, playerId) =>
+      playerId === "solo-player"
+        ? new Promise((resolve) => (resolveDecision = resolve))
+        : Promise.reject(new Error("Jev unavailable")),
     );
     vi.useFakeTimers();
     const { result } = renderHook(() => useOfflineGame());
@@ -314,8 +328,10 @@ describe("human Jev suggestions", () => {
 
   it("ignores an old game's pending analysis after a reset", async () => {
     let resolveDecision!: (decision: Awaited<ReturnType<typeof requestJevBotMove>>) => void;
-    requestJevBotMoveMock.mockImplementation(
-      () => new Promise((resolve) => (resolveDecision = resolve)),
+    requestJevBotMoveMock.mockImplementation((_state, playerId) =>
+      playerId === "solo-player"
+        ? new Promise((resolve) => (resolveDecision = resolve))
+        : Promise.reject(new Error("Jev unavailable")),
     );
     vi.useFakeTimers();
     const { result } = renderHook(() => useOfflineGame());

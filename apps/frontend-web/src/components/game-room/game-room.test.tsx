@@ -55,11 +55,11 @@ function SoloTable() {
   );
 }
 
-it("changes a solo opponent between Basic and Jev and marks Jev at the table", () => {
+it("changes an opponent strategy without decorating player names", () => {
   render(<SoloTable />);
 
   expect(screen.queryByRole("button", { name: /Copy room code/ })).toBeNull();
-  expect(screen.getByText("Jev ✨[jev]")).toBeTruthy();
+  expect(screen.getByText("Jev")).toBeTruthy();
   expect(screen.getByTitle("Jev unavailable — using Basic AI")).toBeTruthy();
   expect(screen.queryByText("Ada ✨[jev]")).toBeNull();
 
@@ -67,8 +67,33 @@ it("changes a solo opponent between Basic and Jev and marks Jev at the table", (
   const adaMode = screen.getByRole("group", { name: "AI mode for Ada" });
   fireEvent.click(adaMode.querySelectorAll("button")[1]);
 
-  expect(screen.getAllByText("Ada ✨[jev]")).toHaveLength(2);
+  expect(screen.getAllByText("Ada")).toHaveLength(2);
+  expect(screen.queryByText(/✨\[jev\]/)).toBeNull();
   expect(adaMode.querySelectorAll("button")[1].getAttribute("aria-pressed")).toBe("true");
+});
+
+it("hides solo AI settings when strategies are fixed while retaining fallback indicators", () => {
+  render(
+    <GameRoom
+      botSettings={{
+        players: players.slice(1).map((player) => ({ ...player, botStrategy: "jev" })),
+      }}
+      gameState={gameState}
+      jevFallbackPlayerIds={new Set(["jev"])}
+      send={() => {}}
+      tableLabel="Solo table"
+      user={{ id: "solo-player", name: "You" }}
+    />,
+  );
+
+  expect(screen.getByText("Ada")).toBeTruthy();
+  expect(screen.queryByText(/✨\[jev\]/)).toBeNull();
+  expect(screen.getByTitle("Jev unavailable — using Basic AI")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
+  const settings = within(screen.getByRole("dialog"));
+  expect(settings.queryByText("Opponent AI")).toBeNull();
+  expect(settings.queryByRole("group", { name: /AI mode/ })).toBeNull();
+  expect(settings.getByRole("button", { name: /Turn sound/ })).toBeTruthy();
 });
 
 it("loads account consent for a seated online Player and confirms a save without setting up this device", async () => {

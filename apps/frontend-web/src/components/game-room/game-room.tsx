@@ -47,7 +47,7 @@ export type GameRoomUser = { id: string; name: string };
 export type BotStrategy = "basic" | "jev";
 export type BotSettings = {
   players: ReadonlyArray<GameRoomUser & { botStrategy?: BotStrategy }>;
-  onStrategyChange: (playerId: string, strategy: BotStrategy) => void;
+  onStrategyChange?: (playerId: string, strategy: BotStrategy) => void;
 };
 type GameRoomProps = {
   botSettings?: BotSettings;
@@ -246,10 +246,6 @@ export const GameRoom = ({
 
   if (!gameState) return <main className="game-room room-loading">Connecting to the table…</main>;
   const { players, guardMessage, winner } = gameState.context;
-  const playerName = (player: GameRoomUser) => {
-    const bot = botSettings?.players.find((entry) => entry.id === player.id);
-    return bot?.botStrategy === "jev" ? `${player.name} ✨[jev]` : player.name;
-  };
   const myIndex = players.findIndex((p) => p.id === user.id);
   const spectator = !sharedDevice && myIndex === -1;
   const [bottom, left, top, right] = makePlayerOrder(spectator ? 0 : myIndex);
@@ -275,14 +271,14 @@ export const GameRoom = ({
   const status = waiting
     ? `Waiting for players · ${players.length} of 4 seats filled`
     : finished
-      ? `${winner ? playerName(winner) : "An opponent"} wins · table complete`
+      ? `${winner ? winner.name : "An opponent"} wins · table complete`
       : spectator
-        ? `${players[gameState.context.currentPlayerIndex] ? playerName(players[gameState.context.currentPlayerIndex]) : "Next player"} is playing…`
+        ? `${players[gameState.context.currentPlayerIndex]?.name ?? "Next player"} is playing…`
         : isMyTurn
           ? currentValue === "ROUND_FIRST_MOVE"
             ? "Your turn · start with 3 ♦"
             : "Your turn"
-          : `${players[gameState.context.currentPlayerIndex] ? playerName(players[gameState.context.currentPlayerIndex]) : "Next player"} is thinking…`;
+          : `${players[gameState.context.currentPlayerIndex]?.name ?? "Next player"} is thinking…`;
   const act = async (event: GameEvent) => {
     try {
       await send(event);
@@ -430,7 +426,7 @@ export const GameRoom = ({
         <section className="finished-room-strip" aria-label="Finished room">
           <div className="finished-room-summary">
             <span className="finished-room-eyebrow">Table complete</span>
-            <strong>{winner ? playerName(winner) : "An opponent"} wins!</strong>
+            <strong>{winner ? winner.name : "An opponent"} wins!</strong>
             {spectator && <small>Waiting for the host to start another game…</small>}
           </div>
           <div className="finished-room-actions">
@@ -470,7 +466,7 @@ export const GameRoom = ({
           ].map(({ index, position, avatar }) => (
             <PlayerSeat
               key={position}
-              name={players[index] ? playerName(players[index]) : "Open seat"}
+              name={players[index]?.name ?? "Open seat"}
               count={cardCount(index)}
               avatar={players[index] ? avatar : "♠"}
               active={
@@ -609,7 +605,7 @@ export const GameRoom = ({
           )}
           {spectator && players[bottom] && (
             <PlayerSeat
-              name={playerName(players[bottom])}
+              name={players[bottom].name}
               count={cardCount(bottom)}
               avatar="👨🏻"
               active={
@@ -719,14 +715,14 @@ export const GameRoom = ({
             {panel === "help"
               ? "Be the first to play all your cards. Play singles, pairs, triples, or five-card poker hands. Match the previous combination with a stronger one, or pass. Ranks run from 3 up to 2; suits from diamonds, clubs, hearts to spades. The first play must include 3 ♦."
               : panel === "settings"
-                ? botSettings
+                ? botSettings?.onStrategyChange
                   ? "Choose how each opponent plays. Changes apply to their next turn."
                   : "Make yourself comfortable. Sound starts after your first interaction."
                 : `${tableLabel} · ${players.length} players at the table`}
           </DialogDescription>
           {panel === "settings" && (
             <div className="table-settings-list">
-              {botSettings && (
+              {botSettings?.onStrategyChange && (
                 <div className="bot-strategy-settings">
                   <div className="settings-section-heading">
                     <span>Opponent AI</span>
@@ -736,7 +732,7 @@ export const GameRoom = ({
                     const strategy = bot.botStrategy ?? "basic";
                     return (
                       <div className="bot-strategy-row" key={bot.id}>
-                        <span className="bot-strategy-name">{playerName(bot)}</span>
+                        <span className="bot-strategy-name">{bot.name}</span>
                         <div
                           className="bot-strategy-toggle"
                           role="group"
@@ -745,14 +741,14 @@ export const GameRoom = ({
                           <button
                             type="button"
                             aria-pressed={strategy === "basic"}
-                            onClick={() => botSettings.onStrategyChange(bot.id, "basic")}
+                            onClick={() => botSettings.onStrategyChange?.(bot.id, "basic")}
                           >
                             Basic
                           </button>
                           <button
                             type="button"
                             aria-pressed={strategy === "jev"}
-                            onClick={() => botSettings.onStrategyChange(bot.id, "jev")}
+                            onClick={() => botSettings.onStrategyChange?.(bot.id, "jev")}
                           >
                             ✨ Jev
                           </button>
@@ -872,7 +868,7 @@ export const GameRoom = ({
           <DialogTitle>
             {!sharedDevice && winner?.id === user.id
               ? "Beautifully played."
-              : `${winner ? playerName(winner) : "An opponent"} wins!`}
+              : `${winner ? winner.name : "An opponent"} wins!`}
           </DialogTitle>
           <DialogDescription>
             {spectator

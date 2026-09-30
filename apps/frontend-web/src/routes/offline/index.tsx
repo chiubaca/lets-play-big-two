@@ -31,7 +31,6 @@ function SoloGame() {
     jevFallbackPlayerIds,
     requestHint,
     send,
-    setBotStrategy,
     start,
     thinkingPlayerId,
   } = useOfflineGame();
@@ -49,7 +48,7 @@ function SoloGame() {
     return (
       <GameRoom
         gameState={gameState}
-        botSettings={{ players: botPlayers, onStrategyChange: setBotStrategy }}
+        botSettings={{ players: botPlayers }}
         jevFallbackPlayerIds={jevFallbackPlayerIds}
         requestHint={requestHint}
         send={send}
