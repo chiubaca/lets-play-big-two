@@ -24,6 +24,10 @@
   font-size: 13px;
 }
 
+.legal-shell > .home-back-button {
+  margin-bottom: 20px;
+}
+
 .legal-back svg {
   width: 16px;
 }

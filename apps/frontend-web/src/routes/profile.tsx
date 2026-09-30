@@ -1,5 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
+import { Loader2 } from "lucide-react";
+import { HomeBackButton } from "~/components/home-back-button";
 import { AuthPanel } from "~/components/auth-panel";
 import { CasinoBackdrop } from "~/components/casino/casino";
 import { ProfileForm } from "~/components/profile-form";
@@ -17,9 +18,7 @@ function ProfilePage() {
   return (
     <main className="profile-page">
       <CasinoBackdrop />
-      <Link to="/" className="profile-back">
-        <ArrowLeft aria-hidden="true" /> Back to Big Two Crew
-      </Link>
+      <HomeBackButton className="profile-back" />
       <h1 className="sr-only">Your profile</h1>
       <div className="profile-page-content">
         {isPending ? (

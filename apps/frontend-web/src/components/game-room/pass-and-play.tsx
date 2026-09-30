@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Bot, ChevronDown, Smartphone, UserRound } from "lucide-react";
+import { ArrowRight, Bot, ChevronDown, Smartphone, UserRound } from "lucide-react";
+import { HomeBackButton } from "~/components/home-back-button";
 import { CasinoBackdrop, CasinoPanel } from "~/components/casino/casino";
 import { useScrollOverlap } from "~/components/use-scroll-overlap";
 import { Button } from "~/components/ui/button";
@@ -72,9 +73,7 @@ export function PassAndPlay({
     <main className="pass-setup" ref={pageRef}>
       <CasinoBackdrop />
       <nav className="pass-setup-nav" aria-label="Go back">
-        <button type="button" className="pass-setup-back" aria-label="Back home" onClick={onBack}>
-          <ArrowLeft aria-hidden="true" />
-        </button>
+        <HomeBackButton onBack={onBack} />
       </nav>
       <div className="pass-setup-content">
         <header className="pass-setup-heading" ref={headingRef}>

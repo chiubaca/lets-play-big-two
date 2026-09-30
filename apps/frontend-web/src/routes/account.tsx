@@ -4,6 +4,7 @@ import { Loader2, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { AuthPanel } from "~/components/auth-panel";
 import { LegalPage } from "~/components/legal-page";
+import { HomeBackButton } from "~/components/home-back-button";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { authClient } from "~/libs/auth-client";
@@ -44,7 +45,11 @@ function AccountPage() {
   });
 
   return (
-    <LegalPage eyebrow="Account controls" title="Account & data deletion">
+    <LegalPage
+      eyebrow="Account controls"
+      title="Account & data deletion"
+      backControl={<HomeBackButton />}
+    >
       <div className="legal-content">
         {isPending ? (
           <p className="flex items-center gap-2">

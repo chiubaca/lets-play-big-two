@@ -22,33 +22,11 @@
   padding-top: 26px;
 }
 
-.pass-setup-back {
-  display: grid;
-  width: 60px;
-  height: 60px;
-  place-items: center;
-  border: 2px solid #e9bd69;
-  border-radius: 50%;
-  color: #ffdb88;
-  background: #03170ff2;
-  box-shadow:
-    inset 0 0 0 3px #04140d,
-    0 6px 18px #0009;
-  cursor: pointer;
-}
-
-.pass-setup-back svg {
-  width: 32px;
-  height: 32px;
-}
-
-.pass-setup-back:hover,
 .pass-setup-count-options button:hover,
 .pass-setup-select:hover {
   filter: brightness(1.15);
 }
 
-.pass-setup-back:focus-visible,
 .pass-setup-count-options button:focus-visible,
 .pass-setup-select:focus-within,
 .pass-setup-seat-name input:focus-visible,
@@ -279,11 +257,6 @@
 @media (max-width: 440px) {
   .pass-setup-nav {
     padding-top: 20px;
-  }
-
-  .pass-setup-back {
-    width: 50px;
-    height: 50px;
   }
 
   .pass-setup-content {

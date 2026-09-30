@@ -158,7 +158,7 @@ export function HomeScreen({
                   />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="home-account-menu">
+              <DropdownMenuContent align="end" sideOffset={10} className="home-account-menu">
                 <DropdownMenuItem asChild>
                   <Link to="/profile">
                     <UserRound aria-hidden="true" />
@@ -168,7 +168,7 @@ export function HomeScreen({
                 <DropdownMenuItem asChild>
                   <Link to="/account">
                     <Trash2 aria-hidden="true" />
-                    Account deletion
+                    Delete account
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />

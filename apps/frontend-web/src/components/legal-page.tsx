@@ -8,19 +8,23 @@ export function LegalPage({
   children,
   eyebrow,
   title,
+  backControl,
 }: {
   children: ReactNode;
   eyebrow: string;
   title: string;
+  backControl?: ReactNode;
 }) {
   return (
     <main className="legal-page">
       <CasinoBackdrop />
       <div className="legal-shell">
-        <Link to="/" className="legal-back">
-          <ArrowLeft aria-hidden="true" />
-          Back to Big Two Crew
-        </Link>
+        {backControl ?? (
+          <Link to="/" className="legal-back">
+            <ArrowLeft aria-hidden="true" />
+            Back to Big Two Crew
+          </Link>
+        )}
         <article className="legal-card">
           <header>
             <p>{eyebrow}</p>

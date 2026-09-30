@@ -154,9 +154,9 @@ it("opens the account submenu from the username and offers profile, deletion, an
   expect(within(menu).getByRole("menuitem", { name: "Profile" }).getAttribute("href")).toBe(
     "/profile",
   );
-  expect(
-    within(menu).getByRole("menuitem", { name: "Account deletion" }).getAttribute("href"),
-  ).toBe("/account");
+  expect(within(menu).getByRole("menuitem", { name: "Delete account" }).getAttribute("href")).toBe(
+    "/account",
+  );
   fireEvent.click(within(menu).getByRole("menuitem", { name: "Log out" }));
   expect(signOutAndDetachTurnDevice).toHaveBeenCalled();
 });

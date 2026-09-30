@@ -14,26 +14,6 @@
   z-index: 2;
   top: 28px;
   left: max(24px, calc((100% - 820px) / 2));
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--casino-gold);
-  font-size: 13px;
-  text-decoration: none;
-}
-
-.profile-back svg {
-  width: 16px;
-}
-
-.profile-back:hover {
-  color: var(--casino-gold-bright);
-}
-
-.profile-back:focus-visible {
-  outline: 2px solid var(--casino-focus);
-  outline-offset: 4px;
-  border-radius: 4px;
 }
 
 .profile-page-content {
