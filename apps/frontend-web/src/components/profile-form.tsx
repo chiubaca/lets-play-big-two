@@ -28,9 +28,11 @@ export function ProfileForm({
   const [validationError, setValidationError] = useState<string | null>(null);
   const [editor, setEditor] = useState<"emoji" | "username" | null>(null);
   const [inspecting, setInspecting] = useState(false);
+  const [inspectorVisible, setInspectorVisible] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
   const inspectorRef = useRef<HTMLDivElement>(null);
   const changeInspection = (open: boolean) => {
+    if (open) setInspectorVisible(true);
     if (!open) {
       const inspector = inspectorRef.current;
       const preview = previewRef.current?.querySelector(".membership-card-stage");
@@ -92,13 +94,18 @@ export function ProfileForm({
 
   return (
     <div className="profile-form">
-      <div className="profile-preview" aria-label="Profile preview" ref={previewRef}>
+      <div
+        className="profile-preview"
+        aria-label="Profile preview"
+        ref={previewRef}
+        data-inspecting={inspectorVisible}
+      >
         <MembershipCard
           name={username.trim() || user.name}
           emoji={emoji}
           onEditEmoji={() => openEditor("emoji")}
           onEditName={() => openEditor("username")}
-          onInspect={() => setInspecting(true)}
+          onInspect={() => changeInspection(true)}
         />
       </div>
       <p className="profile-card-caption">Your seat at the members’ table.</p>
@@ -106,8 +113,12 @@ export function ProfileForm({
         <DialogContent
           ref={inspectorRef}
           className="profile-card-inspector"
+          overlayClassName="profile-card-inspector-overlay"
           onCloseAutoFocus={(event) => {
             event.preventDefault();
+            setInspectorVisible(false);
+            // Reveal before restoring focus; React applies the state update after this callback.
+            previewRef.current?.setAttribute("data-inspecting", "false");
             previewRef.current
               ?.querySelector<HTMLButtonElement>(".membership-card-inspect")
               ?.focus();
