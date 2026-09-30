@@ -6,19 +6,23 @@ export function MembershipCard({
   name,
   emoji,
   compact = false,
+  enlarged = false,
+  onInspect,
   onEditEmoji,
   onEditName,
 }: {
   name: string;
   emoji: string;
   compact?: boolean;
+  enlarged?: boolean;
+  onInspect?: () => void;
   onEditEmoji?: () => void;
   onEditName?: () => void;
 }) {
   const holography = useCardHolography(!compact);
   return (
     <span
-      className={`membership-card-stage${compact ? " membership-card-stage--compact" : ""}`}
+      className={`membership-card-stage${compact ? " membership-card-stage--compact" : ""}${enlarged ? " membership-card-stage--enlarged" : ""}`}
       {...holography}
     >
       <span className={`membership-card${compact ? " membership-card--compact" : ""}`}>
@@ -28,6 +32,14 @@ export function MembershipCard({
             <span className="membership-card-glare" aria-hidden="true" />
             <span className="membership-card-watermark" aria-hidden="true" />
           </>
+        )}
+        {onInspect && !compact && (
+          <button
+            type="button"
+            className="membership-card-inspect"
+            onClick={onInspect}
+            aria-label={enlarged ? "Return to your profile" : "Zoom in on your membership card"}
+          />
         )}
         <span className="membership-card-brand">
           <span className="sr-only">Big Two Crew</span>
@@ -94,7 +106,7 @@ export function MembershipCard({
         ) : (
           <span className="membership-card-footer">
             <span>
-              Big Two <span aria-hidden="true">/</span> 鋤大弟
+              Big Two Crew<span aria-hidden="true">/</span> 鋤大弟
             </span>
             <span aria-hidden="true">♠ · ♥ · ♣ · ♦</span>
           </span>

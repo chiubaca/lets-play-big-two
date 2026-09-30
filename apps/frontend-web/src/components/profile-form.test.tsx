@@ -54,6 +54,40 @@ it("shows the saved profile and disables saving unchanged values", () => {
   );
 });
 
+it("opens an enlarged card independently of the editing dialogs and restores focus", async () => {
+  renderProfile();
+  const opener = screen.getByRole("button", { name: "Zoom in on your membership card" });
+  fireEvent.click(opener);
+  const dialog = screen.getByRole("dialog", { name: "Your membership card" });
+  expect(dialog.querySelector(".membership-card-stage--enlarged")).toBeTruthy();
+  expect(screen.queryByLabelText("Username")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  await waitFor(() => expect(document.activeElement).toBe(opener));
+  fireEvent.click(screen.getByRole("button", { name: "Edit profile emoji" }));
+  expect(screen.getByRole("dialog", { name: "Choose your emoji" })).toBeTruthy();
+  expect(authClient.updateUser).not.toHaveBeenCalled();
+});
+
+it("explains scrolling and previews the selected emoji without saving", () => {
+  renderProfile();
+  fireEvent.click(screen.getByRole("button", { name: "Edit profile emoji" }));
+  const picker = screen.getByRole("region", { name: "Emoji choices" });
+  expect(picker.getAttribute("aria-describedby")).toBe("profile-emoji-scroll-hint");
+  expect(screen.getByText(/Scroll for more/)).toBeTruthy();
+  expect(screen.getByLabelText("Selected emoji: 😎")).toBeTruthy();
+  const choice = screen.getByRole("button", { name: "Choose 🐲" });
+  fireEvent.click(choice);
+  expect(screen.getByLabelText("Selected emoji: 🐲")).toBeTruthy();
+  expect(choice.getAttribute("aria-pressed")).toBe("true");
+  expect(choice.querySelector(".profile-emoji-check")).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "Choose 😎" }).querySelector(".profile-emoji-check"),
+  ).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(authClient.updateUser).not.toHaveBeenCalled();
+});
+
 it("previews edits on the card and discards them when cancelled", () => {
   renderProfile();
   const preview = screen.getByLabelText("Profile preview");

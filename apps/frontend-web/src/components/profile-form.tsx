@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { Check, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -27,6 +27,8 @@ export function ProfileForm({
   const [saved, setSaved] = useState({ username: initialUsername, emoji: user.emoji ?? "♠️" });
   const [validationError, setValidationError] = useState<string | null>(null);
   const [editor, setEditor] = useState<"emoji" | "username" | null>(null);
+  const [inspecting, setInspecting] = useState(false);
+  const previewRef = useRef<HTMLDivElement>(null);
   const saveProfile = useMutation({
     mutationFn: async (profile: { username: string; emoji: string }) => {
       const result = await authClient.updateUser({
@@ -58,14 +60,38 @@ export function ProfileForm({
 
   return (
     <div className="profile-form">
-      <div className="profile-preview" aria-label="Profile preview">
+      <div className="profile-preview" aria-label="Profile preview" ref={previewRef}>
         <MembershipCard
           name={username.trim() || user.name}
           emoji={emoji}
           onEditEmoji={() => openEditor("emoji")}
           onEditName={() => openEditor("username")}
+          onInspect={() => setInspecting(true)}
         />
       </div>
+      <p className="profile-card-caption">Your seat at the members’ table.</p>
+      <Dialog open={inspecting} onOpenChange={setInspecting}>
+        <DialogContent
+          className="profile-card-inspector"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            previewRef.current
+              ?.querySelector<HTMLButtonElement>(".membership-card-inspect")
+              ?.focus();
+          }}
+        >
+          <DialogTitle className="sr-only">Your membership card</DialogTitle>
+          <MembershipCard
+            name={saved.username || user.name}
+            emoji={saved.emoji}
+            enlarged
+            onInspect={() => setInspecting(false)}
+          />
+          <DialogDescription className="profile-card-inspector-hint">
+            Move across the card to catch the light. Close to return to your profile.
+          </DialogDescription>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={editor !== null}
         onOpenChange={(open) => {
@@ -77,9 +103,16 @@ export function ProfileForm({
         }}
       >
         <DialogContent className="profile-editor" showCloseButton={!saveProfile.isPending}>
-          <DialogTitle>
-            {editor === "emoji" ? "Choose your emoji" : "Edit your username"}
-          </DialogTitle>
+          <div className="profile-editor-heading">
+            {editor === "emoji" && (
+              <span className="profile-emoji-preview" aria-label={`Selected emoji: ${emoji}`}>
+                {emoji}
+              </span>
+            )}
+            <DialogTitle>
+              {editor === "emoji" ? "Choose your emoji" : "Edit your username"}
+            </DialogTitle>
+          </div>
           <DialogDescription>
             {editor === "emoji"
               ? "A little personality for your membership card."
@@ -105,10 +138,14 @@ export function ProfileForm({
             {editor === "emoji" && (
               <fieldset disabled={saveProfile.isPending}>
                 <legend className="sr-only">Emoji choices</legend>
+                <p className="profile-emoji-scroll-hint" id="profile-emoji-scroll-hint">
+                  Scroll for more — find your table personality.
+                </p>
                 <div
                   className="profile-emoji-picker"
                   role="region"
                   aria-label="Emoji choices"
+                  aria-describedby="profile-emoji-scroll-hint"
                   tabIndex={0}
                 >
                   {PROFILE_EMOJI_GROUPS.map((group) => (
@@ -129,6 +166,9 @@ export function ProfileForm({
                             }}
                           >
                             {choice}
+                            {emoji === choice && (
+                              <Check className="profile-emoji-check" aria-hidden="true" />
+                            )}
                           </Button>
                         ))}
                       </div>
