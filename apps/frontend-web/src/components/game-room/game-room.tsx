@@ -1,12 +1,12 @@
 import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   Check,
-  Copy,
   Eye,
   HelpCircle,
   LoaderCircle,
   Menu,
   Settings,
+  Share2,
   Volume2,
   VolumeX,
   WifiOff,
@@ -398,14 +398,26 @@ export const GameRoom = ({
         {roomCode && (
           <button
             className="room-code"
-            aria-label={`Copy room code ${roomCode}`}
+            aria-label={`Share room ${roomCode}`}
+            title={copied ? "Room link copied" : "Share room link"}
             onClick={async () => {
+              const url = new URL(`/room/${encodeURIComponent(roomCode)}`, window.location.origin)
+                .href;
               try {
-                await navigator.clipboard.writeText(roomCode);
-                setCopied(true);
+                if (navigator.share) {
+                  await navigator.share({ title: "Join my Big Two room", url });
+                } else {
+                  await navigator.clipboard.writeText(url);
+                  setCopied(true);
+                }
                 playSound("select");
-              } catch {
-                setMessage(`Room: ${roomCode}`);
+              } catch (error) {
+                if (
+                  (error instanceof DOMException || error instanceof Error) &&
+                  error.name === "AbortError"
+                )
+                  return;
+                setMessage(`Could not share the room. Room link: ${url}`);
               }
             }}
           >
@@ -413,7 +425,7 @@ export const GameRoom = ({
               <small>Room</small>
               <strong>{tableLabel}</strong>
             </span>
-            {copied ? <Check /> : <Copy />}
+            {copied ? <Check aria-hidden="true" /> : <Share2 aria-hidden="true" />}
           </button>
         )}
         <div className="room-header-actions">

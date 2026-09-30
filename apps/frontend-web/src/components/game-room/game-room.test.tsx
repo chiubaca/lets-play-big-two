@@ -198,7 +198,7 @@ it("keeps bot removal confirmation open and shows server failures", async () => 
 it("changes an opponent strategy without decorating player names", () => {
   render(<SoloTable />);
 
-  expect(screen.queryByRole("button", { name: /Copy room code/ })).toBeNull();
+  expect(screen.queryByRole("button", { name: /Share room/ })).toBeNull();
   expect(screen.getByText("Jev")).toBeTruthy();
   expect(screen.getByTitle("Jev unavailable — using Basic AI")).toBeTruthy();
   expect(screen.queryByText("Ada ✨[jev]")).toBeNull();
@@ -584,9 +584,11 @@ it("allows an explicit retry after a failed registration and announces the failu
   expect(device.enable).toHaveBeenCalledTimes(2);
 });
 
-it("copies only the online room code", async () => {
+it("copies the online room URL when Web Share is unavailable", async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
   const originalClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  const originalShare = Object.getOwnPropertyDescriptor(navigator, "share");
+  Object.defineProperty(navigator, "share", { configurable: true, value: undefined });
   Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
 
   try {
@@ -600,11 +602,56 @@ it("copies only the online room code", async () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy room code ABCDE" }));
-    expect(writeText).toHaveBeenCalledWith("ABCDE");
+    fireEvent.click(screen.getByRole("button", { name: "Share room ABCDE" }));
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/room/ABCDE`);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Share room ABCDE" }).title).toBe(
+        "Room link copied",
+      ),
+    );
   } finally {
+    if (originalShare) Object.defineProperty(navigator, "share", originalShare);
+    else Reflect.deleteProperty(navigator, "share");
     if (originalClipboard) Object.defineProperty(navigator, "clipboard", originalClipboard);
     else Reflect.deleteProperty(navigator, "clipboard");
+  }
+});
+
+it.each(["success", "cancel", "failure"])("shares the online room URL: %s", async (result) => {
+  const share = vi.fn().mockImplementation(async () => {
+    if (result === "cancel") throw new DOMException("Cancelled", "AbortError");
+    if (result === "failure") throw new Error("Share failed");
+  });
+  const originalShare = Object.getOwnPropertyDescriptor(navigator, "share");
+  Object.defineProperty(navigator, "share", { configurable: true, value: share });
+
+  try {
+    render(
+      <GameRoom
+        gameState={gameState}
+        send={() => {}}
+        tableLabel="Room ABCDE"
+        roomCode="ABCDE"
+        user={{ id: "solo-player", name: "You" }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Share room ABCDE" }));
+    await waitFor(() =>
+      expect(share).toHaveBeenCalledWith({
+        title: "Join my Big Two room",
+        url: `${window.location.origin}/room/ABCDE`,
+      }),
+    );
+    if (result === "failure") {
+      await screen.findByText(
+        `Could not share the room. Room link: ${window.location.origin}/room/ABCDE`,
+      );
+    } else {
+      expect(screen.queryByText(/Could not share the room/)).toBeNull();
+    }
+  } finally {
+    if (originalShare) Object.defineProperty(navigator, "share", originalShare);
+    else Reflect.deleteProperty(navigator, "share");
   }
 });
 
@@ -751,7 +798,7 @@ it("returns focus to Results after closing or escaping, with the room inert duri
   fireEvent.click(results);
 
   expect(screen.getByRole("dialog").contains(document.activeElement)).toBe(true);
-  expect(screen.queryByRole("button", { name: "Copy room code ABCDE" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Share room ABCDE" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Close" }));
   await waitFor(() => expect(document.activeElement).toBe(results));
 
