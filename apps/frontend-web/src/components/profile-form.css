@@ -41,6 +41,63 @@
   text-shadow: 0 2px 4px #000;
 }
 
+/* Keep Radix Presence mounted until the card has returned to its preview. */
+.profile-card-inspector[data-slot="dialog-content"][data-state="closed"] {
+  pointer-events: none;
+  animation: profile-card-dismiss 650ms ease forwards;
+}
+
+.profile-card-inspector[data-state="closed"]
+  .membership-card-stage--enlarged
+  .membership-card-turner {
+  animation: profile-card-return 650ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.profile-card-inspector[data-state="closed"] .profile-card-inspector-hint,
+.profile-card-inspector[data-state="closed"] [data-slot="dialog-close"] {
+  visibility: hidden;
+}
+
+@keyframes profile-card-return {
+  from {
+    transform: var(--card-return-start, rotateX(var(--rotate-x)) rotateY(var(--rotate-y)));
+  }
+  45% {
+    transform: translate(
+        calc(var(--card-return-x, 0px) * 0.5),
+        calc(var(--card-return-y, 0px) * 0.5)
+      )
+      scale(
+        calc((1 + var(--card-return-scale-x, 0.65)) / 2),
+        calc((1 + var(--card-return-scale-y, 0.65)) / 2)
+      )
+      rotateY(180deg);
+  }
+  to {
+    transform: translate(var(--card-return-x, 0px), var(--card-return-y, 0px))
+      scale(var(--card-return-scale-x, 0.65), var(--card-return-scale-y, 0.65)) rotateY(360deg);
+  }
+}
+
+@keyframes profile-card-dismiss {
+  0%,
+  80% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-card-inspector[data-slot="dialog-content"][data-state="closed"],
+  .profile-card-inspector[data-state="closed"]
+    .membership-card-stage--enlarged
+    .membership-card-turner {
+    animation: none;
+  }
+}
+
 @media (max-width: 600px) {
   .profile-card-inspector[data-slot="dialog-content"] {
     width: calc(100% - 16px);

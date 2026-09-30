@@ -88,6 +88,41 @@ it("explains scrolling and previews the selected emoji without saving", () => {
   expect(authClient.updateUser).not.toHaveBeenCalled();
 });
 
+it.each(["Escape", "card"])(
+  "returns the enlarged card to its preview when closed with %s",
+  (method) => {
+    renderProfile();
+    const preview = screen
+      .getByLabelText("Profile preview")
+      .querySelector(".membership-card-stage")!;
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in on your membership card" }));
+    const dialog = screen.getByRole("dialog", { name: "Your membership card" });
+    const enlarged = dialog.querySelector(".membership-card-stage")!;
+    vi.spyOn(preview, "getBoundingClientRect").mockReturnValue({
+      x: 100,
+      y: 200,
+      width: 400,
+      height: 250,
+    } as DOMRect);
+    vi.spyOn(enlarged, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 100,
+      width: 600,
+      height: 400,
+    } as DOMRect);
+    if (method === "Escape") {
+      fireEvent.keyDown(document, { key: "Escape" });
+    } else {
+      fireEvent.click(screen.getByRole("button", { name: "Return to your profile" }));
+    }
+    expect(dialog.style.getPropertyValue("--card-return-x")).toBe("0px");
+    expect(dialog.style.getPropertyValue("--card-return-y")).toBe("25px");
+    expect(dialog.style.getPropertyValue("--card-return-scale-x")).toBe(`${400 / 600}`);
+    expect(dialog.style.getPropertyValue("--card-return-scale-y")).toBe("0.625");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  },
+);
+
 it("previews edits on the card and discards them when cancelled", () => {
   renderProfile();
   const preview = screen.getByLabelText("Profile preview");

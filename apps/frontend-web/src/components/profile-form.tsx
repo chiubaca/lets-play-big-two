@@ -29,6 +29,38 @@ export function ProfileForm({
   const [editor, setEditor] = useState<"emoji" | "username" | null>(null);
   const [inspecting, setInspecting] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
+  const inspectorRef = useRef<HTMLDivElement>(null);
+  const changeInspection = (open: boolean) => {
+    if (!open) {
+      const inspector = inspectorRef.current;
+      const preview = previewRef.current?.querySelector(".membership-card-stage");
+      const enlarged = inspector?.querySelector(".membership-card-stage");
+      if (inspector && preview && enlarged) {
+        const turner = enlarged.querySelector(".membership-card-turner");
+        if (turner) {
+          inspector.style.setProperty(
+            "--card-return-start",
+            getComputedStyle(turner).transform || "none",
+          );
+        }
+        const target = preview.getBoundingClientRect();
+        const source = enlarged.getBoundingClientRect();
+        if (source.width && source.height) {
+          inspector.style.setProperty(
+            "--card-return-x",
+            `${target.x + target.width / 2 - source.x - source.width / 2}px`,
+          );
+          inspector.style.setProperty(
+            "--card-return-y",
+            `${target.y + target.height / 2 - source.y - source.height / 2}px`,
+          );
+          inspector.style.setProperty("--card-return-scale-x", `${target.width / source.width}`);
+          inspector.style.setProperty("--card-return-scale-y", `${target.height / source.height}`);
+        }
+      }
+    }
+    setInspecting(open);
+  };
   const saveProfile = useMutation({
     mutationFn: async (profile: { username: string; emoji: string }) => {
       const result = await authClient.updateUser({
@@ -70,8 +102,9 @@ export function ProfileForm({
         />
       </div>
       <p className="profile-card-caption">Your seat at the members’ table.</p>
-      <Dialog open={inspecting} onOpenChange={setInspecting}>
+      <Dialog open={inspecting} onOpenChange={changeInspection}>
         <DialogContent
+          ref={inspectorRef}
           className="profile-card-inspector"
           onCloseAutoFocus={(event) => {
             event.preventDefault();
@@ -85,7 +118,7 @@ export function ProfileForm({
             name={saved.username || user.name}
             emoji={saved.emoji}
             enlarged
-            onInspect={() => setInspecting(false)}
+            onInspect={() => changeInspection(false)}
           />
           <DialogDescription className="profile-card-inspector-hint">
             Move across the card to catch the light. Close to return to your profile.

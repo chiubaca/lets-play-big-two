@@ -94,6 +94,18 @@ it("moves foil, glare and tilt together in one animation frame and returns to re
   expect(stage.style.getPropertyValue("--rotate-x")).toBe("0deg");
 });
 
+it("provides a hidden back face with the homepage's stacked logo", () => {
+  const { container } = renderCard();
+  const back = container.querySelector(".membership-card-back")!;
+  expect(back.getAttribute("aria-hidden")).toBe("true");
+  expect(back.querySelector(".home-logo-title")).toBeTruthy();
+  for (const src of ["/title-logo.png", "/title-text.png", "/title-crew.png"]) {
+    expect(back.querySelector(`img[src="${src}"]`)).toBeTruthy();
+  }
+  expect(back.querySelector(".membership-card-identity")).toBeNull();
+  expect(back.querySelector("button")).toBeNull();
+});
+
 it("keeps the compact dropdown card static with no holographic layers or nested buttons", () => {
   const { stage } = renderCard(true);
   fireEvent.pointerMove(stage, { clientX: 440, clientY: 126 });
