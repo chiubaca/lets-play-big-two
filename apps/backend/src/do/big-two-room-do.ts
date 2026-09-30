@@ -1,5 +1,6 @@
 import { createActor } from "xstate";
 import { DurableObject } from "cloudflare:workers";
+import { chooseBotMove } from "@big-two/game-ai";
 
 import {
   type GameEvent,
@@ -225,6 +226,9 @@ export class BigTwoRoomObject extends DurableObject<Env> {
         id TEXT PRIMARY KEY, room_id TEXT NOT NULL, recipient_id TEXT NOT NULL,
         deadline INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS bot_turn(
+        id INTEGER PRIMARY KEY, room_id TEXT NOT NULL, player_id TEXT NOT NULL, due_at INTEGER NOT NULL
+      );
       -- first_turn is the existing persistent Turn slot, now used for every ongoing Turn.
       CREATE TABLE IF NOT EXISTS turn_delivery(
         turn_id TEXT NOT NULL, endpoint_id TEXT NOT NULL, session_id TEXT NOT NULL,
@@ -365,6 +369,14 @@ export class BigTwoRoomObject extends DurableObject<Env> {
   }
 
   async repairTurn(roomId: string): Promise<void> {
+    const botTurn = this.sql
+      .exec<{ due_at: number }>("SELECT due_at FROM bot_turn LIMIT 1")
+      .toArray()[0];
+    if (botTurn) {
+      const alarm = await this.ctx.storage.getAlarm();
+      if (alarm === null || alarm > botTurn.due_at)
+        await this.ctx.storage.setAlarm(Math.max(Date.now(), botTurn.due_at));
+    }
     const turn = this.sql
       .exec<OngoingTurn>("SELECT * FROM first_turn WHERE room_id = ? LIMIT 1", roomId)
       .toArray()[0];
@@ -394,7 +406,57 @@ export class BigTwoRoomObject extends DurableObject<Env> {
   }
 
   async alarm(): Promise<void> {
-    return this.serial(() => this.drainTurn());
+    return this.serial(async () => {
+      await this.drainBotTurn();
+      await this.drainTurn();
+    });
+  }
+
+  private async drainBotTurn(): Promise<void> {
+    const pending = this.sql
+      .exec<{ room_id: string; player_id: string; due_at: number }>(
+        "SELECT * FROM bot_turn LIMIT 1",
+      )
+      .toArray()[0];
+    if (!pending) return;
+    if (pending.due_at > Date.now()) {
+      await this.repairTurn(pending.room_id);
+      return;
+    }
+    const stored = await this.getGameState();
+    const state = stored ? (JSON.parse(stored) as BigTwoGameMachineSnapshot) : null;
+    const player = state?.context.players[state.context.currentPlayerIndex];
+    if (
+      !state ||
+      !player?.isBot ||
+      player.id !== pending.player_id ||
+      !ONGOING_PHASES.some((phase) => phase === state.value) ||
+      !(await this.available(pending.room_id))
+    ) {
+      this.sql.exec("DELETE FROM bot_turn");
+      return;
+    }
+    const cards = chooseBotMove({
+      hand: player.hand,
+      roundMode: state.context.roundMode,
+      cardsToBeat: state.value === "NEXT_PLAYER_TURN" ? state.context.cardPile.at(-1) : undefined,
+      requiredCard:
+        state.value === "ROUND_FIRST_MOVE" ? { value: "3", suit: "DIAMOND" } : undefined,
+    });
+    const event: GameEvent = cards
+      ? {
+          type:
+            state.value === "ROUND_FIRST_MOVE"
+              ? "PLAY_FIRST_MOVE"
+              : state.value === "PLAY_NEW_ROUND"
+                ? "PLAY_NEW_ROUND_FIRST_MOVE"
+                : "PLAY_CARDS",
+          playerId: player.id,
+          cards,
+        }
+      : { type: "PASS_TURN", playerId: player.id };
+    const result = await this.commitGameAction(event, player.id, pending.room_id, "bot");
+    if (!result.success) throw new Error(result.error);
   }
 
   private async drainTurn(): Promise<void> {
@@ -483,6 +545,7 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     event: GameEvent,
     requesterId: string,
     roomId?: string,
+    executionMode: "player" | "bot" = "player",
   ): Promise<{ success: true } | { success: false; error: string }> {
     if (roomId && !(await this.available(roomId)))
       return { success: false, error: "Room not found" };
@@ -495,14 +558,27 @@ export class BigTwoRoomObject extends DurableObject<Env> {
 
     const gameState = JSON.parse(record.game_state as string) as BigTwoGameMachineSnapshot;
 
-    const authorizationError = getGameActionAuthorizationError({
-      event,
-      players: gameState.context.players,
-      requesterId,
-    });
+    const authorizationError =
+      executionMode === "bot"
+        ? undefined
+        : getGameActionAuthorizationError({
+            event,
+            players: gameState.context.players,
+            requesterId,
+          });
     if (authorizationError) {
       return { success: false, error: authorizationError };
     }
+    if (
+      event.type === "FILL_WITH_BOTS" &&
+      (gameState.value !== "WAITING_FOR_PLAYERS" || gameState.context.players.length >= 4)
+    )
+      return { success: false, error: "Bots can only fill open seats while waiting for players" };
+    if (
+      event.type === "REMOVE_BOT" &&
+      !gameState.context.players.some((player) => player.id === event.botId && player.isBot)
+    )
+      return { success: false, error: "That seat is not a bot" };
 
     const gameStateMachineActor = createActor(bigTwoGameMachine, {
       snapshot: gameState,
@@ -549,9 +625,10 @@ export class BigTwoRoomObject extends DurableObject<Env> {
         (event.type === "PLAY_NEW_ROUND_FIRST_MOVE" &&
           gameState.value === "PLAY_NEW_ROUND" &&
           gameStateSnapshot.value === "NEXT_PLAYER_TURN"));
-    const recipientId = startsTurn
-      ? gameStateSnapshot.context.players[gameStateSnapshot.context.currentPlayerIndex]?.id
+    const turnPlayer = startsTurn
+      ? gameStateSnapshot.context.players[gameStateSnapshot.context.currentPlayerIndex]
       : undefined;
+    const recipientId = turnPlayer && !turnPlayer.isBot ? turnPlayer.id : undefined;
     let enrollments: Enrollment[] = [];
     if (recipientId) {
       try {
@@ -566,8 +643,17 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     this.ctx.storage.transactionSync(() => {
       this.sql.exec(`UPDATE game_room SET game_state = ? WHERE id = 1`, serialisedGameState);
       if (startsTurn || !ONGOING_PHASES.some((phase) => phase === gameStateSnapshot.value)) {
+        this.sql.exec("DELETE FROM bot_turn");
         this.sql.exec("DELETE FROM turn_delivery");
         this.sql.exec("DELETE FROM first_turn");
+      }
+      if (roomId && turnPlayer?.isBot) {
+        this.sql.exec(
+          "INSERT OR REPLACE INTO bot_turn (id, room_id, player_id, due_at) VALUES (1, ?, ?, ?)",
+          roomId,
+          turnPlayer.id,
+          Date.now() + 650,
+        );
       }
       if (roomId && recipientId) {
         const id = crypto.randomUUID();
@@ -597,10 +683,12 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     const departingPlayer =
       event.type === "LEAVE_GAME"
         ? gameState.context.players.find((player) => player.id === requesterId)
-        : undefined;
+        : event.type === "REMOVE_BOT"
+          ? gameState.context.players.find((player) => player.id === event.botId)
+          : undefined;
     // Everything after the SQLite write is best-effort: a committed action cannot be retried
     // safely just because notification or room housekeeping failed.
-    if (roomId && recipientId) {
+    if (roomId && startsTurn) {
       try {
         await this.repairTurn(roomId);
       } catch (error) {
@@ -612,11 +700,13 @@ export class BigTwoRoomObject extends DurableObject<Env> {
         gameStateSnapshot,
         undefined,
         departingPlayer && {
-          playerId: requesterId,
+          playerId: event.type === "REMOVE_BOT" ? event.botId : requesterId,
           message:
-            gameState.value === "WAITING_FOR_PLAYERS"
-              ? `${departingPlayer.name} left the table.`
-              : `${departingPlayer.name} left the table, so the game was reset.`,
+            event.type === "REMOVE_BOT"
+              ? `${departingPlayer.name} was removed. The game was reset and a seat is now open.`
+              : gameState.value === "WAITING_FOR_PLAYERS"
+                ? `${departingPlayer.name} left the table.`
+                : `${departingPlayer.name} left the table, so the game was reset.`,
         },
       );
     } catch (error) {

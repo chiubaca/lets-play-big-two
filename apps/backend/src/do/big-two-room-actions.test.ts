@@ -2,6 +2,7 @@ import { createActor } from "xstate";
 import Database from "better-sqlite3";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 import { bigTwoGameMachine, type BigTwoGameMachineSnapshot } from "@big-two/game-state-machine";
+import { chooseBotMove } from "@big-two/game-ai";
 import { BigTwoRoomObject } from "./big-two-room-do";
 
 vi.mock("cloudflare:workers", () => ({
@@ -98,6 +99,12 @@ function createRoomHarness() {
     object: new BigTwoRoomObject(ctx, env),
     reload: () => new BigTwoRoomObject(ctx, env),
     snapshot: () => JSON.parse(stored().game_state) as BigTwoGameMachineSnapshot,
+    turnRecipient: () =>
+      (
+        sqlite.prepare("SELECT recipient_id FROM first_turn LIMIT 1").get() as
+          | { recipient_id: string }
+          | undefined
+      )?.recipient_id,
     writes: () => writes,
     row,
     chat,
@@ -248,4 +255,127 @@ it("shortens an empty unfinished room's deadline when leaving resets play", asyn
   expect(
     (await r.reload().getRoomView("ada", "ABCDE"))?.context.players.map((player) => player.id),
   ).toEqual(["ada"]);
+});
+
+it("allows only the Host to fill seats and remove bots, opening a seat for a human", async () => {
+  const r = createRoomHarness();
+  expect(await r.object.gameAction({ type: "FILL_WITH_BOTS" }, "bob", "ABCDE")).toEqual({
+    success: false,
+    error: "Only the Host can manage the game",
+  });
+  expect(await r.object.gameAction({ type: "FILL_WITH_BOTS" }, "ada", "ABCDE")).toEqual({
+    success: true,
+  });
+  const bots = r.snapshot().context.players.filter((p) => p.isBot);
+  expect(bots).toHaveLength(2);
+  expect(await r.object.gameAction({ type: "REMOVE_BOT", botId: "bob" }, "ada", "ABCDE")).toEqual({
+    success: false,
+    error: "That seat is not a bot",
+  });
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  expect(
+    await r.object.gameAction({ type: "REMOVE_BOT", botId: bots[0].id }, "bob", "ABCDE"),
+  ).toEqual({ success: false, error: "Only the Host can manage the game" });
+  expect(
+    await r.reload().gameAction({ type: "REMOVE_BOT", botId: bots[0].id }, "ada", "ABCDE"),
+  ).toEqual({ success: true });
+  expect(r.snapshot().value).toBe("WAITING_FOR_PLAYERS");
+  expect(r.snapshot().context.players).toHaveLength(3);
+  expect(r.snapshot().context.players.every((p) => p.hand.length === 0)).toBe(true);
+  await r
+    .reload()
+    .gameAction({ type: "JOIN_GAME", playerId: "eve", playerName: "Eve" }, "eve", "ABCDE");
+  expect(r.snapshot().context.players.map((p) => p.id)).toContain("eve");
+});
+
+it("runs persisted bot turns on alarms without allowing client impersonation", async () => {
+  const r = createRoomHarness();
+  await r.object.gameAction({ type: "FILL_WITH_BOTS" }, "ada", "ABCDE");
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  let state = r.snapshot();
+  // Move through human turns until a bot is up.
+  if (!state.context.players[state.context.currentPlayerIndex].isBot) {
+    const starter = state.context.players[state.context.currentPlayerIndex];
+    await r.object.gameAction(
+      { type: "PLAY_FIRST_MOVE", playerId: starter.id, cards: [{ value: "3", suit: "DIAMOND" }] },
+      starter.id,
+      "ABCDE",
+    );
+    state = r.snapshot();
+    if (!state.context.players[state.context.currentPlayerIndex].isBot) {
+      const next = state.context.players[state.context.currentPlayerIndex];
+      await r.object.gameAction({ type: "PASS_TURN", playerId: next.id }, next.id, "ABCDE");
+    }
+  }
+  state = r.snapshot();
+  const bot = state.context.players[state.context.currentPlayerIndex];
+  expect(bot.isBot).toBe(true);
+  expect(
+    await r.object.gameAction({ type: "PASS_TURN", playerId: bot.id }, bot.id, "ABCDE"),
+  ).toEqual({ success: false, error: "You are not a participant in this room" });
+  vi.setSystemTime(NOW + 1000);
+  await r.reload().alarm();
+  expect(r.snapshot().context.currentPlayerIndex).not.toBe(state.context.currentPlayerIndex);
+  const after = r.snapshot();
+  await r.reload().alarm();
+  expect(r.snapshot()).toEqual(after); // Duplicate delivery cannot skip a turn.
+  await r.object.gameAction({ type: "REMOVE_BOT", botId: bot.id }, "ada", "ABCDE");
+  vi.setSystemTime(NOW + 3000);
+  await r.reload().alarm();
+  expect(r.snapshot().value).toBe("WAITING_FOR_PLAYERS");
+  expect(r.snapshot().context.cardPile).toEqual([]);
+});
+
+it("plays a complete mixed table through consecutive bot turns and human notification handoffs", async () => {
+  const r = createRoomHarness();
+  await r.object.gameAction({ type: "FILL_WITH_BOTS" }, "ada", "ABCDE");
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  let botTurns = 0;
+  let humanTurns = 0;
+  for (let turn = 0; turn < 500 && r.snapshot().value !== "GAME_END"; turn++) {
+    const state = r.snapshot();
+    const player = state.context.players[state.context.currentPlayerIndex];
+    if (player.isBot) {
+      botTurns++;
+      expect(r.turnRecipient()).toBeUndefined();
+      vi.setSystemTime(NOW + (turn + 1) * 1000);
+      await r.reload().alarm();
+    } else {
+      humanTurns++;
+      expect(r.turnRecipient()).toBe(player.id);
+      const cards = chooseBotMove({
+        hand: player.hand,
+        roundMode: state.context.roundMode,
+        cardsToBeat: state.value === "NEXT_PLAYER_TURN" ? state.context.cardPile.at(-1) : undefined,
+        requiredCard:
+          state.value === "ROUND_FIRST_MOVE" ? { value: "3", suit: "DIAMOND" } : undefined,
+      });
+      expect(
+        await r.reload().gameAction(
+          cards
+            ? {
+                type:
+                  state.value === "ROUND_FIRST_MOVE"
+                    ? "PLAY_FIRST_MOVE"
+                    : state.value === "PLAY_NEW_ROUND"
+                      ? "PLAY_NEW_ROUND_FIRST_MOVE"
+                      : "PLAY_CARDS",
+                playerId: player.id,
+                cards,
+              }
+            : { type: "PASS_TURN", playerId: player.id },
+          player.id,
+          "ABCDE",
+        ),
+      ).toEqual({ success: true });
+    }
+  }
+  expect(r.snapshot().value).toBe("GAME_END");
+  expect(botTurns).toBeGreaterThan(1);
+  expect(humanTurns).toBeGreaterThan(1);
+  expect(r.turnRecipient()).toBeUndefined();
+  const finished = r.snapshot();
+  vi.setSystemTime(NOW + 1_000_000);
+  await r.reload().alarm();
+  expect(r.snapshot()).toEqual(finished);
 });

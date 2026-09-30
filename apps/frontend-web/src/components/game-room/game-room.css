@@ -1796,3 +1796,12 @@
     transition: none !important;
   }
 }
+.online-bot-settings {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.online-bot-settings p {
+  margin: 0;
+  font-size: 0.85rem;
+}

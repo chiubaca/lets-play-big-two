@@ -13,7 +13,7 @@ export function getGameActionAuthorizationError({
     return event.playerId === requesterId ? undefined : "Cannot join as another player";
   }
 
-  if (!players.some((player) => player.id === requesterId)) {
+  if (!players.some((player) => player.id === requesterId && !player.isBot)) {
     return "You are not a participant in this room";
   }
 
@@ -22,7 +22,10 @@ export function getGameActionAuthorizationError({
   }
 
   if (
-    (event.type === "START_GAME" || event.type === "RESET_GAME") &&
+    (event.type === "START_GAME" ||
+      event.type === "RESET_GAME" ||
+      event.type === "FILL_WITH_BOTS" ||
+      event.type === "REMOVE_BOT") &&
     players[0]?.id !== requesterId
   ) {
     return "Only the Host can manage the game";

@@ -204,6 +204,7 @@ export const bigTwoGameMachine = setup({
     }),
     resetGame: assign(({ context }) => ({
       players: context.players.map((player) => ({
+        ...player,
         hand: [],
         id: player.id,
         name: player.name,
@@ -215,12 +216,32 @@ export const bigTwoGameMachine = setup({
       winner: undefined,
       guardMessage: undefined,
     })),
-    removePlayer: assign(({ context, event }) => ({
-      players:
+    fillWithBots: assign(({ context }) => {
+      const players = [...context.players];
+      let number = 1;
+      while (players.length < 4) {
+        const name = `Bot ${number++}`;
+        if (players.some((player) => player.name === name)) continue;
+        players.push({ id: `bot-${crypto.randomUUID()}`, name, hand: [], isBot: true });
+      }
+      return { players, guardMessage: undefined };
+    }),
+    removePlayer: assign(({ context, event }) => {
+      const players = context.players.filter((player) =>
         event.type === "LEAVE_GAME"
-          ? context.players.filter((player) => player.id !== event.playerId)
-          : context.players,
-    })),
+          ? player.id !== event.playerId
+          : event.type === "REMOVE_BOT"
+            ? player.id !== event.botId
+            : true,
+      );
+      // A bot never inherits the Host role or keeps an abandoned table occupied.
+      if (!players.some((player) => !player.isBot)) return { players: [] };
+      if (players[0]?.isBot) {
+        const hostIndex = players.findIndex((player) => !player.isBot);
+        players.unshift(...players.splice(hostIndex, 1));
+      }
+      return { players };
+    }),
     passTurn: assign(({ context }) => ({
       currentPlayerIndex: rotatePlayerIndex({
         currentPlayerIndex: context.currentPlayerIndex,
@@ -296,6 +317,12 @@ export const bigTwoGameMachine = setup({
     winner: undefined,
   }),
   on: {
+    REMOVE_BOT: {
+      guard: ({ context, event }) =>
+        context.players.some((player) => player.id === event.botId && player.isBot),
+      actions: ["resetGame", "removePlayer"],
+      target: ".WAITING_FOR_PLAYERS",
+    },
     LEAVE_GAME: {
       guard: "isSeatedPlayer",
       actions: ["resetGame", "removePlayer"],
@@ -305,6 +332,10 @@ export const bigTwoGameMachine = setup({
   states: {
     WAITING_FOR_PLAYERS: {
       on: {
+        FILL_WITH_BOTS: {
+          guard: ({ context }) => context.players.length > 0 && context.players.length < 4,
+          actions: "fillWithBots",
+        },
         JOIN_GAME: {
           actions: "addPlayer",
           guard: "canJoinGame",

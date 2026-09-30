@@ -13,6 +13,8 @@ export const gameEventSchema = z.discriminatedUnion("type", [
     playerName: z.string().min(1),
   }),
   z.object({ type: z.literal("START_GAME") }),
+  z.object({ type: z.literal("FILL_WITH_BOTS") }),
+  z.object({ type: z.literal("REMOVE_BOT"), botId: z.string().min(1) }),
   z.object({
     type: z.literal("PLAY_FIRST_MOVE"),
     playerId: z.string().min(1),

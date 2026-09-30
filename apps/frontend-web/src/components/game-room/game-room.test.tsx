@@ -55,6 +55,83 @@ function SoloTable() {
   );
 }
 
+it("lets the online Host fill seats and confirms removing a bot mid-game", async () => {
+  const send = vi.fn().mockResolvedValue(undefined);
+  const onlineState = {
+    ...gameState,
+    value: "WAITING_FOR_PLAYERS",
+    context: { ...gameState.context, players: players.slice(0, 2) },
+  } as BigTwoGameMachineSnapshot;
+  const props = { send, tableLabel: "ABCDE", roomCode: "ABCDE", user: players[0] };
+  const view = render(<GameRoom {...props} gameState={onlineState} />);
+  fireEvent.click(screen.getByRole("button", { name: "Fill with bots" }));
+  await waitFor(() => expect(send).toHaveBeenCalledWith({ type: "FILL_WITH_BOTS" }));
+  view.rerender(
+    <GameRoom
+      {...props}
+      gameState={{
+        ...gameState,
+        context: {
+          ...gameState.context,
+          players: [players[0], { ...players[1], name: "Bot 1", isBot: true }],
+        },
+      }}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Open table menu" }));
+  expect(screen.queryByRole("button", { name: "Remove Bot 1" })).toBeNull();
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }));
+  fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
+  fireEvent.click(screen.getByRole("button", { name: "Remove Bot 1" }));
+  expect(screen.getByText(/opens this seat for a human/)).toBeTruthy();
+  expect(send).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole("button", { name: "Remove bot and reset game" }));
+  await waitFor(() => expect(send).toHaveBeenCalledWith({ type: "REMOVE_BOT", botId: "ada" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+});
+
+it("hides online bot controls from non-Hosts and spectators", () => {
+  const state = {
+    ...gameState,
+    value: "WAITING_FOR_PLAYERS",
+    context: {
+      ...gameState.context,
+      players: [players[0], players[1], { ...players[2], isBot: true }],
+    },
+  } as BigTwoGameMachineSnapshot;
+  const props = { send: vi.fn(), tableLabel: "ABCDE", roomCode: "ABCDE", gameState: state };
+  const view = render(<GameRoom {...props} user={players[1]} />);
+  expect(screen.queryByRole("button", { name: "Fill with bots" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
+  expect(screen.queryByRole("button", { name: /Remove Jev/ })).toBeNull();
+  view.unmount();
+  render(<GameRoom {...props} user={{ id: "spectator", name: "Spectator" }} />);
+  expect(screen.queryByRole("button", { name: "Fill with bots" })).toBeNull();
+});
+
+it("keeps bot removal confirmation open and shows server failures", async () => {
+  render(
+    <GameRoom
+      gameState={{
+        ...gameState,
+        context: {
+          ...gameState.context,
+          players: [players[0], { ...players[1], name: "Bot 1", isBot: true }],
+        },
+      }}
+      send={vi.fn().mockRejectedValue(new Error("Connection lost"))}
+      tableLabel="ABCDE"
+      roomCode="ABCDE"
+      user={players[0]}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
+  fireEvent.click(screen.getByRole("button", { name: "Remove Bot 1" }));
+  fireEvent.click(screen.getByRole("button", { name: "Remove bot and reset game" }));
+  await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("Connection lost"));
+  expect(screen.getByRole("dialog")).toBeTruthy();
+});
+
 it("changes an opponent strategy without decorating player names", () => {
   render(<SoloTable />);
 

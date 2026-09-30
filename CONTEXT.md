@@ -16,8 +16,11 @@ _Avoid_: Spectator
 A distinct opportunity for a seated Player to act in an ongoing game. The first turn follows a deal; later turns follow a play or pass. The same Player may get a new turn when the lead returns to them after other Players pass.
 
 **Host**:
-The first seated Player in a room, who can start and reset games. When that Player leaves the table, the next seated Player becomes Host.
+The first seated human Player in a room, who can start and reset games, fill open seats with Bots, and remove Bots. When that Player leaves the table, the next seated human Player becomes Host.
 _Avoid_: Room creator
+
+**Bot**:
+A server-controlled Player that the Host can add to fill an online room's open seats while waiting for a game. The Host can remove a Bot at any time; removal resets the game for everyone and opens that seat for a human. Bots never become Host and leave when the last human leaves the table.
 
 **Room chat**:
 Conversation within an online Big Two room, including messages from signed-in Players and Spectators. Its complete history belongs to the room for as long as that room exists and is available to any signed-in visitor, including someone who arrives after the conversation began.

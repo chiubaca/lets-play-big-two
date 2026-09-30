@@ -20,6 +20,7 @@ export type Player = {
   name: string;
   id: string;
   hand: Card[];
+  isBot?: boolean;
 };
 
 export type RoundMode = "single" | "pairs" | "combo";

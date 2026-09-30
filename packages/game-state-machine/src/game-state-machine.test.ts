@@ -3,6 +3,7 @@ import { createActor } from "xstate";
 import type { Card } from "@big-two/game-core";
 import { bigTwoGameMachine } from "./game-state-machine.ts";
 import { gameEventSchema } from "./game-state-machine.schemas.ts";
+import type { BigTwoGameMachineSnapshot } from "./game-state-machine.types.ts";
 
 const threeOfDiamonds: Card = { suit: "DIAMOND", value: "3" };
 
@@ -27,6 +28,45 @@ function startGame(playerCount: number) {
   actor.send({ type: "START_GAME" });
   return actor;
 }
+
+it.each([
+  "WAITING_FOR_PLAYERS",
+  "ROUND_FIRST_MOVE",
+  "NEXT_PLAYER_TURN",
+  "PLAY_NEW_ROUND",
+  "GAME_END",
+] as const)("removes a bot and clears all game progress from %s", (phase) => {
+  const actor = joinPlayers(1);
+  actor.send({ type: "FILL_WITH_BOTS" });
+  actor.send({ type: "START_GAME" });
+  const state = actor.getPersistedSnapshot() as BigTwoGameMachineSnapshot;
+  const restored = createActor(bigTwoGameMachine, {
+    snapshot: { ...state, value: phase } as BigTwoGameMachineSnapshot,
+  }).start();
+  const bot = restored.getSnapshot().context.players[1];
+  restored.send({ type: "REMOVE_BOT", botId: bot.id });
+  expect(restored.getSnapshot().value).toBe("WAITING_FOR_PLAYERS");
+  expect(restored.getSnapshot().context.players).toHaveLength(3);
+  expect(restored.getSnapshot().context.players.filter((p) => p.isBot)).toHaveLength(2);
+  expect(restored.getSnapshot().context.players.every((p) => p.hand.length === 0)).toBe(true);
+  expect(restored.getSnapshot().context.cardPile).toEqual([]);
+  expect(restored.getSnapshot().context.roundMode).toBeNull();
+  expect(restored.getSnapshot().context.winner).toBeUndefined();
+  restored.stop();
+  actor.stop();
+});
+
+it("passes the Host role to a human after bot seats and clears bots when no humans remain", () => {
+  const actor = joinPlayers(1);
+  actor.send({ type: "FILL_WITH_BOTS" });
+  const bot = actor.getSnapshot().context.players[3];
+  actor.send({ type: "REMOVE_BOT", botId: bot.id });
+  actor.send({ type: "JOIN_GAME", playerId: "p2", playerName: "Player 2" });
+  actor.send({ type: "LEAVE_GAME", playerId: "p1" });
+  expect(actor.getSnapshot().context.players[0].id).toBe("p2");
+  actor.send({ type: "LEAVE_GAME", playerId: "p2" });
+  expect(actor.getSnapshot().context.players).toEqual([]);
+});
 
 describe("Big Two game setup", () => {
   it("starts with an empty waiting room", () => {

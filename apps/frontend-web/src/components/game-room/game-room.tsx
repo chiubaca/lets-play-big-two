@@ -169,6 +169,9 @@ export const GameRoom = ({
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [leavePending, setLeavePending] = useState(false);
   const [leaveError, setLeaveError] = useState<string>();
+  const [removeBot, setRemoveBot] = useState<{ id: string; name: string }>();
+  const [botPending, setBotPending] = useState(false);
+  const [botError, setBotError] = useState<string>();
   const [roomNotice, setRoomNotice] = useState<string>();
   const noticeTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [copied, setCopied] = useState(false);
@@ -315,6 +318,19 @@ export const GameRoom = ({
       );
     } finally {
       setLeavePending(false);
+    }
+  };
+  const manageBots = async (event: GameEvent) => {
+    if (botPending) return;
+    setBotPending(true);
+    setBotError(undefined);
+    try {
+      await send(event);
+      setRemoveBot(undefined);
+    } catch (error) {
+      setBotError(error instanceof Error ? error.message : "Could not update the bots. Try again.");
+    } finally {
+      setBotPending(false);
     }
   };
   const hint = () => {
@@ -468,7 +484,7 @@ export const GameRoom = ({
               key={position}
               name={players[index]?.name ?? "Open seat"}
               count={cardCount(index)}
-              avatar={players[index] ? avatar : "♠"}
+              avatar={players[index]?.isBot ? "🤖" : players[index] ? avatar : "♠"}
               active={
                 isGameTurnState(currentValue) && index === gameState.context.currentPlayerIndex
               }
@@ -517,6 +533,15 @@ export const GameRoom = ({
             {waiting ? (
               <>
                 <span>{status}</span>
+                {roomCode && host && players.length < 4 && (
+                  <button
+                    className="table-small-button"
+                    disabled={botPending}
+                    onClick={() => void manageBots({ type: "FILL_WITH_BOTS" })}
+                  >
+                    {botPending ? "Adding bots…" : "Fill with bots"}
+                  </button>
+                )}
                 {!me && players.length < 4 ? (
                   <button
                     className="table-small-button"
@@ -538,6 +563,8 @@ export const GameRoom = ({
                 ) : (
                   <small>Waiting for the host to deal</small>
                 )}
+                {message && <span role="alert">{message}</span>}
+                {botError && <span role="alert">{botError}</span>}
               </>
             ) : (
               <>
@@ -722,6 +749,26 @@ export const GameRoom = ({
           </DialogDescription>
           {panel === "settings" && (
             <div className="table-settings-list">
+              {roomCode && host && players.some((player) => player.isBot) && (
+                <div className="online-bot-settings">
+                  <p>Remove a bot to open a seat. This resets the game for everyone.</p>
+                  {players
+                    .filter((player) => player.isBot)
+                    .map((bot) => (
+                      <button
+                        key={bot.id}
+                        className="table-small-button"
+                        onClick={() => {
+                          setBotError(undefined);
+                          setRemoveBot({ id: bot.id, name: bot.name });
+                          setPanel(null);
+                        }}
+                      >
+                        Remove {bot.name}
+                      </button>
+                    ))}
+                </div>
+              )}
               {botSettings?.onStrategyChange && (
                 <div className="bot-strategy-settings">
                   <div className="settings-section-heading">
@@ -804,6 +851,41 @@ export const GameRoom = ({
           )}
         </DialogContent>
       </Dialog>
+      {roomCode && (
+        <Dialog
+          open={Boolean(removeBot)}
+          onOpenChange={(open) => {
+            if (!open && !botPending) setRemoveBot(undefined);
+          }}
+        >
+          <DialogContent className="table-dialog" showCloseButton={!botPending}>
+            <DialogTitle>Remove {removeBot?.name}?</DialogTitle>
+            <DialogDescription>
+              This resets the game for everyone and opens this seat for a human to join. The other
+              players and bots keep their seats.
+            </DialogDescription>
+            <div className="leave-table-actions">
+              <button
+                className="table-small-button"
+                disabled={botPending}
+                onClick={() => setRemoveBot(undefined)}
+              >
+                Cancel
+              </button>
+              <button
+                className="table-small-button table-leave-button"
+                disabled={botPending || !host}
+                onClick={() =>
+                  removeBot && void manageBots({ type: "REMOVE_BOT", botId: removeBot.id })
+                }
+              >
+                {botPending ? "Removing…" : "Remove bot and reset game"}
+              </button>
+            </div>
+            {botError && <p role="alert">{botError}</p>}
+          </DialogContent>
+        </Dialog>
+      )}
       {roomCode && (
         <Dialog
           open={confirmLeave}
