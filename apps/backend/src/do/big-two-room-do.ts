@@ -11,6 +11,7 @@ import {
 import { getGameActionAuthorizationError } from "./authorize-game-action";
 import { redactPlayerIdentity } from "./redact-player-identity";
 import { roomView } from "./room-view";
+import { withRoomProfileEmojis } from "./room-profile-emojis";
 import {
   registeredEndpoint,
   sendTurnPush,
@@ -741,7 +742,12 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     const stored = await this.getGameState();
     if (!stored) return null;
     const state = JSON.parse(stored) as BigTwoGameMachineSnapshot;
-    return roomView(state, viewerId, this.spectatorCount(state, await this.accessibleSockets()));
+    const profiledState = await withRoomProfileEmojis(state, this.env.BIG_TWO_DB);
+    return roomView(
+      profiledState,
+      viewerId,
+      this.spectatorCount(state, await this.accessibleSockets()),
+    );
   }
 
   async getChatSeat(viewerId: string): Promise<{ seatName: string | null } | null> {
@@ -774,6 +780,8 @@ export class BigTwoRoomObject extends DurableObject<Env> {
   ) {
     const sockets = await this.accessibleSockets();
     const count = this.spectatorCount(state, sockets, excluding);
+    if (sockets.length === 0) return;
+    const profiledState = await withRoomProfileEmojis(state, this.env.BIG_TWO_DB);
     for (const socket of sockets) {
       if (socket === excluding) continue;
       const viewerId = this.viewerId(socket);
@@ -781,7 +789,7 @@ export class BigTwoRoomObject extends DurableObject<Env> {
       try {
         socket.send(
           JSON.stringify({
-            ...roomView(state, viewerId, count),
+            ...roomView(profiledState, viewerId, count),
             ...(notice && viewerId !== notice.playerId ? { roomNotice: notice.message } : {}),
           }),
         );

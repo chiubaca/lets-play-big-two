@@ -9,7 +9,13 @@ import { isGameTurnState } from "./game-room-session";
 import { useOfflineGame, type OfflinePlayer } from "./use-offline-game";
 import "./pass-and-play.css";
 
-export function PassAndPlay({ onBack }: { onBack: () => void }) {
+export function PassAndPlay({
+  onBack,
+  profileEmoji = "♠️",
+}: {
+  onBack: () => void;
+  profileEmoji?: string;
+}) {
   const [seatCount, setSeatCount] = useState(4);
   const [names, setNames] = useState(["You", "Player 2", "Player 3", "Player 4"]);
   const [seatTypes, setSeatTypes] = useState<("human" | "bot")[]>(["human", "human", "bot", "bot"]);
@@ -82,13 +88,15 @@ export function PassAndPlay({ onBack }: { onBack: () => void }) {
             onSubmit={(event) => {
               event.preventDefault();
               if (!validNames) return;
-              const seats: OfflinePlayer[] = names
-                .slice(0, seatCount)
-                .map((name, index) =>
-                  seatTypes[index] === "bot"
-                    ? { id: `bot-${index}`, name: `AI ${index + 1}`, isBot: true }
-                    : { id: `local-${index}`, name: name.trim() },
-                );
+              const seats: OfflinePlayer[] = names.slice(0, seatCount).map((name, index) =>
+                seatTypes[index] === "bot"
+                  ? { id: `bot-${index}`, name: `AI ${index + 1}`, isBot: true }
+                  : {
+                      id: `local-${index}`,
+                      name: name.trim(),
+                      emoji: index === 0 ? profileEmoji : "♠️",
+                    },
+              );
               setPlayers(seats);
               game.start(seats);
             }}
@@ -115,7 +123,15 @@ export function PassAndPlay({ onBack }: { onBack: () => void }) {
               {names.slice(0, seatCount).map((name, index) => (
                 <div className="pass-setup-seat" key={index}>
                   <span className="pass-setup-avatar" aria-hidden="true">
-                    {seatTypes[index] === "human" ? <UserRound /> : <Bot />}
+                    {seatTypes[index] === "human" ? (
+                      index === 0 ? (
+                        profileEmoji
+                      ) : (
+                        <UserRound />
+                      )
+                    ) : (
+                      <Bot />
+                    )}
                   </span>
                   <div className="pass-setup-seat-name">
                     <label htmlFor={`player-${index}`}>Player {index + 1}</label>

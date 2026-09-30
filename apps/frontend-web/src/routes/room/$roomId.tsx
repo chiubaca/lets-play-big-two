@@ -29,7 +29,9 @@ function RoomPage() {
     return <RoomSignIn />;
   }
 
-  return <OnlineGameRoom roomId={roomId} user={{ id: user.id, name: user.name }} />;
+  return (
+    <OnlineGameRoom roomId={roomId} user={{ id: user.id, name: user.name, emoji: user.emoji }} />
+  );
 }
 
 export function RoomSignIn() {

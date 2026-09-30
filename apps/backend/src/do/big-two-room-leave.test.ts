@@ -43,6 +43,7 @@ function room(playing: boolean) {
         prepare: () => ({
           bind: (_room: string, _deadline: number, _session: string, userId: string) => ({
             first: async () => (revoked.has(userId) ? null : { id: "valid" }),
+            all: async () => ({ results: [] }),
           }),
         }),
       },

@@ -158,7 +158,17 @@ describe("pass-and-play turns", () => {
     await act(async () => vi.advanceTimersByTimeAsync(650));
 
     expect(requestJevBotMoveMock).toHaveBeenCalledOnce();
-    expect(requestJevBotMoveMock).toHaveBeenCalledWith(jevTurn, "jev");
+    // The view adds seat metadata; inference still receives the actor's game snapshot.
+    expect(requestJevBotMoveMock).toHaveBeenCalledWith(
+      {
+        ...jevTurn,
+        context: {
+          ...jevTurn.context,
+          players: jevTurn.context.players.map(({ isBot: _isBot, ...player }) => player),
+        },
+      },
+      "jev",
+    );
     expect(result.current.jevDecisionLog).toMatchObject([
       {
         sequence: 1,

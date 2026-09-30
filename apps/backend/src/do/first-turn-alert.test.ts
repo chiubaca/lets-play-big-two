@@ -58,7 +58,7 @@ function room(playerCount = 2, legacyFocusSchema = false) {
   roomDb
     .prepare("INSERT INTO game_room VALUES (1, ?)")
     .run(JSON.stringify(actor.getPersistedSnapshot()));
-  accounts.exec(`CREATE TABLE user (id TEXT PRIMARY KEY);
+  accounts.exec(`CREATE TABLE user (id TEXT PRIMARY KEY, emoji TEXT DEFAULT '♠️');
     CREATE TABLE session (id TEXT PRIMARY KEY, user_id TEXT, expires_at INTEGER);
     CREATE TABLE room (id TEXT PRIMARY KEY, status TEXT, expires_at INTEGER,
       created_at INTEGER, empty_since INTEGER, visited INTEGER);
@@ -67,7 +67,7 @@ function room(playerCount = 2, legacyFocusSchema = false) {
     CREATE TABLE turnNotificationRegistration (endpoint_id TEXT PRIMARY KEY, endpoint TEXT,
       p256dh TEXT, auth TEXT, user_id TEXT, session_id TEXT, generation INTEGER,
       enrollment_id TEXT NOT NULL DEFAULT 'enrolled');
-    INSERT INTO user VALUES ('ada'), ('ben'), ('cal');
+    INSERT INTO user (id) VALUES ('ada'), ('ben'), ('cal');
     INSERT INTO session VALUES ('ada-session','ada',1800000600000), ('ben-session','ben',1800000600000),
       ('ada-focus','ada',1800000600000), ('ben-focus','ben',1800000600000),
       ('cal-session','cal',1800000600000);

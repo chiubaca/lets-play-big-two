@@ -29,6 +29,19 @@ it("configures the number of seats and optional bot players", () => {
   expect(screen.getByRole("button", { name: "Start game" }).hasAttribute("disabled")).toBe(true);
 });
 
+it("keeps the account emoji on the first human seat when the device changes hands", async () => {
+  const { container } = render(<PassAndPlay profileEmoji="🐲" onBack={() => {}} />);
+  expect(container.querySelector(".pass-setup-avatar")?.textContent).toBe("🐲");
+  fireEvent.click(screen.getByRole("button", { name: "2" }));
+  fireEvent.click(screen.getByRole("button", { name: "Start game" }));
+  const avatars = Array.from(
+    container.querySelectorAll(".player-avatar"),
+    (avatar) => avatar.textContent,
+  );
+  expect(avatars).toContain("🐲");
+  expect(avatars).toContain("♠️");
+});
+
 it("keeps hands out of the DOM until Ready, then hides them after playing and passing", async () => {
   const { container } = render(<PassAndPlay onBack={() => {}} />);
   fireEvent.click(screen.getByRole("button", { name: "2" }));

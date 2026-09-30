@@ -55,6 +55,69 @@ function SoloTable() {
   );
 }
 
+it("uses the current user's profile emoji at the solo table and spades for other human seats", () => {
+  const { container } = render(
+    <GameRoom
+      gameState={gameState}
+      send={() => {}}
+      tableLabel="Solo table"
+      user={{ id: "solo-player", name: "You", emoji: "🐲" }}
+    />,
+  );
+  expect(container.querySelector(".seat-you .player-avatar")?.textContent).toBe("🐲");
+  expect(container.querySelector(".seat-top .player-avatar")?.textContent).toBe("♠️");
+});
+
+it("shows other online players' emojis and retains robot avatars for bots", () => {
+  const online = {
+    ...gameState,
+    context: {
+      ...gameState.context,
+      players: players.map((player, index) => ({
+        ...player,
+        emoji: index === 1 ? "🦊" : "🐲",
+        isBot: index === 2,
+      })),
+    },
+  };
+  const { container } = render(
+    <GameRoom
+      gameState={online}
+      send={() => {}}
+      tableLabel="ABCDE"
+      roomCode="ABCDE"
+      user={{ id: "solo-player", name: "You", emoji: "🍀" }}
+    />,
+  );
+  const avatars = Array.from(
+    container.querySelectorAll(".player-avatar"),
+    (avatar) => avatar.textContent,
+  );
+  expect(avatars).toContain("🦊");
+  expect(avatars).toContain("🤖");
+  expect(container.querySelector(".seat-you .player-avatar")?.textContent).toBe("🍀");
+});
+
+it("uses the seated player's emoji in the spectator's bottom seat", () => {
+  const online = {
+    ...gameState,
+    context: {
+      ...gameState.context,
+      players: players.map((player) => ({ ...player, emoji: "🦊" })),
+    },
+  };
+  const { container } = render(
+    <GameRoom
+      gameState={online}
+      send={() => {}}
+      tableLabel="ABCDE"
+      roomCode="ABCDE"
+      user={{ id: "spectator", name: "Spectator", emoji: "🍀" }}
+    />,
+  );
+  expect(container.querySelector(".seat-you .player-avatar")?.textContent).toBe("🦊");
+});
+
 it("lets the online Host fill seats and confirms removing a bot mid-game", async () => {
   const send = vi.fn().mockResolvedValue(undefined);
   const onlineState = {

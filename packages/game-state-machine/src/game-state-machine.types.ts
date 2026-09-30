@@ -21,6 +21,7 @@ export type Player = {
   id: string;
   hand: Card[];
   isBot?: boolean;
+  emoji?: string | null;
 };
 
 export type RoundMode = "single" | "pairs" | "combo";

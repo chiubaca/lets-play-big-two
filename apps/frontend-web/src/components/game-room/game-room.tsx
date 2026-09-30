@@ -43,7 +43,7 @@ const LazyGameRoomDevTools = import.meta.env.DEV
     )
   : null;
 
-export type GameRoomUser = { id: string; name: string };
+export type GameRoomUser = { id: string; name: string; emoji?: string | null };
 export type BotStrategy = "basic" | "jev";
 export type BotSettings = {
   players: ReadonlyArray<GameRoomUser & { botStrategy?: BotStrategy }>;
@@ -476,15 +476,15 @@ export const GameRoom = ({
         <div className="table-felt">
           <CasinoTableMark subtle={Boolean(lastHand?.length)} />
           {[
-            { index: top, position: "top", avatar: "👨🏻" },
-            { index: left, position: "left", avatar: "👩🏻" },
-            { index: right, position: "right", avatar: "👨🏻‍✈️" },
-          ].map(({ index, position, avatar }) => (
+            { index: top, position: "top" },
+            { index: left, position: "left" },
+            { index: right, position: "right" },
+          ].map(({ index, position }) => (
             <PlayerSeat
               key={position}
               name={players[index]?.name ?? "Open seat"}
               count={cardCount(index)}
-              avatar={players[index]?.isBot ? "🤖" : players[index] ? avatar : "♠"}
+              avatar={players[index]?.isBot ? "🤖" : (players[index]?.emoji ?? "♠️")}
               active={
                 isGameTurnState(currentValue) && index === gameState.context.currentPlayerIndex
               }
@@ -634,7 +634,7 @@ export const GameRoom = ({
             <PlayerSeat
               name={players[bottom].name}
               count={cardCount(bottom)}
-              avatar="👨🏻"
+              avatar={players[bottom].isBot ? "🤖" : (players[bottom].emoji ?? "♠️")}
               active={
                 isGameTurnState(currentValue) && bottom === gameState.context.currentPlayerIndex
               }
@@ -647,7 +647,7 @@ export const GameRoom = ({
             <PlayerSeat
               name={sharedDevice ? user.name : "You"}
               count={cardCount(myIndex)}
-              avatar="👨🏻"
+              avatar={me.isBot ? "🤖" : (user.emoji ?? me.emoji ?? "♠️")}
               active={isMyTurn}
               jevFallback={jevFallbackPlayerIds?.has(me.id)}
               position="you"

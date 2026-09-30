@@ -169,6 +169,7 @@ export const bigTwoGameMachine = setup({
           {
             id: event.playerId,
             name: event.playerName,
+            ...(event.playerEmoji ? { emoji: event.playerEmoji } : {}),
             hand: [],
           },
         ],

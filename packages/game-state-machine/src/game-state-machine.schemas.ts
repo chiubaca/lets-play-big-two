@@ -11,6 +11,7 @@ export const gameEventSchema = z.discriminatedUnion("type", [
     type: z.literal("JOIN_GAME"),
     playerId: z.string().min(1),
     playerName: z.string().min(1),
+    playerEmoji: z.string().max(32).optional(),
   }),
   z.object({ type: z.literal("START_GAME") }),
   z.object({ type: z.literal("FILL_WITH_BOTS") }),

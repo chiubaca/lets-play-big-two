@@ -98,7 +98,16 @@ export function useOfflineGame() {
         setReadyPlayerId(undefined);
       }
       previousPlayerId = currentPlayerId;
-      setGameState(snapshot);
+      setGameState({
+        ...snapshot,
+        context: {
+          ...snapshot.context,
+          players: snapshot.context.players.map((player) => ({
+            ...player,
+            isBot: playersRef.current.find((seat) => seat.id === player.id)?.isBot,
+          })),
+        },
+      });
     });
     actor.start();
 
@@ -107,6 +116,7 @@ export function useOfflineGame() {
         type: "JOIN_GAME",
         playerId: player.id,
         playerName: player.name,
+        ...(player.emoji ? { playerEmoji: player.emoji } : {}),
       });
     }
     actor.send({ type: "START_GAME" });
