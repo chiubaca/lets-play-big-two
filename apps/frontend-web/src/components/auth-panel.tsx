@@ -5,6 +5,7 @@ import { useId, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { authClient } from "~/libs/auth-client";
+import { profileUsernameError } from "~/libs/profile-username";
 import { forgetTurnNotificationInstall } from "~/components/game-room/turn-notification-device";
 import "./auth-panel.css";
 
@@ -46,8 +47,8 @@ export function AuthPanel({
             ? await authClient.signUp.email({
                 email: value.email,
                 password: value.password,
-                name: value.username,
-                username: value.username,
+                name: value.username.trim().normalize("NFC"),
+                username: value.username.trim().normalize("NFC"),
               })
             : await authClient.signIn.email({ email: value.email, password: value.password });
         if (response.error) setAuthError(response.error.message ?? "We couldn’t sign you in.");
@@ -110,10 +111,7 @@ export function AuthPanel({
             name="username"
             validators={{
               onChange: ({ value }) => {
-                if (!value) return "Username is required";
-                if (value.length < 3) return "Use at least 3 characters";
-                if (!/^[a-zA-Z0-9_]+$/.test(value)) return "Use letters, numbers, or underscores";
-                return undefined;
+                return profileUsernameError(value);
               },
             }}
           >

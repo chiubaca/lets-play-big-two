@@ -9,6 +9,8 @@ import * as schema from "@big-two/data-ops/drizzle/schema";
 
 import { env } from "cloudflare:workers";
 import { revokeTurnsForDeletion } from "./turn-deletion";
+import { profileEmoji } from "./profile-emoji";
+import { validProfileUsername } from "./profile-username";
 
 export const auth = betterAuth({
   database: drizzleAdapter(drizzle(env.BIG_TWO_DB), {
@@ -32,6 +34,14 @@ export const auth = betterAuth({
     enabled: true,
   },
   user: {
+    additionalFields: {
+      emoji: {
+        type: "string",
+        required: false,
+        defaultValue: "♠️",
+        validator: { input: profileEmoji },
+      },
+    },
     deleteUser: {
       enabled: true,
       beforeDelete: async (user) => {
@@ -56,7 +66,17 @@ export const auth = betterAuth({
       },
     },
   },
-  plugins: [username()],
+  plugins: [
+    username({
+      // The plugin measures UTF-16 length; the validator counts visible Unicode characters.
+      minUsernameLength: 1,
+      maxUsernameLength: 1024,
+      usernameValidator: validProfileUsername,
+      displayUsernameValidator: validProfileUsername,
+      usernameNormalization: (value) => value.trim().normalize("NFC").toLowerCase(),
+      displayUsernameNormalization: (value) => value.trim().normalize("NFC"),
+    }),
+  ],
   socialProviders: {
     google: {
       clientId: env.GOOGLE_CLIENT_ID,
