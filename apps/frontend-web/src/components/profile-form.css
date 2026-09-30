@@ -1,0 +1,130 @@
+.profile-form {
+  display: grid;
+  gap: 26px;
+}
+
+.profile-preview {
+  display: flex;
+  justify-content: center;
+}
+
+.profile-editor fieldset {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+
+.profile-editor {
+  width: min(440px, calc(100% - 32px));
+  max-width: 440px;
+  max-height: calc(100svh - 32px);
+  overflow-y: auto;
+  padding: 28px;
+  border: 1px solid #dcb875aa;
+  border-radius: 18px;
+  color: var(--casino-cream);
+  background: linear-gradient(145deg, #173b2a, #081d16 75%);
+  box-shadow:
+    inset 0 0 0 5px #081d16,
+    inset 0 0 0 6px #dcb87533,
+    0 24px 64px #0009;
+}
+
+.profile-editor [data-slot="dialog-title"] {
+  padding-right: 20px;
+  color: var(--casino-gold-bright);
+  font-size: 25px;
+}
+
+.profile-editor [data-slot="dialog-description"] {
+  color: var(--casino-cream-muted);
+}
+
+.profile-editor-form {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.profile-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+}
+
+.profile-editor legend,
+.profile-username label {
+  margin-bottom: 8px;
+  color: var(--casino-cream);
+  font-weight: 600;
+}
+
+.profile-emoji-picker {
+  max-height: 300px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--casino-gold-deep) #020b07;
+  scrollbar-width: thin;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid #eccb7e40;
+  border-radius: 14px;
+  background: #020b0788;
+}
+
+.profile-emoji-picker:focus-visible {
+  outline: 2px solid var(--casino-focus);
+  outline-offset: 3px;
+}
+
+.profile-emoji-group + .profile-emoji-group {
+  margin-top: 20px;
+}
+
+.profile-emoji-group h2 {
+  margin-bottom: 10px;
+  color: var(--casino-cream-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.profile-emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(46px, 1fr));
+  gap: 8px;
+}
+
+.profile-emoji-option {
+  width: 100%;
+  height: 48px;
+  border: 1px solid #eccb7e26;
+  border-radius: 10px;
+  font-size: 26px;
+}
+
+.profile-emoji-option[aria-pressed="true"] {
+  border-color: var(--casino-gold);
+  background: #eccb7e22;
+  box-shadow: 0 0 0 1px var(--casino-gold);
+}
+
+.profile-username {
+  display: grid;
+  gap: 8px;
+}
+
+.profile-username input {
+  height: 46px;
+  border-color: #eccb7e66;
+  border-radius: 10px;
+  color: var(--casino-cream);
+  background: #020b07b8;
+}
+
+.profile-hint {
+  color: var(--casino-cream-muted);
+  font-size: 12px;
+}

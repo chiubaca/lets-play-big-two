@@ -37,32 +37,59 @@
   color: var(--casino-gold);
 }
 
-.home-account-profile {
-  display: grid;
-  color: inherit;
-  text-align: right;
-  text-decoration: none;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 600;
+.home-account-trigger {
+  height: auto;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  color: var(--casino-gold);
+  background: transparent;
 }
 
-.home-account-profile:hover {
-  color: var(--casino-gold-bright);
+.home-account-trigger:hover,
+.home-account-trigger[aria-expanded="true"] {
+  background: transparent;
 }
 
-.home-account-profile:focus-visible {
-  border-radius: 4px;
+.home-account-trigger:hover .membership-card,
+.home-account-trigger[aria-expanded="true"] .membership-card {
+  border-color: var(--casino-gold-bright);
+  filter: brightness(1.12);
+}
+
+.home-account-trigger:focus-visible {
   outline: 2px solid var(--casino-focus);
   outline-offset: 4px;
 }
 
-.home-account-profile small {
-  color: var(--casino-cream-muted);
-  font-family: var(--font-mono);
-  font-size: 7px;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
+.home-account-menu {
+  min-width: 200px;
+  padding: 6px;
+  border: 1px solid #eccb7e70;
+  border-radius: 12px;
+  color: var(--casino-cream);
+  background: #07190ff5;
+  box-shadow: 0 12px 36px #0008;
+}
+
+.home-account-menu [data-slot="dropdown-menu-item"] {
+  min-height: 40px;
+  gap: 10px;
+  border-radius: 6px;
+}
+
+.home-account-menu [data-slot="dropdown-menu-item"]:focus {
+  color: var(--casino-gold-bright);
+  background: #eccb7e18;
+}
+
+.home-account-menu [data-slot="dropdown-menu-item"] svg {
+  color: var(--casino-gold);
+}
+
+.home-account-menu [data-slot="dropdown-menu-item"][data-highlighted] svg {
+  color: var(--casino-gold-bright);
 }
 
 .home-content {

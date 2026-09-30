@@ -1,0 +1,489 @@
+.membership-card-stage {
+  --pointer-x: 65%;
+  --pointer-y: 25%;
+  --foil-x: 50%;
+  --foil-y: 50%;
+  --rotate-x: 0deg;
+  --rotate-y: 0deg;
+  display: block;
+  width: min(100%, 440px);
+  perspective: 900px;
+}
+
+.membership-card-stage--compact {
+  width: 184px;
+}
+
+.membership-card {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  width: min(100%, 440px);
+  min-height: 252px;
+  overflow: hidden;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-content: space-between;
+  gap: 26px 18px;
+  padding: 28px 30px 22px;
+  border: 1px solid #e5cb92;
+  border-radius: 18px;
+  color: #f5dfad;
+  background:
+    radial-gradient(ellipse at 0% 0%, #355c42, transparent 65%),
+    linear-gradient(120deg, #10291f, #071b15 55%, #153c2d);
+  box-shadow:
+    inset 0 0 0 5px #081d16,
+    inset 0 0 0 6px #dcb87566,
+    inset 0 1px 0 #fff3,
+    0 24px 48px -12px #000a,
+    0 0 32px -12px #dcb87544;
+  text-align: left;
+  white-space: normal;
+  transform: rotateX(var(--rotate-x)) rotateY(var(--rotate-y));
+  transition:
+    transform 650ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 350ms ease;
+}
+
+.membership-card::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 11px;
+  border: 1px solid #e5cb923b;
+  border-radius: 10px;
+  background:
+    linear-gradient(#e5cb9299, #e5cb9299) left top / 24px 1px,
+    linear-gradient(#e5cb9299, #e5cb9299) left top / 1px 24px,
+    linear-gradient(#e5cb9299, #e5cb9299) right bottom / 24px 1px,
+    linear-gradient(#e5cb9299, #e5cb9299) right bottom / 1px 24px;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+
+.membership-card::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background:
+    repeating-radial-gradient(
+      ellipse at 90% 40%,
+      transparent 0 7px,
+      #b8dab512 8px,
+      transparent 9px 13px
+    ),
+    repeating-radial-gradient(
+      ellipse at 75% 55%,
+      transparent 0 10px,
+      #e5cb9212 11px,
+      transparent 12px 16px
+    );
+  mask-image: linear-gradient(90deg, transparent 25%, #000 100%);
+  pointer-events: none;
+}
+
+/* Layered foil and pointer-positioned glare, inspired by Simey’s Pokémon Cards Holo v2:
+   https://codepen.io/simeydotme/pen/abYWJdX. No third-party textures or runtime dependencies. */
+.membership-card-foil,
+.membership-card-glare {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  transition: opacity 450ms ease;
+}
+
+.membership-card-foil {
+  background-image:
+    repeating-linear-gradient(
+      115deg,
+      #f5a9c5 0%,
+      #efd58d 12%,
+      #a3e5b0 24%,
+      #85dce5 36%,
+      #b5a5e8 48%,
+      #f5a9c5 60%
+    ),
+    repeating-linear-gradient(
+      137deg,
+      #071712 0%,
+      #92aaa1 2.8%,
+      #d1ece0 3.5%,
+      #92aaa1 4.2%,
+      #071712 7%,
+      #071712 10%
+    ),
+    radial-gradient(
+      farthest-corner circle at var(--pointer-x) var(--pointer-y),
+      #ffffffb3,
+      #ffffff0a 35%,
+      #0009 85%
+    );
+  background-size:
+    350% 350%,
+    250% 250%,
+    100% 100%;
+  background-position:
+    var(--foil-x) var(--foil-y),
+    var(--foil-x) var(--foil-y),
+    center;
+  background-blend-mode: soft-light, screen;
+  mix-blend-mode: color-dodge;
+  filter: brightness(0.85) contrast(1.4) saturate(1.2);
+  opacity: 0.28;
+  mask-image: linear-gradient(110deg, #0009, #0003 35%, #0002 55%, #000 100%);
+}
+
+.membership-card-foil::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle, #fff5cbcc 0 0.6px, transparent 1px) 0 0 / 19px 23px,
+    radial-gradient(circle, #b3fff6bb 0 0.5px, transparent 1px) 7px 11px / 31px 37px;
+  mask-image: radial-gradient(ellipse at var(--pointer-x) var(--pointer-y), #000, transparent 65%);
+  mix-blend-mode: screen;
+  opacity: 0.45;
+}
+
+.membership-card-glare {
+  background:
+    radial-gradient(ellipse at var(--pointer-x) var(--pointer-y), #fff8dd66, transparent 55%),
+    linear-gradient(
+      115deg,
+      transparent 30%,
+      #ffffff0a 43%,
+      #ffffff45 48%,
+      #ffffff0a 53%,
+      transparent 65%
+    );
+  background-size:
+    100% 100%,
+    250% 250%;
+  background-position:
+    center,
+    var(--foil-x) var(--foil-y);
+  mix-blend-mode: screen;
+  opacity: 0.2;
+}
+
+.membership-card-watermark {
+  position: absolute;
+  z-index: 1;
+  right: 26px;
+  top: 48px;
+  width: 164px;
+  height: 164px;
+  background:
+    repeating-linear-gradient(140deg, #e5cb9233 0 1px, transparent 1px 3px),
+    linear-gradient(120deg, #90efcf44, #efd695bb, #dd94d599, #88d6ec99, #90efcf44);
+  background-size:
+    100% 100%,
+    250% 250%;
+  background-position:
+    center,
+    var(--foil-x) var(--foil-y);
+  mask-image: url("/title-logo.png");
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.membership-card-stage[data-interacting="true"] .membership-card {
+  transition-duration: 100ms, 350ms;
+  box-shadow:
+    inset 0 0 0 5px #081d16,
+    inset 0 0 0 6px #dcb87577,
+    0 28px 48px -12px #000b,
+    0 0 40px -12px #98dfc344;
+}
+
+.membership-card-stage[data-interacting="true"] .membership-card-foil,
+.membership-card-stage:focus-within .membership-card-foil {
+  opacity: 0.7;
+}
+
+.membership-card-stage[data-interacting="true"] .membership-card-glare,
+.membership-card-stage:focus-within .membership-card-glare {
+  opacity: 0.55;
+}
+
+.membership-card-brand,
+.membership-card-seal,
+.membership-card-identity,
+.membership-card-footer,
+.membership-card-chevron {
+  position: relative;
+  z-index: 2;
+}
+
+.membership-card-brand {
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 182px;
+  height: 64px;
+  filter: saturate(0.7) brightness(0.92);
+  mix-blend-mode: screen;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.membership-card-brand-emblem {
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+}
+
+.membership-card-wordmark {
+  position: relative;
+  display: block;
+  width: 122px;
+  height: 64px;
+}
+
+.membership-card-wordmark img {
+  position: absolute;
+  height: auto;
+}
+
+.membership-card-brand-text {
+  top: -19px;
+  left: 0;
+  width: 122px;
+}
+
+.membership-card-brand-crew {
+  top: 18px;
+  left: 50%;
+  width: 74px;
+  transform: translateX(-50%);
+}
+
+.membership-card-seal {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  align-self: start;
+  place-items: center;
+  border: 1px solid #e5cb92bb;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #ecd6a34d, #153426 60%, #dcb87533);
+  box-shadow:
+    inset 0 0 0 4px #081d16,
+    inset 0 0 0 5px #dcb87566,
+    0 3px 10px #0005;
+  font-size: 29px;
+}
+
+.membership-card-identity {
+  display: grid;
+  min-width: 0;
+  grid-column: 1 / -1;
+  gap: 6px;
+}
+
+.membership-card-label,
+.membership-card-footer {
+  color: #cfb989;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.membership-card-name {
+  overflow-wrap: anywhere;
+  color: #ffebbf;
+  font-family: var(--font-heading);
+  font-size: clamp(22px, 5vw, 30px);
+  font-weight: 500;
+  line-height: 1.2;
+  text-shadow: 0 2px 2px #0009;
+}
+
+.membership-card-edit {
+  position: relative;
+  cursor: pointer;
+  text-align: left;
+}
+
+.membership-card-name.membership-card-edit {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 44px;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.membership-card-edit:hover {
+  color: #fff4da;
+}
+
+.membership-card-edit:hover .membership-card-edit-icon,
+.membership-card-edit:focus-visible .membership-card-edit-icon {
+  color: #ffebbf;
+}
+
+.membership-card-edit:focus-visible {
+  outline: 2px solid var(--casino-focus);
+  outline-offset: 5px;
+  border-radius: 6px;
+}
+
+.membership-card-edit-icon {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  color: #cfb989;
+}
+
+.membership-card-seal .membership-card-edit-icon {
+  position: absolute;
+  right: -4px;
+  bottom: -2px;
+  width: 22px;
+  height: 22px;
+  padding: 4px;
+  border: 1px solid #dcb87588;
+  border-radius: 50%;
+  background: #081d16;
+}
+
+.membership-card-footer {
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid #dcb87533;
+  font-size: 8px;
+}
+
+.membership-card-footer > span:last-child {
+  color: #e7c98a;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.membership-card--compact {
+  width: 184px;
+  min-height: 64px;
+  grid-template-columns: 32px minmax(0, 1fr) 12px;
+  align-items: center;
+  align-content: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  box-shadow:
+    inset 0 0 0 3px #081d16,
+    inset 0 0 0 4px #dcb87533,
+    0 5px 12px #0004;
+  transition:
+    border-color 180ms ease,
+    filter 180ms ease;
+}
+
+.membership-card--compact::before {
+  inset: 6px;
+  border-radius: 5px;
+  background: none;
+}
+
+.membership-card--compact .membership-card-brand {
+  display: none;
+}
+
+.membership-card--compact .membership-card-seal {
+  width: 32px;
+  height: 32px;
+  align-self: center;
+  box-shadow: none;
+  font-size: 19px;
+}
+
+.membership-card--compact .membership-card-identity {
+  grid-column: auto;
+  gap: 4px;
+}
+
+.membership-card--compact .membership-card-label {
+  font-size: 7px;
+}
+
+.membership-card--compact .membership-card-name {
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.membership-card .membership-card-chevron {
+  width: 12px;
+  height: 12px;
+  color: #cfb989;
+}
+
+@media (max-width: 380px) {
+  .membership-card:not(.membership-card--compact) {
+    padding: 24px 22px 20px;
+    gap: 22px 10px;
+  }
+  .membership-card-brand {
+    width: 150px;
+    height: 54px;
+  }
+  .membership-card-brand-emblem {
+    width: 44px;
+    height: 44px;
+  }
+  .membership-card-wordmark {
+    width: 100px;
+    height: 54px;
+  }
+  .membership-card-brand-text {
+    top: -16px;
+    width: 100px;
+  }
+  .membership-card-brand-crew {
+    top: 15px;
+    width: 62px;
+  }
+  .membership-card-watermark {
+    top: 65px;
+    right: 20px;
+    width: 132px;
+    height: 132px;
+  }
+  .membership-card-footer {
+    letter-spacing: 0.08em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .membership-card,
+  .membership-card--compact,
+  .membership-card-foil,
+  .membership-card-glare {
+    transition: none;
+    transform: none;
+  }
+  .membership-card-stage[data-interacting="true"] .membership-card-foil,
+  .membership-card-stage:focus-within .membership-card-foil {
+    opacity: 0.28;
+  }
+  .membership-card-stage[data-interacting="true"] .membership-card-glare,
+  .membership-card-stage:focus-within .membership-card-glare {
+    opacity: 0.2;
+  }
+}

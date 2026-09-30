@@ -1,15 +1,35 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, Bot, Loader2, LogIn, LogOut, Plus, UsersRound, Wifi, X } from "lucide-react";
+import {
+  ArrowRight,
+  Bot,
+  Loader2,
+  LogIn,
+  LogOut,
+  Plus,
+  Trash2,
+  UserRound,
+  UsersRound,
+  Wifi,
+  X,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AuthPanel, type AuthSuccessUser } from "~/components/auth-panel";
 import { CasinoBackdrop, CasinoPanel } from "~/components/casino/casino";
 import { HomeLogo } from "~/components/home-logo";
+import { MembershipCard } from "~/components/membership-card";
 import { useScrollOverlap } from "~/components/use-scroll-overlap";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import { signOutAndDetachTurnDevice } from "~/libs/turn-sign-out";
 import { honoClient } from "~/libs/hono-client";
 import "./home-screen.css";
@@ -23,6 +43,7 @@ export interface HomeSession {
     username?: string | null;
     displayUsername?: string | null;
     image?: string | null;
+    emoji?: string | null;
   };
 }
 
@@ -62,7 +83,8 @@ export function HomeScreen({
     },
   });
 
-  const displayName = session?.user.username ?? session?.user.name?.split(" ")[0];
+  const displayName =
+    session?.user.displayUsername ?? session?.user.username ?? session?.user.name?.split(" ")[0];
 
   const welcomedUserId = useRef<string | null>(null);
   const seenLoggedOut = useRef(false);
@@ -122,18 +144,40 @@ export function HomeScreen({
       <header className="home-nav">
         {session ? (
           <div className="home-account">
-            <Link to="/account" className="home-account-profile" aria-label="Account settings">
-              <small>Member</small>
-              {displayName}
-            </Link>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Sign out"
-              onClick={() => void signOutAndDetachTurnDevice()}
-            >
-              <LogOut />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="home-account-trigger"
+                  aria-label={`Open account menu for ${displayName}`}
+                >
+                  <MembershipCard
+                    compact
+                    name={displayName ?? "Member"}
+                    emoji={session.user.emoji ?? "♠️"}
+                  />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="home-account-menu">
+                <DropdownMenuItem asChild>
+                  <Link to="/profile">
+                    <UserRound aria-hidden="true" />
+                    Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/account">
+                    <Trash2 aria-hidden="true" />
+                    Account deletion
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => void signOutAndDetachTurnDevice()}>
+                  <LogOut aria-hidden="true" />
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         ) : (
           <Button

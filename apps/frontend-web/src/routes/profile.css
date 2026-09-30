@@ -1,0 +1,57 @@
+.profile-page {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  min-height: 100svh;
+  place-items: center;
+  padding: 88px 24px;
+  color: var(--casino-cream);
+  background: var(--casino-night);
+}
+
+.profile-back {
+  position: absolute;
+  z-index: 2;
+  top: 28px;
+  left: max(24px, calc((100% - 820px) / 2));
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--casino-gold);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.profile-back svg {
+  width: 16px;
+}
+
+.profile-back:hover {
+  color: var(--casino-gold-bright);
+}
+
+.profile-back:focus-visible {
+  outline: 2px solid var(--casino-focus);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.profile-page-content {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  width: min(100%, 440px);
+  gap: 24px;
+}
+
+.profile-page-error {
+  color: #ff9c91;
+  font-size: 14px;
+}
+
+.profile-sign-in {
+  padding: 24px;
+  border: 1px solid #eccb7e70;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #173b2af5, #081d16fa);
+}
