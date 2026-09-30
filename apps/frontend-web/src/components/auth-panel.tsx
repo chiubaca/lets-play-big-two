@@ -21,7 +21,18 @@ function FieldError({ field }: { field: AnyFieldApi }) {
   );
 }
 
-export function AuthPanel({ returnToCurrentPage = false }: { returnToCurrentPage?: boolean }) {
+export interface AuthSuccessUser {
+  id?: string;
+  displayName?: string;
+}
+
+export function AuthPanel({
+  returnToCurrentPage = false,
+  onSuccess,
+}: {
+  returnToCurrentPage?: boolean;
+  onSuccess?: (user: AuthSuccessUser) => void;
+}) {
   const formId = useId();
   const [view, setView] = useState<AuthView>("signIn");
   const [authError, setAuthError] = useState<string | null>(null);
@@ -40,7 +51,23 @@ export function AuthPanel({ returnToCurrentPage = false }: { returnToCurrentPage
               })
             : await authClient.signIn.email({ email: value.email, password: value.password });
         if (response.error) setAuthError(response.error.message ?? "We couldn’t sign you in.");
-        else await forgetTurnNotificationInstall();
+        else {
+          await forgetTurnNotificationInstall();
+          const authUser = response.data?.user as
+            | {
+                id?: string;
+                name?: string | null;
+                username?: string | null;
+                displayUsername?: string | null;
+              }
+            | undefined;
+          const displayName =
+            authUser?.username ??
+            authUser?.displayUsername ??
+            authUser?.name?.split(" ")[0] ??
+            (view === "signUp" ? value.username : value.email.split("@")[0]);
+          onSuccess?.({ id: authUser?.id, displayName });
+        }
       } catch {
         setAuthError("Something went wrong. Please try again.");
       }
@@ -208,6 +235,11 @@ export function AuthPanel({ returnToCurrentPage = false }: { returnToCurrentPage
         variant="lacquer"
         className="h-11 w-full"
         onClick={() => {
+          try {
+            sessionStorage.setItem("big-two-pending-welcome", "1");
+          } catch {
+            // Storage may be unavailable (private mode); the welcome toast is best-effort.
+          }
           void authClient.signIn.social({
             provider: "google",
             callbackURL: returnToCurrentPage ? window.location.href : window.location.origin,

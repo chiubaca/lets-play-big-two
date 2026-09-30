@@ -1,0 +1,32 @@
+[data-sonner-toaster] [data-sonner-toast].casino-toast {
+  padding: 18px 24px;
+  border: 1px solid color-mix(in srgb, var(--casino-gold) 52%, transparent);
+  border-radius: 18px;
+  color: var(--casino-cream);
+  background: linear-gradient(145deg, var(--casino-panel-raised), var(--casino-night-deep) 80%);
+  box-shadow:
+    inset 0 1px color-mix(in srgb, var(--casino-cream) 8%, transparent),
+    inset 0 -2px var(--casino-gold-deep),
+    0 18px 45px #0007;
+  font-family: var(--font-sans);
+}
+
+[data-sonner-toast].casino-toast [data-content] {
+  width: 100%;
+  text-align: center;
+}
+
+[data-sonner-toast].casino-toast .casino-toast-title {
+  color: var(--casino-cream);
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 550;
+  line-height: 1.4;
+  letter-spacing: -0.015em;
+}
+
+[data-sonner-toast].casino-toast .casino-toast-description {
+  color: var(--casino-cream-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}

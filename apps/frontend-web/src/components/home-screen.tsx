@@ -1,8 +1,9 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowRight, Bot, Loader2, LogIn, LogOut, Plus, UsersRound, Wifi, X } from "lucide-react";
-import { useRef, useState } from "react";
-import { AuthPanel } from "~/components/auth-panel";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { AuthPanel, type AuthSuccessUser } from "~/components/auth-panel";
 import { CasinoBackdrop, CasinoPanel } from "~/components/casino/casino";
 import { HomeLogo } from "~/components/home-logo";
 import { useScrollOverlap } from "~/components/use-scroll-overlap";
@@ -62,6 +63,50 @@ export function HomeScreen({
   });
 
   const displayName = session?.user.username ?? session?.user.name?.split(" ")[0];
+
+  const welcomedUserId = useRef<string | null>(null);
+  const seenLoggedOut = useRef(false);
+
+  const showWelcome = (userId: string | null, name: string | null | undefined) => {
+    if (userId) {
+      if (welcomedUserId.current === userId) return;
+      welcomedUserId.current = userId;
+    }
+    toast.success(`Welcome back, ${name ?? "friend"}!`);
+  };
+
+  const handleAuthSuccess = (user: AuthSuccessUser) => {
+    setAuthOpen(false);
+    showWelcome(user.id ?? session?.user.id ?? null, user.displayName ?? displayName);
+  };
+
+  useEffect(() => {
+    if (!sessionPending && !session) {
+      seenLoggedOut.current = true;
+      welcomedUserId.current = null;
+    }
+  }, [session, sessionPending]);
+
+  useEffect(() => {
+    if (sessionPending || !session) return;
+    let pendingSocialWelcome = false;
+    try {
+      pendingSocialWelcome = sessionStorage.getItem("big-two-pending-welcome") === "1";
+      if (pendingSocialWelcome) sessionStorage.removeItem("big-two-pending-welcome");
+    } catch {
+      // Storage may be unavailable; fall through to the modal/session transition handling.
+    }
+    if (welcomedUserId.current === session.user.id) {
+      if (authOpen) setAuthOpen(false);
+      return;
+    }
+    if (authOpen || pendingSocialWelcome || seenLoggedOut.current) {
+      seenLoggedOut.current = false;
+      setAuthOpen(false);
+      showWelcome(session.user.id, displayName);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, sessionPending, authOpen]);
   const joinRoom = async () => {
     const code = roomCode.trim().toUpperCase();
     if (!code) {
@@ -274,7 +319,7 @@ export function HomeScreen({
           <DialogDescription className="sr-only">
             Sign in or create an account to create and join online Big Two rooms.
           </DialogDescription>
-          <AuthPanel />
+          <AuthPanel onSuccess={handleAuthSuccess} />
         </DialogContent>
       </Dialog>
     </main>

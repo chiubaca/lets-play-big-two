@@ -117,11 +117,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <TanStackQueryProvider>
           <JevDevtoolsProvider>
             {children}
-            <Toaster
-              toastOptions={{
-                className: "border-gold/30 bg-card/95 text-foreground",
-              }}
-            />
+            <Toaster />
             <TanStackDevtools
               config={{
                 position: "bottom-right",
