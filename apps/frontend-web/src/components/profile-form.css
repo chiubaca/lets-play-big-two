@@ -45,13 +45,21 @@
   text-shadow: 0 2px 4px #000;
 }
 
+.profile-card-zoom {
+  justify-self: center;
+}
+
+.profile-card-zoom-layout {
+  transform-origin: top left;
+}
+
 /* Keep Radix Presence mounted until the card has returned to its preview. */
 .profile-card-inspector[data-slot="dialog-content"][data-state="closed"] {
   pointer-events: none;
   animation: profile-card-dismiss 650ms ease forwards;
 }
 
-.profile-card-inspector[data-state="closed"] .membership-card-stage--enlarged {
+.profile-card-inspector[data-state="closed"] .profile-card-zoom {
   animation: profile-card-return 650ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
@@ -107,7 +115,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .profile-card-inspector[data-slot="dialog-content"][data-state="closed"],
-  .profile-card-inspector[data-state="closed"] .membership-card-stage--enlarged,
+  .profile-card-inspector[data-state="closed"] .profile-card-zoom,
   .profile-card-inspector[data-state="closed"] .membership-card-turner,
   .profile-card-inspector-overlay[data-state="closed"] {
     animation: none;

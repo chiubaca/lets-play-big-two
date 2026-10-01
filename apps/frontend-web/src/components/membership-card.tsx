@@ -8,6 +8,7 @@ export function MembershipCard({
   emoji,
   compact = false,
   enlarged = false,
+  interactive = true,
   onInspect,
   onEditEmoji,
   onEditName,
@@ -16,11 +17,12 @@ export function MembershipCard({
   emoji: string;
   compact?: boolean;
   enlarged?: boolean;
+  interactive?: boolean;
   onInspect?: () => void;
   onEditEmoji?: () => void;
   onEditName?: () => void;
 }) {
-  const holography = useCardHolography(!compact);
+  const holography = useCardHolography(!compact, !interactive);
   return (
     <span
       className={`membership-card-stage${compact ? " membership-card-stage--compact" : ""}${enlarged ? " membership-card-stage--enlarged" : ""}`}
@@ -77,7 +79,7 @@ export function MembershipCard({
               type="button"
               className="membership-card-seal membership-card-edit"
               onClick={onEditEmoji}
-              aria-label="Edit profile emoji"
+              aria-label={enlarged ? "Return to your profile" : "Edit profile emoji"}
             >
               <span aria-hidden="true">{emoji}</span>
               <Pencil className="membership-card-edit-icon" aria-hidden="true" />
@@ -94,7 +96,9 @@ export function MembershipCard({
                 type="button"
                 className="membership-card-name membership-card-edit"
                 onClick={onEditName}
-                aria-label={`Edit username, currently ${name}`}
+                aria-label={
+                  enlarged ? "Return to your profile" : `Edit username, currently ${name}`
+                }
               >
                 <span>{name}</span>
                 <Pencil className="membership-card-edit-icon" aria-hidden="true" />

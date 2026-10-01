@@ -88,6 +88,36 @@ it("explains scrolling and previews the selected emoji without saving", () => {
   expect(authClient.updateUser).not.toHaveBeenCalled();
 });
 
+it("enlarges the original card layout uniformly and retains its edit artwork", () => {
+  vi.stubGlobal("innerWidth", 390);
+  vi.stubGlobal("innerHeight", 844);
+  renderProfile();
+  const preview = screen.getByLabelText("Profile preview").querySelector(".membership-card-stage")!;
+  vi.spyOn(preview, "getBoundingClientRect").mockReturnValue({
+    width: 320,
+    height: 280,
+  } as DOMRect);
+  fireEvent.click(screen.getByRole("button", { name: "Zoom in on your membership card" }));
+  const dialog = screen.getByRole("dialog", { name: "Your membership card" });
+  const zoom = dialog.querySelector<HTMLElement>(".profile-card-zoom")!;
+  const layout = dialog.querySelector<HTMLElement>(".profile-card-zoom-layout")!;
+  expect(zoom.style.width).toBe("374px");
+  expect(zoom.style.height).toBe("327.25px");
+  expect(layout.style.width).toBe("320px");
+  expect(layout.style.transform).toBe("scale(1.16875)");
+  expect(dialog.querySelectorAll(".membership-card-edit-icon").length).toBe(2);
+  vi.spyOn(preview, "getBoundingClientRect").mockReturnValue({
+    width: 342,
+    height: 266,
+  } as DOMRect);
+  fireEvent(window, new Event("resize"));
+  expect(layout.style.width).toBe("342px");
+  expect(zoom.style.width).toBe("374px");
+  fireEvent.click(screen.getAllByRole("button", { name: "Return to your profile" })[1]);
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(authClient.updateUser).not.toHaveBeenCalled();
+});
+
 it.each(["Escape", "card"])(
   "returns the enlarged card to its preview when closed with %s",
   (method) => {
@@ -97,7 +127,7 @@ it.each(["Escape", "card"])(
       .querySelector(".membership-card-stage")!;
     fireEvent.click(screen.getByRole("button", { name: "Zoom in on your membership card" }));
     const dialog = screen.getByRole("dialog", { name: "Your membership card" });
-    const enlarged = dialog.querySelector(".membership-card-stage")!;
+    const enlarged = dialog.querySelector(".profile-card-zoom")!;
     vi.spyOn(preview, "getBoundingClientRect").mockReturnValue({
       x: 100,
       y: 200,
@@ -113,7 +143,7 @@ it.each(["Escape", "card"])(
     if (method === "Escape") {
       fireEvent.keyDown(document, { key: "Escape" });
     } else {
-      fireEvent.click(screen.getByRole("button", { name: "Return to your profile" }));
+      fireEvent.click(screen.getAllByRole("button", { name: "Return to your profile" })[0]);
     }
     expect(dialog.style.getPropertyValue("--card-return-x")).toBe("0px");
     expect(dialog.style.getPropertyValue("--card-return-y")).toBe("25px");

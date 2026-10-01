@@ -1,9 +1,17 @@
 import { useEffect, useRef, type PointerEvent } from "react";
 
-export function useCardHolography(enabled: boolean) {
+export function useCardHolography(enabled: boolean, suspended = false) {
   const ref = useRef<HTMLSpanElement>(null);
   const frame = useRef<number | null>(null);
   const reducedMotion = useRef(false);
+  const suspension = useRef(suspended);
+  suspension.current = suspended;
+
+  useEffect(() => {
+    if (!suspended) return;
+    if (frame.current !== null) cancelAnimationFrame(frame.current);
+    frame.current = null;
+  }, [suspended]);
 
   useEffect(() => {
     if (!enabled) {
@@ -40,7 +48,12 @@ export function useCardHolography(enabled: boolean) {
   };
 
   const followPointer = (event: PointerEvent<HTMLSpanElement>) => {
-    if (!enabled || reducedMotion.current || (event.pointerType === "touch" && event.buttons === 0))
+    if (
+      !enabled ||
+      suspension.current ||
+      reducedMotion.current ||
+      (event.pointerType === "touch" && event.buttons === 0)
+    )
       return;
     const card = ref.current;
     if (!card) return;
@@ -51,6 +64,7 @@ export function useCardHolography(enabled: boolean) {
     if (frame.current !== null) cancelAnimationFrame(frame.current);
     frame.current = requestAnimationFrame(() => {
       frame.current = null;
+      if (suspension.current || reducedMotion.current) return;
       const tilt = 10;
       card.dataset.interacting = "true";
       card.style.setProperty("--pointer-x", `${x * 100}%`);

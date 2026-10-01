@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { Check, Loader2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -29,15 +29,52 @@ export function ProfileForm({
   const [editor, setEditor] = useState<"emoji" | "username" | null>(null);
   const [inspecting, setInspecting] = useState(false);
   const [inspectorVisible, setInspectorVisible] = useState(false);
+  const [inspectionSize, setInspectionSize] = useState({ width: 440, height: 266, zoom: 1 });
   const previewRef = useRef<HTMLDivElement>(null);
   const inspectorRef = useRef<HTMLDivElement>(null);
+  const measureInspection = useCallback(() => {
+    const preview = previewRef.current?.querySelector(".membership-card-stage");
+    if (!preview) return;
+    const { width, height } = preview.getBoundingClientRect();
+    if (!width || !height) return;
+    const availableWidth =
+      window.innerWidth <= 600 ? window.innerWidth - 16 : Math.min(656, window.innerWidth - 56);
+    setInspectionSize({
+      width,
+      height,
+      zoom: Math.min(availableWidth / width, (window.innerHeight - 160) / height),
+    });
+  }, []);
+  useEffect(() => {
+    if (!inspecting) return;
+    window.addEventListener("resize", measureInspection);
+    return () => window.removeEventListener("resize", measureInspection);
+  }, [inspecting, measureInspection]);
   const changeInspection = (open: boolean) => {
-    if (open) setInspectorVisible(true);
+    if (open) {
+      const preview = previewRef.current?.querySelector<HTMLElement>(".membership-card-stage");
+      if (preview) {
+        preview.removeAttribute("data-interacting");
+        preview.style.setProperty("--rotate-x", "0deg");
+        preview.style.setProperty("--rotate-y", "0deg");
+        measureInspection();
+      }
+      setInspectorVisible(true);
+    }
     if (!open) {
       const inspector = inspectorRef.current;
       const preview = previewRef.current?.querySelector(".membership-card-stage");
-      const enlarged = inspector?.querySelector(".membership-card-stage");
-      if (inspector && preview && enlarged) {
+      const enlarged = inspector?.querySelector<HTMLElement>(".membership-card-stage");
+      const zoom = inspector?.querySelector(".profile-card-zoom");
+      if (inspector && preview && enlarged && zoom) {
+        enlarged
+          .querySelector<HTMLButtonElement>(".membership-card-inspect")
+          ?.focus({ preventScroll: true });
+        enlarged.removeAttribute("data-interacting");
+        const previewStyle = getComputedStyle(preview);
+        for (const property of ["--pointer-x", "--pointer-y", "--foil-x", "--foil-y"]) {
+          enlarged.style.setProperty(property, previewStyle.getPropertyValue(property));
+        }
         const turner = enlarged.querySelector(".membership-card-turner");
         if (turner) {
           inspector.style.setProperty(
@@ -46,7 +83,7 @@ export function ProfileForm({
           );
         }
         const target = preview.getBoundingClientRect();
-        const source = enlarged.getBoundingClientRect();
+        const source = zoom.getBoundingClientRect();
         if (source.width && source.height) {
           inspector.style.setProperty(
             "--card-return-x",
@@ -106,6 +143,7 @@ export function ProfileForm({
           onEditEmoji={() => openEditor("emoji")}
           onEditName={() => openEditor("username")}
           onInspect={() => changeInspection(true)}
+          interactive={!inspectorVisible}
         />
       </div>
       <p className="profile-card-caption">Your seat at the members’ table.</p>
@@ -125,12 +163,28 @@ export function ProfileForm({
           }}
         >
           <DialogTitle className="sr-only">Your membership card</DialogTitle>
-          <MembershipCard
-            name={saved.username || user.name}
-            emoji={saved.emoji}
-            enlarged
-            onInspect={() => changeInspection(false)}
-          />
+          <div
+            className="profile-card-zoom"
+            style={{
+              width: inspectionSize.width * inspectionSize.zoom,
+              height: inspectionSize.height * inspectionSize.zoom,
+            }}
+          >
+            <div
+              className="profile-card-zoom-layout"
+              style={{ width: inspectionSize.width, transform: `scale(${inspectionSize.zoom})` }}
+            >
+              <MembershipCard
+                name={saved.username || user.name}
+                emoji={saved.emoji}
+                enlarged
+                interactive={inspecting}
+                onInspect={() => changeInspection(false)}
+                onEditName={() => changeInspection(false)}
+                onEditEmoji={() => changeInspection(false)}
+              />
+            </div>
+          </div>
           <DialogDescription className="profile-card-inspector-hint">
             Move across the card to catch the light. Close to return to your profile.
           </DialogDescription>

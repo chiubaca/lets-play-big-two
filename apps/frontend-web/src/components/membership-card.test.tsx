@@ -124,6 +124,21 @@ it("does not animate when reduced motion is preferred", () => {
   expect(stage.getAttribute("style")).toBeNull();
 });
 
+it("cancels queued pointer updates when inspection is closing without erasing its lighting", () => {
+  const { stage, rerender } = renderCard();
+  fireEvent.pointerMove(stage, { clientX: 330, clientY: 63 });
+  const queued = frame;
+  stage.style.setProperty("--pointer-x", "41%");
+  rerender(<MembershipCard name="Lucky Dragon" emoji="🐲" interactive={false} />);
+  queued?.(0);
+  expect(cancelAnimationFrame).toHaveBeenCalled();
+  expect(stage.dataset.interacting).toBeUndefined();
+  expect(stage.style.getPropertyValue("--pointer-x")).toBe("41%");
+  vi.mocked(requestAnimationFrame).mockClear();
+  fireEvent.pointerMove(stage, { clientX: 330, clientY: 63 });
+  expect(requestAnimationFrame).not.toHaveBeenCalled();
+});
+
 it("responds to touch while leaving scroll gestures and edit clicks alone", () => {
   const { stage } = renderCard();
   fireEvent.pointerDown(stage, { pointerType: "touch", buttons: 1, clientX: 330, clientY: 63 });
