@@ -1,7 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { HomeBackButton } from "~/components/home-back-button";
-import { AuthPanel } from "~/components/auth-panel";
 import { CasinoBackdrop } from "~/components/casino/casino";
 import { ProfileForm } from "~/components/profile-form";
 import { authClient } from "~/libs/auth-client";
@@ -12,8 +11,12 @@ export const Route = createFileRoute("/profile")({
   component: ProfilePage,
 });
 
-function ProfilePage() {
+export function ProfilePage() {
   const { data: session, isPending, error } = authClient.useSession();
+
+  if (!isPending && !error && !session) {
+    return <Navigate to="/" search={{ auth: "sign-in" }} replace />;
+  }
 
   return (
     <main className="profile-page">
@@ -31,14 +34,7 @@ function ProfilePage() {
           </p>
         ) : session ? (
           <ProfileForm key={session.user.id} user={session.user} />
-        ) : (
-          <>
-            <p>Sign in to choose your emoji and update your username.</p>
-            <div className="profile-sign-in">
-              <AuthPanel returnToCurrentPage />
-            </div>
-          </>
-        )}
+        ) : null}
       </div>
     </main>
   );

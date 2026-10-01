@@ -34,10 +34,3 @@
     top: -24px;
   }
 }
-
-.profile-sign-in {
-  padding: 24px;
-  border: 1px solid #eccb7e70;
-  border-radius: 18px;
-  background: linear-gradient(145deg, #173b2af5, #081d16fa);
-}

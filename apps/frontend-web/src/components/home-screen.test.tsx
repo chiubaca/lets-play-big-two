@@ -53,8 +53,10 @@ vi.mock("@tanstack/react-router", () => ({
       </a>
     );
   },
-  useNavigate: () => vi.fn(),
+  useNavigate: () => navigate,
 }));
+
+const navigate = vi.fn();
 
 const signInEmail = authClient.signIn.email as unknown as ReturnType<typeof vi.fn>;
 const roomsGet = honoClient.api.rooms.$get as unknown as ReturnType<typeof vi.fn>;
@@ -79,12 +81,15 @@ function testSession(username = "tester"): HomeSession {
   };
 }
 
-function renderHome(session: HomeSession | null = null) {
+function renderHome(
+  session: HomeSession | null = null,
+  { authRequested = false, sessionPending = false } = {},
+) {
   roomsGet.mockResolvedValue({ ok: true, json: async () => ({ rooms: [] }) });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <HomeScreen session={session} sessionPending={false} />
+      <HomeScreen session={session} sessionPending={sessionPending} authRequested={authRequested} />
     </QueryClientProvider>,
   );
 }
@@ -113,6 +118,27 @@ it("closes the sign-in modal and welcomes the player after email sign-in", async
 
   await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith("Welcome back, tester!"));
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+});
+
+it("opens auth for a signed-out profile redirect and consumes the URL request", () => {
+  renderHome(null, { authRequested: true });
+  expect(screen.getByRole("dialog")).toBeTruthy();
+  expect(navigate).toHaveBeenCalledWith({ to: "/", search: {}, replace: true });
+  fireEvent.click(screen.getByRole("button", { name: "Close sign in" }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+it("does not open requested auth until the session check is complete", () => {
+  renderHome(null, { authRequested: true, sessionPending: true });
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(navigate).not.toHaveBeenCalled();
+});
+
+it("ignores an auth request for an already signed-in user", () => {
+  renderHome(testSession(), { authRequested: true });
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(navigate).toHaveBeenCalledWith({ to: "/", search: {}, replace: true });
+  expect(toastSuccess).not.toHaveBeenCalled();
 });
 
 it("closes an open sign-in modal when the session arrives", async () => {

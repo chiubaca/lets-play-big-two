@@ -50,12 +50,19 @@ export interface HomeSession {
 export function HomeScreen({
   session,
   sessionPending,
+  authRequested = false,
 }: {
   session: HomeSession | null;
   sessionPending: boolean;
+  authRequested?: boolean;
 }) {
   const navigate = useNavigate();
   const [authOpen, setAuthOpen] = useState(false);
+  useEffect(() => {
+    if (!authRequested || sessionPending) return;
+    if (!session) setAuthOpen(true);
+    void navigate({ to: "/", search: {}, replace: true });
+  }, [authRequested, sessionPending, session, navigate]);
   const [roomCode, setRoomCode] = useState("");
   const [joinError, setJoinError] = useState<string | null>(null);
   const pageRef = useRef<HTMLElement>(null);
