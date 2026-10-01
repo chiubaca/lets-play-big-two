@@ -45,8 +45,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
       },
       {
         name: "description",
-        content:
-          "The classic four-player Chinese card game - refined, real-time, and ready when you are.",
+        content: "Play big two, with your crew",
       },
       {
         name: "application-name",

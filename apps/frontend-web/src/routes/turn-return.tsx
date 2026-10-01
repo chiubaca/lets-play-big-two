@@ -87,8 +87,8 @@ export function TurnReturn() {
       ) : null}
       {state === "sign-in" && session ? (
         <>
-          <h1>Sign in as the original Player</h1>
-          <p>This account cannot open this notification.</p>
+          <h1>Sign in with the account that received this notification</h1>
+          <p>This notification belongs to a different account. Switch accounts to open it.</p>
           <button onClick={() => void signOutAndDetachTurnDevice()}>
             Sign out to switch accounts
           </button>
@@ -97,13 +97,14 @@ export function TurnReturn() {
       {state === "missing" ? (
         <>
           <h1>This room could not be found</h1>
-          <Link to="/">Return to lobby</Link>
+          <Link to="/">Back home</Link>
         </>
       ) : null}
       {state === "unavailable" ? (
         <>
           <h1>Could not verify this notification</h1>
-          <Link to="/">Return to lobby</Link>
+          <p>Open your room from the home page to check whose turn it is.</p>
+          <Link to="/">Back home</Link>
         </>
       ) : null}
     </main>

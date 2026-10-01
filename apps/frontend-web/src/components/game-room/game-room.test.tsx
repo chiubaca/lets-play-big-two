@@ -259,7 +259,7 @@ it("loads account consent for a seated online Player and confirms a save without
   fireEvent.click(toggle);
   await waitFor(() => expect(toggle.getAttribute("aria-checked")).toBe("true"));
   expect(within(screen.getByRole("dialog")).getByRole("status").textContent).toContain(
-    "Turn notifications on for your account",
+    "Turn notifications are on for your account",
   );
   expect(save).toHaveBeenCalledWith(true);
   expect(requestPermission).not.toHaveBeenCalled();
@@ -375,9 +375,12 @@ it("enrolls only after an explicit device action, announces Ready, and removes w
   await waitFor(() => expect(screen.getByText("Ready on this device")).toBeTruthy());
   expect(device.enable).toHaveBeenCalledWith(3);
   expect(within(screen.getByRole("dialog")).getByRole("status").textContent).toContain(
-    "Delivery is not guaranteed",
+    "Notifications are ready on this device.",
   );
-  const remove = screen.getByRole("button", { name: "Remove this device" });
+  expect(
+    screen.getByText("This device is set up to receive alerts. Some notifications may not arrive."),
+  ).toBeTruthy();
+  const remove = screen.getByRole("button", { name: "Turn off on this device" });
   await waitFor(() => expect(document.activeElement).toBe(remove));
   fireEvent.click(remove);
   await waitFor(() => expect(screen.getByText("Not enabled on this device")).toBeTruthy());
@@ -446,7 +449,7 @@ it("refreshes revoked permission when settings regain focus without requesting i
   );
   fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
   await screen.findByText("Ready on this device");
-  screen.getByRole("button", { name: "Remove this device" }).focus();
+  screen.getByRole("button", { name: "Turn off on this device" }).focus();
   fireEvent.focus(window);
   await screen.findByText("Blocked on this device");
   expect(screen.queryByRole("button", { name: "Enable on this device" })).toBeNull();
@@ -476,16 +479,18 @@ it("keeps removal available when blocked and returns focus to the account switch
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
-  const remove = await screen.findByRole("button", { name: "Remove this device" });
+  const remove = await screen.findByRole("button", { name: "Turn off on this device" });
   fireEvent.click(remove);
   await waitFor(() => expect(device.remove).toHaveBeenCalledOnce());
   await waitFor(() =>
-    expect(screen.queryByRole("button", { name: "Remove this device" })).toBeNull(),
+    expect(screen.queryByRole("button", { name: "Turn off on this device" })).toBeNull(),
   );
   expect(document.activeElement).toBe(
     screen.getByRole("switch", { name: "Turn notifications for my account" }),
   );
-  expect(within(screen.getByRole("dialog")).getByRole("status").textContent).toContain("removed");
+  expect(within(screen.getByRole("dialog")).getByRole("status").textContent).toContain(
+    "Notifications are off on this device. Your account setting is unchanged.",
+  );
 });
 
 it("announces an explicit permission denial and moves focus from the removed setup control", async () => {
@@ -514,7 +519,9 @@ it("announces an explicit permission denial and moves focus from the removed set
   fireEvent.click(enable);
   await screen.findByText("Blocked on this device");
   expect(screen.queryByRole("button", { name: "Enable on this device" })).toBeNull();
-  expect(within(screen.getByRole("dialog")).getByRole("status").textContent).toContain("Blocked");
+  expect(within(screen.getByRole("dialog")).getByRole("status").textContent).toContain(
+    "Notifications are blocked. Allow them in your browser settings, then try again.",
+  );
   expect(document.activeElement).toBe(
     screen.getByRole("switch", { name: "Turn notifications for my account" }),
   );

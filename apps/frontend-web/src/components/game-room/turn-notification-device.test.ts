@@ -248,7 +248,7 @@ it("keeps ordinary iOS tabs and unverified WebKit surfaces unavailable", async (
   });
   expect(await turnNotificationDevice.inspect()).toMatchObject({
     state: "unavailable",
-    reason: expect.stringContaining("verification"),
+    reason: "Notifications aren’t supported in Safari yet.",
   });
   expect(get).not.toHaveBeenCalled();
   expect(requestPermission).not.toHaveBeenCalled();

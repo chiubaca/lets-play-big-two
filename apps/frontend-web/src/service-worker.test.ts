@@ -85,14 +85,14 @@ it("shows only generic text after a non-cached authenticated check, once per Tur
     expect.stringContaining("/api/turn-notifications/check?"),
     expect.objectContaining({ credentials: "include", cache: "no-store" }),
   );
-  expect(w.showNotification).toHaveBeenCalledWith("It’s your turn", {
+  expect(w.showNotification).toHaveBeenCalledWith("Big Two Crew · It’s your turn", {
     tag: `${room}:${turn}`,
     data: { ticket },
   });
   await w.fire("push", { data: { json: () => payload } });
   expect(w.showNotification).toHaveBeenCalledTimes(1);
   await w.fire("push", { data: { json: () => ({ ...payload, roomId: "FGHIJ" }) } });
-  expect(w.showNotification).toHaveBeenCalledWith("It’s your turn", {
+  expect(w.showNotification).toHaveBeenCalledWith("Big Two Crew · It’s your turn", {
     tag: `FGHIJ:${turn}`,
     data: { ticket },
   });
@@ -109,11 +109,11 @@ it("persists per-room/per-Turn receipts across worker reloads and ignores duplic
   const nextTurn = "22222222-2222-4222-8222-222222222222";
   await reloaded.fire("push", { data: { json: () => ({ ...payload, turnId: nextTurn }) } });
   await reloaded.fire("push", { data: { json: () => ({ ...payload, roomId: "FGHIJ" }) } });
-  expect(reloaded.showNotification).toHaveBeenNthCalledWith(1, "It’s your turn", {
+  expect(reloaded.showNotification).toHaveBeenNthCalledWith(1, "Big Two Crew · It’s your turn", {
     tag: `${room}:${nextTurn}`,
     data: { ticket },
   });
-  expect(reloaded.showNotification).toHaveBeenNthCalledWith(2, "It’s your turn", {
+  expect(reloaded.showNotification).toHaveBeenNthCalledWith(2, "Big Two Crew · It’s your turn", {
     tag: `FGHIJ:${turn}`,
     data: { ticket },
   });

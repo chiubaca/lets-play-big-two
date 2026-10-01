@@ -186,7 +186,7 @@ async function receipt(event) {
           await cache.delete(key.href);
           return;
         }
-        await self.registration.showNotification("It’s your turn", {
+        await self.registration.showNotification("Big Two Crew · It’s your turn", {
           tag: `${payload.roomId}:${payload.turnId}`,
           data: { ticket: target.searchParams.get("ticket") },
         });

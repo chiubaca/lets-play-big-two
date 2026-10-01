@@ -42,7 +42,7 @@ function androidWrapperCapability(): { available: boolean; reason?: string } {
     return {
       available: false,
       reason:
-        "This Android app installation cannot confirm notification delegation. Reopen the updated app from its icon and check verified app links.",
+        "Notifications aren’t available in this app right now. Update the app and reopen it from its icon. If this continues, check that supported links open in the app in Android settings.",
     };
   }
   return { available: true };
@@ -103,8 +103,8 @@ function capability(): { available: boolean; reason?: string } {
     return {
       available: false,
       reason: window.matchMedia?.("(display-mode: standalone)").matches
-        ? "This iOS Home Screen surface is awaiting device verification."
-        : "Install this site to your Home Screen to use notifications on iOS. This browser tab cannot enroll.",
+        ? "Notifications aren’t supported in the iOS app yet."
+        : "Notifications aren’t supported in iOS browser tabs. Home Screen app support is also not available yet.",
     };
   }
   if (
@@ -112,7 +112,7 @@ function capability(): { available: boolean; reason?: string } {
     /Safari\//.test(agent) &&
     !/Chrome\/|Chromium\/|Edg\/|Firefox\//.test(agent)
   ) {
-    return { available: false, reason: "Safari notifications are awaiting device verification." };
+    return { available: false, reason: "Notifications aren’t supported in Safari yet." };
   }
   if (
     !window.isSecureContext ||
@@ -120,10 +120,13 @@ function capability(): { available: boolean; reason?: string } {
     !("serviceWorker" in navigator) ||
     !("PushManager" in window)
   ) {
-    return { available: false, reason: "Web Push is unavailable on this device or browser." };
+    return {
+      available: false,
+      reason: "Notifications aren’t supported on this device or browser.",
+    };
   }
   if (!import.meta.env.VITE_VAPID_PUBLIC_KEY) {
-    return { available: false, reason: "Web Push is not configured for this site yet." };
+    return { available: false, reason: "Notifications aren’t available on this site yet." };
   }
   return { available: true };
 }

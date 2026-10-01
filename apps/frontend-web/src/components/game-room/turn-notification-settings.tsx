@@ -46,7 +46,9 @@ export function TurnNotificationSettings({
         () => {
           if (active && currentRevision === revision.current) {
             setEnabled(null);
-            setMessage("Could not load your preference. Close and reopen settings to retry.");
+            setMessage(
+              "Could not load notification settings. Close and reopen settings to try again.",
+            );
           }
         },
       );
@@ -94,7 +96,7 @@ export function TurnNotificationSettings({
             setDeviceState("not-enabled");
             setDeviceError(true);
             setRetryInspection(true);
-            setMessage("Could not check this device. Retry to check again.");
+            setMessage("Could not check this device. Try again.");
           }
         },
       );
@@ -134,10 +136,10 @@ export function TurnNotificationSettings({
         setDeviceError(false);
         setRetryInspection(false);
         setMessage(
-          `This device: ${state.state === "ready" ? "Ready" : state.state === "blocked" ? "Blocked" : state.state === "unavailable" ? "Unavailable" : "Not enabled"}.`,
+          `Notifications on this device: ${state.state === "ready" ? "ready" : state.state === "blocked" ? "blocked" : state.state === "unavailable" ? "unavailable" : "not enabled"}.`,
         );
       } catch {
-        setMessage("Could not check this device. Retry to check again.");
+        setMessage("Could not check this device. Try again.");
       } finally {
         deviceActionInProgress.current = false;
         setDeviceBusy(false);
@@ -146,7 +148,11 @@ export function TurnNotificationSettings({
       return;
     }
     setDeviceBusy(true);
-    setMessage(action === "enable" ? "Setting up this device…" : "Removing this device…");
+    setMessage(
+      action === "enable"
+        ? "Setting up notifications…"
+        : "Turning off notifications on this device…",
+    );
     try {
       if (action === "enable") await preference.device.enable(generation);
       else await preference.device.remove();
@@ -162,9 +168,9 @@ export function TurnNotificationSettings({
       setMessage(
         action === "enable"
           ? state.state === "ready"
-            ? "This device is Ready. Delivery is not guaranteed."
-            : "Device setup could not be confirmed."
-          : "This device was removed. Your account preference is unchanged.",
+            ? "Notifications are ready on this device."
+            : "Could not confirm setup. Close and reopen settings to check this device."
+          : "Notifications are off on this device. Your account setting is unchanged.",
       );
     } catch {
       if (
@@ -174,15 +180,17 @@ export function TurnNotificationSettings({
       ) {
         setDeviceState("blocked");
         returnFocusToSwitch.current = true;
-        setMessage("Notifications are Blocked. Change browser permission to try again.");
+        setMessage(
+          "Notifications are blocked. Allow them in your browser settings, then try again.",
+        );
       } else {
         if (action === "enable") setDeviceState("not-enabled");
         setDeviceError(true);
         setRetryInspection(false);
         setMessage(
           action === "enable"
-            ? "Could not set up this device. Retry to try again."
-            : "Could not confirm device removal. Try removing it again.",
+            ? "Could not set up notifications on this device. Try again."
+            : "Could not confirm that notifications are off on this device. Try turning them off again.",
         );
       }
     } finally {
@@ -197,18 +205,20 @@ export function TurnNotificationSettings({
     ++revision.current;
     saveInProgress.current = true;
     setSaving(true);
-    setMessage("Saving your account preference…");
+    setMessage("Saving…");
     try {
       const saved = await preference.save(!enabled);
       if (saved !== !enabled) throw new Error("Unexpected saved preference");
       setEnabled(saved);
       setMessage(
-        `Turn notifications ${saved ? "on" : "off"} for your account. ${saved ? "Set up this device separately." : "All device enrollments were removed."}`,
+        saved
+          ? "Turn notifications are on for your account. Enable them on this device to receive alerts."
+          : "Turn notifications are off for your account and all your devices.",
       );
     } catch {
       setEnabled(null);
       setMessage(
-        "Could not confirm the save. Close and reopen settings to check your account preference.",
+        "Could not confirm your changes. Close and reopen settings to check whether notifications are on.",
       );
     } finally {
       saveInProgress.current = false;
@@ -222,7 +232,8 @@ export function TurnNotificationSettings({
         <div>
           <strong>Turn notifications</strong>
           <p>
-            For your turns in online rooms you aren’t actively viewing. Applies across your account.
+            Get notified when it’s your turn in an online room you aren’t viewing. Turn this on for
+            your account, then enable each device you want to receive alerts on.
           </p>
         </div>
         <button
@@ -237,7 +248,7 @@ export function TurnNotificationSettings({
         >
           {enabled === null
             ? message.startsWith("Could not")
-              ? "Unknown"
+              ? "Couldn’t load"
               : "Loading"
             : enabled
               ? "On"
@@ -247,8 +258,8 @@ export function TurnNotificationSettings({
       <p role="status" aria-live="polite" className="turn-notification-feedback">
         {message ||
           (enabled === null
-            ? "Loading account preference…"
-            : `Account preference: ${enabled ? "On" : "Off"}`)}
+            ? "Loading notification settings…"
+            : `Turn notifications are ${enabled ? "on" : "off"} for your account.`)}
       </p>
       <div className="turn-notification-device" aria-label="This device">
         <strong>
@@ -264,11 +275,11 @@ export function TurnNotificationSettings({
           {enabled
             ? deviceReason ||
               (deviceState === "ready"
-                ? "Setup completed; delivery is not guaranteed."
+                ? "This device is set up to receive alerts. Some notifications may not arrive."
                 : deviceState === "blocked"
-                  ? "Allow notifications in your browser settings before retrying. No permission prompt will open here."
-                  : "Account consent is saved, but this device has not been set up. No alerts will arrive here yet.")
-            : "First choose for your account. Setting up each device is a separate step; no permission is requested here."}
+                  ? "Allow notifications in your browser settings, then return here to check again."
+                  : "Enable notifications on this device to receive alerts. Your browser may ask for permission.")
+            : "Turn on notifications for your account first, then enable them on this device. Turning on the account setting won’t ask for browser permission."}
         </p>
         {enabled &&
           preference.device &&
@@ -292,7 +303,7 @@ export function TurnNotificationSettings({
               }
             >
               {deviceState === "ready" || (deviceState === "blocked" && removable)
-                ? "Remove this device"
+                ? "Turn off on this device"
                 : deviceError
                   ? "Retry device setup"
                   : "Enable on this device"}

@@ -23,7 +23,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it("hides the intended room under a missing or different account and offers original-Player sign-in", async () => {
+it("hides the intended room under a missing or different account and offers sign-in with the receiving account", async () => {
   window.history.replaceState({}, "", `/turn-return?ticket=${"a".repeat(50)}`);
   useSession.mockReturnValue({ data: { user: { id: "different" } }, isPending: false });
   vi.stubGlobal(
@@ -31,7 +31,16 @@ it("hides the intended room under a missing or different account and offers orig
     vi.fn(async () => new Response(JSON.stringify({ allowed: false }))),
   );
   const { rerender } = render(<TurnReturn />);
-  await waitFor(() => expect(screen.getByText("Sign in as the original Player")).toBeTruthy());
+  await waitFor(() =>
+    expect(
+      screen.getByText("Sign in with the account that received this notification"),
+    ).toBeTruthy(),
+  );
+  expect(
+    screen.getByText(
+      "This notification belongs to a different account. Switch accounts to open it.",
+    ),
+  ).toBeTruthy();
   expect(document.body.textContent).not.toContain("ABCDE");
   fireEvent.click(screen.getByRole("button", { name: "Sign out to switch accounts" }));
   expect(signOut).toHaveBeenCalledTimes(1);
@@ -50,7 +59,7 @@ it("shows missing-room recovery rather than resurrecting a finished or expired r
   );
   render(<TurnReturn />);
   await waitFor(() => expect(screen.getByText("This room could not be found")).toBeTruthy());
-  expect(screen.getByRole("link", { name: "Return to lobby" }).getAttribute("href")).toBe("/");
+  expect(screen.getByRole("link", { name: "Back home" }).getAttribute("href")).toBe("/");
 });
 
 it("clears a resolved missing-room result immediately when the account or ticket changes", async () => {
@@ -85,6 +94,22 @@ it("rejects an arbitrary response target without navigating to it", async () => 
     ),
   );
   render(<TurnReturn />);
-  await waitFor(() => expect(screen.getByText("Sign in as the original Player")).toBeTruthy());
+  await waitFor(() =>
+    expect(
+      screen.getByText("Sign in with the account that received this notification"),
+    ).toBeTruthy(),
+  );
   expect(window.location.origin).not.toBe("https://evil.example");
+});
+
+it("offers home-page recovery when the notification cannot be verified", async () => {
+  window.history.replaceState({}, "", `/turn-return?ticket=${"d".repeat(50)}`);
+  useSession.mockReturnValue({ data: { user: { id: "ada" } }, isPending: false });
+  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Offline")));
+  render(<TurnReturn />);
+  await screen.findByRole("heading", { name: "Could not verify this notification" });
+  expect(
+    screen.getByText("Open your room from the home page to check whose turn it is."),
+  ).toBeTruthy();
+  expect(screen.getByRole("link", { name: "Back home" }).getAttribute("href")).toBe("/");
 });
