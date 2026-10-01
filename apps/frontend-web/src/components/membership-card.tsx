@@ -112,7 +112,7 @@ export function MembershipCard({
           ) : (
             <span className="membership-card-footer">
               <span>
-                Big Two Crew<span aria-hidden="true">/</span> 鋤大弟
+                Big Two Crew<span aria-hidden="true"> / </span> 鋤大弟 CREW
               </span>
               <span aria-hidden="true">♠ · ♥ · ♣ · ♦</span>
             </span>
