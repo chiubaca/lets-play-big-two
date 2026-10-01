@@ -67,6 +67,14 @@
   animation: profile-card-settle 650ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
+.profile-card-inspector[data-state="closed"] .membership-card-name {
+  color: #ffebbf;
+}
+
+.profile-card-inspector[data-state="closed"] .membership-card-edit .membership-card-edit-icon {
+  color: #cfb989;
+}
+
 .profile-card-inspector-overlay[data-state="closed"] {
   animation: profile-card-backdrop-dismiss 650ms ease forwards;
 }
