@@ -1,0 +1,201 @@
+.table-dialog.table-cheat-dialog {
+  width: min(640px, calc(100% - 2rem));
+  max-width: 640px;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  padding: 28px;
+  gap: 8px;
+  box-shadow: 0 24px 70px #0009;
+}
+.table-cheat-dialog [data-slot="dialog-title"] {
+  font-family: var(--font-heading);
+  font-size: 22px;
+  color: #fff0c8;
+  padding-right: 24px;
+}
+.cheat-sheet {
+  display: grid;
+  gap: 22px;
+  margin-top: 14px;
+  font-size: 12px;
+  font-family: var(--font-sans);
+  line-height: 1.55;
+}
+.cheat-sheet h3 {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 12px;
+  color: #f3cf84;
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 500;
+}
+.cheat-sheet h3 > span {
+  color: #b9b99f;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 400;
+}
+.cheat-sheet p {
+  margin: 10px 0 0;
+  color: #b9b99f;
+}
+.cheat-card {
+  display: inline-flex;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+.cheat-card .playing-card-fluid {
+  display: block;
+  width: 40px;
+  height: 58px;
+  pointer-events: none;
+}
+.cheat-suit-order {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cheat-suit-step {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.cheat-suit-step > div {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+.cheat-suit-step > div > span:last-child {
+  font-size: 11px;
+}
+.cheat-suit-step .playing-card-fluid {
+  width: 48px;
+  height: 68px;
+}
+.cheat-order-arrow {
+  color: #e4c47e;
+}
+.cheat-ranks {
+  padding: 14px;
+  border: 1px solid #c5a46140;
+  background: #c5a46108;
+  border-radius: 12px;
+}
+.cheat-rank-order {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  font-family: var(--font-heading);
+  font-size: 16px;
+}
+.cheat-rank-order > span:last-child {
+  color: #e4c47e;
+  font-weight: 700;
+}
+.cheat-basic-plays {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.cheat-basic-plays > div {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.cheat-basic-plays p {
+  margin: 0;
+}
+.cheat-sheet strong {
+  color: #f3cf84;
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 500;
+}
+.cheat-basic-plays p span,
+.cheat-table-tip p span {
+  display: block;
+  margin-top: 4px;
+}
+.cheat-hand {
+  display: flex;
+  flex: 0 0 auto;
+  padding-right: 2px;
+}
+.cheat-hand .cheat-card + .cheat-card {
+  margin-left: -10px;
+}
+.cheat-sheet .cheat-ladder-intro {
+  margin: -4px 0 12px;
+}
+.cheat-combos {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border-top: 1px solid #c5a46140;
+}
+.cheat-combos li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid #c5a46140;
+}
+.cheat-combo-copy {
+  flex: 1;
+  min-width: 0;
+}
+.cheat-combo-copy strong,
+.cheat-combo-copy span,
+.cheat-combo-copy small {
+  display: block;
+}
+.cheat-combo-copy strong {
+  font-size: 15px;
+}
+.cheat-combo-copy span {
+  color: #d4d0b8;
+}
+.cheat-combo-copy small {
+  margin-top: 3px;
+  color: #b9b99f;
+  font-size: 11px;
+}
+.cheat-table-tip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  background: #c5a46112;
+  border: 1px solid #8f743f66;
+  border-radius: 12px;
+}
+.cheat-table-tip p {
+  margin: 0;
+}
+@media (max-width: 480px) {
+  .table-dialog.table-cheat-dialog {
+    padding: 22px 16px;
+  }
+  .table-cheat-dialog [data-slot="dialog-title"] {
+    font-size: 22px;
+  }
+  .cheat-suit-step {
+    gap: 8px;
+  }
+  .cheat-basic-plays {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .cheat-combos li {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .cheat-combo-copy {
+    flex-basis: 100%;
+  }
+  .cheat-combos .cheat-hand {
+    margin-top: 4px;
+  }
+}

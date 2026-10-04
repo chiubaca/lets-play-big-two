@@ -30,6 +30,7 @@ import {
   type TurnNotificationPreference,
 } from "./turn-notification-settings";
 import { WinnerArtwork } from "./winner-artwork";
+import { BigTwoCheatSheet } from "./big-two-cheat-sheet";
 import { CasinoBackdrop, CasinoTableMark } from "~/components/casino/casino";
 import "./game-room.css";
 
@@ -744,23 +745,26 @@ export const GameRoom = ({
           if (!open) setPanel(null);
         }}
       >
-        <DialogContent className={`table-dialog ${panel === "menu" ? "table-menu-dialog" : ""}`}>
+        <DialogContent
+          className={`table-dialog ${panel === "menu" ? "table-menu-dialog" : panel === "help" ? "table-cheat-dialog" : ""}`}
+        >
           <DialogTitle>
             {panel === "menu"
               ? "Your table"
               : panel === "settings"
                 ? "Table settings"
-                : "A little table wisdom"}
+                : "Big Two cheat sheet"}
           </DialogTitle>
           <DialogDescription>
             {panel === "help"
-              ? "Be the first to play all your cards. Play singles, pairs, triples, or five-card poker hands. Match the previous combination with a stronger one, or pass. Ranks run from 3 up to 2; suits from diamonds, clubs, hearts to spades. The first play must include 3 ♦."
+              ? "Your pocket guide to the table. First to play all their cards wins."
               : panel === "settings"
                 ? botSettings?.onStrategyChange
                   ? "Choose how each opponent plays. Changes apply to their next turn."
                   : "Make yourself comfortable. Sound starts after your first interaction."
                 : `${tableLabel} · ${players.length} players at the table`}
           </DialogDescription>
+          {panel === "help" && <BigTwoCheatSheet />}
           {panel === "settings" && (
             <div className="table-settings-list">
               {roomCode && host && players.some((player) => player.isBot) && (
