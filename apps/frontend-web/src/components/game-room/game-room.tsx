@@ -7,8 +7,6 @@ import {
   Menu,
   Settings,
   Share2,
-  Volume2,
-  VolumeX,
   WifiOff,
 } from "lucide-react";
 import type {
@@ -711,17 +709,13 @@ export const GameRoom = ({
           >
             Play
           </button>
-          <div className="table-footnote">
-            <span>♠ &nbsp; BIG TWO</span>
-            {requestHint && (
+          {requestHint && (
+            <div className="table-footnote">
               <button disabled={!isMyTurn} onClick={hint} aria-label="Suggest a move">
                 Need a hint?
               </button>
-            )}
-            <button onClick={toggleMuted} aria-label={muted ? "Unmute sounds" : "Mute sounds"}>
-              {muted ? <VolumeX /> : <Volume2 />}
-            </button>
-          </div>
+            </div>
+          )}
         </footer>
       )}
       {import.meta.env.DEV && localDevTools && LazyGameRoomDevTools ? (

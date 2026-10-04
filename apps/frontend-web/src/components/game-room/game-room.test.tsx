@@ -93,6 +93,24 @@ it("uses a sound switch whose checked state reflects whether sound is on", () =>
   expect(localStorage.getItem("big-two-muted")).toBe("false");
 });
 
+it("keeps hints in the footer without branding or a duplicate sound button", () => {
+  const { container } = render(
+    <GameRoom
+      gameState={gameState}
+      send={() => {}}
+      requestHint={() => null}
+      tableLabel="Solo table"
+      user={{ id: "solo-player", name: "You" }}
+    />,
+  );
+  const footer = container.querySelector(".table-footnote")!;
+  expect(footer.textContent).not.toContain("BIG TWO");
+  expect(
+    within(footer as HTMLElement).getByRole("button", { name: "Suggest a move" }),
+  ).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /mute sounds/i })).toBeNull();
+});
+
 it("uses the current user's profile emoji at the solo table and spades for other human seats", () => {
   const { container } = render(
     <GameRoom

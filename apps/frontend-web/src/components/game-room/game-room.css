@@ -669,10 +669,6 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
-.table-footnote svg {
-  width: 16px;
-  height: 16px;
-}
 .table-dialog {
   border: 1px solid #c5a461;
   background: var(--casino-panel);
