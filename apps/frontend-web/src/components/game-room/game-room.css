@@ -418,7 +418,7 @@
   top: 22%;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 2;
+  z-index: 4;
   width: 48%;
   text-align: center;
 }
@@ -479,15 +479,25 @@
   z-index: 5;
 }
 .game-room .table-card {
-  border: 1px solid #d0c6b4;
+  border: 2px solid #111;
   border-radius: 8px;
-  background: linear-gradient(115deg, var(--casino-card), #eee5d7 65%, var(--casino-card-shadow));
+  background: #fff;
   color: var(--casino-black);
-  box-shadow:
-    inset 0 0 0 2px #fff6,
-    0 5px 8px #0006;
+  box-shadow: 0 5px 8px #0006;
   padding: 8px;
   overflow: hidden;
+}
+.game-room .played-card {
+  padding: 0;
+}
+.game-room .played-card .card-value {
+  font-size: 36cqw;
+}
+.game-room .played-card .card-suit {
+  font-size: 22cqw;
+}
+.game-room .played-card .card-center {
+  font-size: 58cqw;
 }
 .game-room .hand-card {
   position: absolute;
@@ -507,45 +517,11 @@
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
-.game-room .table-card .card-value {
-  position: absolute;
-  top: 7px;
-  left: 9px;
-  font-family: var(--font-heading);
-  font-size: clamp(25px, 4.6cqw, 48px);
-  line-height: 1;
-  letter-spacing: -0.08em;
-}
-.game-room .table-card .card-suit {
-  position: absolute;
-  left: 10px;
-  top: 32%;
-  font-size: clamp(22px, 3.8cqw, 40px);
-}
-.game-room .table-card .card-value:last-child {
-  top: auto;
-  left: auto;
-  bottom: 8px;
-  right: 10px;
-  font-size: 22px;
-}
-.game-room .table-card::after {
-  content: attr(data-suit);
-  position: absolute;
-  bottom: 10%;
-  right: 12%;
-  font-family: var(--font-heading);
-  font-size: clamp(45px, 8cqw, 90px);
-  line-height: 1;
-}
-.game-room .table-card[data-red="true"]::after {
-  color: var(--casino-red);
-}
 .game-room .table-card .text-suit-red {
-  color: var(--casino-red);
+  color: #d50918;
 }
 .game-room .table-card .text-suit-black {
-  color: var(--casino-black);
+  color: #111;
 }
 .game-room .hand-card[aria-pressed="true"] {
   transform: translateX(calc(-50% + var(--card-x)))
@@ -1121,18 +1097,6 @@
     translate: 0 0;
   }
 }
-.game-room .table-pile .played-card .card-value {
-  font-size: clamp(18px, 3cqw, 28px);
-  top: 5px;
-  left: 5px;
-}
-.game-room .table-pile .played-card .card-suit,
-.game-room .table-pile .played-card .card-value:last-child {
-  display: none;
-}
-.game-room .table-pile .played-card::after {
-  font-size: clamp(22px, 4cqw, 44px);
-}
 @media (min-width: 1000px) and (min-height: 740px) {
   .game-room {
     padding-top: 24px;
@@ -1336,23 +1300,6 @@
     border-radius: 6px;
     padding: 4px;
   }
-  .game-room .table-card .card-value {
-    top: 5px;
-    left: 5px;
-    font-size: 6cqw;
-  }
-  .game-room .table-card .card-suit {
-    left: 5px;
-    top: 30%;
-    font-size: 5.5cqw;
-  }
-  .game-room .table-card::after {
-    font-size: 11cqw;
-    right: 7%;
-  }
-  .game-room .table-card .card-value:last-child {
-    display: none;
-  }
   .game-room .hand-card[aria-pressed="true"] {
     transform: translateX(calc(-50% + var(--card-x)))
       translateY(calc(var(--card-y) - var(--dev-selected-lift, 20px))) rotate(var(--card-angle));
@@ -1364,15 +1311,6 @@
   .table-pile .played-card {
     width: 12cqw;
     height: 18cqw;
-  }
-  .table-pile .played-card .card-value {
-    font-size: 5cqw;
-  }
-  .table-pile .played-card::after {
-    font-size: 8cqw;
-  }
-  .table-pile .played-card .card-suit {
-    display: none;
   }
   .pile-label {
     font-size: 7px;
@@ -1649,15 +1587,6 @@
   .game-room .hand-card {
     width: 75px;
   }
-  .game-room .table-card .card-value {
-    font-size: 28px;
-  }
-  .game-room .table-card .card-suit {
-    font-size: 22px;
-  }
-  .game-room .table-card::after {
-    font-size: 47px;
-  }
   .table-controls {
     padding-top: 16px;
     gap: 8px;
@@ -1773,21 +1702,6 @@
   .game-room .hand-card {
     width: 57px;
   }
-  .game-room .table-card .card-value {
-    font-size: 24px;
-    left: 4px;
-    top: 4px;
-  }
-  .game-room .table-card .card-suit {
-    font-size: 18px;
-    left: 5px;
-  }
-  .game-room .table-card::after {
-    font-size: 32px;
-  }
-  .game-room .table-card .card-value:last-child {
-    display: none;
-  }
   .table-play-area {
     top: 35%;
     left: 23%;
@@ -1799,9 +1713,6 @@
   .table-pile .played-card {
     width: 34px;
     height: 47px;
-  }
-  .table-pile .card-suit {
-    display: none;
   }
   .table-prompt {
     top: 83%;

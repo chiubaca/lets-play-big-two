@@ -51,7 +51,7 @@ export function Card({ card, selected, onClick, disabled, className, style }: Ca
       disabled={disabled}
       style={style}
       className={cn(
-        "playing-card-fluid relative flex flex-col items-center justify-between border-2 bg-playcard transition-all",
+        "playing-card-fluid relative border-2 bg-white transition-all",
         "shadow-card",
         selected && [
           "border-gold shadow-card-lift",
@@ -59,7 +59,7 @@ export function Card({ card, selected, onClick, disabled, className, style }: Ca
           "ring-1 ring-gold/30 md:ring-2",
         ],
         !selected && [
-          "border-playcard-foreground/15",
+          "border-[#111111]",
           "hover:border-gold/50 hover:-translate-y-1 hover:shadow-card-lift",
         ],
         disabled && "cursor-not-allowed opacity-50",
@@ -67,10 +67,16 @@ export function Card({ card, selected, onClick, disabled, className, style }: Ca
         className,
       )}
     >
-      <span className={cn("card-value font-bold leading-none", colorClass)}>{card.value}</span>
-      <span className={cn("card-suit leading-none", colorClass)}>{symbol}</span>
-      <span className={cn("card-value rotate-180 font-bold leading-none", colorClass)}>
-        {card.value}
+      <span className={cn("card-corner", colorClass)} aria-hidden="true">
+        <span className="card-value font-bold leading-none">{card.value}</span>
+        <span className="card-suit leading-none">{symbol}</span>
+      </span>
+      <span className={cn("card-center leading-none", colorClass)} aria-hidden="true">
+        {symbol}
+      </span>
+      <span className={cn("card-corner card-corner-bottom", colorClass)} aria-hidden="true">
+        <span className="card-value font-bold leading-none">{card.value}</span>
+        <span className="card-suit leading-none">{symbol}</span>
       </span>
     </button>
   );

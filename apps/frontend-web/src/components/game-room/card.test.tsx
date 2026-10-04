@@ -6,6 +6,23 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { Card } from "./card";
 
 describe("Card", () => {
+  it.each(["DIAMOND", "CLUB", "HEART", "SPADE"] as const)(
+    "renders mirrored rank and suit corners with a central %s pip",
+    (suit) => {
+      const { container } = render(<Card card={{ suit, value: "10" }} />);
+      const corners = container.querySelectorAll(".card-corner");
+      expect(corners).toHaveLength(2);
+      for (const corner of corners) {
+        expect(corner.querySelector(".card-value")?.textContent).toBe("10");
+        expect(corner.querySelector(".card-suit")?.textContent).toBe(
+          container.querySelector(".card-center")?.textContent,
+        );
+        expect(corner.getAttribute("aria-hidden")).toBe("true");
+      }
+      expect(corners[1].classList.contains("card-corner-bottom")).toBe(true);
+    },
+  );
+
   it("exposes its identity and selection state", () => {
     const onClick = vi.fn();
     const { rerender } = render(
