@@ -226,12 +226,15 @@ export function TurnNotificationSettings({
     }
   }
 
+  const deviceEnabled = deviceState === "ready" || (deviceState === "blocked" && removable);
+  const showDeviceRetry = deviceError && !deviceEnabled;
+
   return (
     <section className="turn-notification-settings" aria-label="Turn notification settings">
       <div className="turn-notification-row">
         <div>
           <strong>Turn notifications</strong>
-          <p>
+          <p id="turn-notification-description">
             Get notified when it’s your turn in an online room you aren’t viewing. Turn this on for
             your account, then enable each device you want to receive alerts on.
           </p>
@@ -241,19 +244,12 @@ export function TurnNotificationSettings({
           type="button"
           role="switch"
           aria-label="Turn notifications for my account"
+          aria-describedby="turn-notification-description"
           aria-checked={enabled === true}
           disabled={enabled === null || saving || deviceBusy}
           onClick={() => void toggle()}
-          className="turn-notification-switch"
-        >
-          {enabled === null
-            ? message.startsWith("Could not")
-              ? "Couldn’t load"
-              : "Loading"
-            : enabled
-              ? "On"
-              : "Off"}
-        </button>
+          className="table-setting-switch"
+        />
       </div>
       <p role="status" aria-live="polite" className="turn-notification-feedback">
         {message ||
@@ -289,24 +285,27 @@ export function TurnNotificationSettings({
             <button
               ref={deviceButton}
               type="button"
-              className="table-small-button turn-notification-device-button"
+              className={
+                showDeviceRetry
+                  ? "table-small-button turn-notification-device-button"
+                  : "table-setting-switch turn-notification-device-switch"
+              }
+              role={showDeviceRetry ? "button" : "switch"}
+              aria-label={
+                deviceEnabled
+                  ? "Turn off on this device"
+                  : deviceError
+                    ? "Retry device setup"
+                    : "Enable on this device"
+              }
+              aria-checked={showDeviceRetry ? undefined : deviceEnabled}
               disabled={saving}
               aria-disabled={deviceBusy || checkingDevice}
               onClick={() =>
-                void changeDevice(
-                  deviceState === "ready" || (deviceState === "blocked" && removable)
-                    ? "remove"
-                    : retryInspection
-                      ? "retry"
-                      : "enable",
-                )
+                void changeDevice(deviceEnabled ? "remove" : retryInspection ? "retry" : "enable")
               }
             >
-              {deviceState === "ready" || (deviceState === "blocked" && removable)
-                ? "Turn off on this device"
-                : deviceError
-                  ? "Retry device setup"
-                  : "Enable on this device"}
+              {showDeviceRetry ? "Retry device setup" : null}
             </button>
           )}
       </div>

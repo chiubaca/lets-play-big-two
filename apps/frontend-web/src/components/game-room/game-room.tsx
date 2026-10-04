@@ -25,6 +25,7 @@ import { makePlayerOrder } from "./helpers/make-player-order";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
 import { createPlayEvent, isGameTurnState } from "./game-room-session";
 import { useTableAudio } from "./use-table-audio";
+import { useAutoPass } from "./use-auto-pass";
 import { RoomChat, type ChatMessage } from "./room-chat";
 import {
   TurnNotificationSettings,
@@ -190,6 +191,13 @@ export const GameRoom = ({
   const currentId = gameState?.context.players[gameState.context.currentPlayerIndex]?.id;
   const currentValue = gameState?.value;
   const isMyTurn = !hideHand && currentId === user.id && isGameTurnState(currentValue);
+  const autoPass = useAutoPass({
+    gameState,
+    playerId: user.id,
+    isMyTurn,
+    send,
+    onError: setMessage,
+  });
   const pile = gameState?.context.cardPile;
   const lastPlayKey = JSON.stringify(pile?.at(-1) ?? []);
   const liveNotice = gameState && "roomNotice" in gameState ? gameState.roomNotice : undefined;
@@ -820,9 +828,42 @@ export const GameRoom = ({
                   </p>
                 </div>
               )}
-              <button className="table-small-button settings-sound-button" onClick={toggleMuted}>
-                {muted ? "Turn sound on" : "Turn sound off"}
-              </button>
+              {!spectator && (
+                <div className="table-setting-row">
+                  <div>
+                    <strong>Auto-pass</strong>
+                    <p id="auto-pass-description">
+                      Pass automatically when you can’t beat the current play. Saved on this device.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="table-setting-switch"
+                    role="switch"
+                    aria-checked={autoPass.enabled}
+                    aria-label="Auto-pass"
+                    aria-describedby="auto-pass-description"
+                    onClick={autoPass.toggle}
+                  />
+                </div>
+              )}
+              <div className="table-setting-row">
+                <div>
+                  <strong>Turn sound</strong>
+                  <p id="turn-sound-description">
+                    Play table sounds and an alert when it’s your turn.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="table-setting-switch"
+                  role="switch"
+                  aria-label="Turn sound"
+                  aria-describedby="turn-sound-description"
+                  aria-checked={!muted}
+                  onClick={toggleMuted}
+                />
+              </div>
               {roomCode && !spectator && turnNotifications && panel === "settings" && (
                 <TurnNotificationSettings preference={turnNotifications} />
               )}

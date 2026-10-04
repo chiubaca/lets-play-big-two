@@ -991,8 +991,24 @@
 .bot-strategy-note {
   margin: 0;
 }
-.settings-sound-button {
-  width: 100%;
+.table-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 12px 0;
+  border-bottom: 1px solid #8f743f33;
+}
+.table-setting-row strong {
+  color: #f3cf84;
+  font-family: var(--font-heading);
+  font-size: 15px;
+}
+.table-setting-row p {
+  margin: 5px 0 0;
+  color: #b9b99f;
+  font-size: 12px;
+  line-height: 1.55;
 }
 .turn-notification-settings {
   display: grid;
@@ -1018,23 +1034,56 @@
   line-height: 1.55;
   color: #b9b99f;
 }
-.turn-notification-switch {
+.table-setting-switch {
+  position: relative;
   flex: none;
-  min-width: 68px;
-  border: 1px solid #c5a461;
+  width: 52px;
+  height: 32px;
+  border: 1px solid #8f743f;
   border-radius: 999px;
-  padding: 8px 13px;
-  color: #f7dfab;
-  background: #0b2415;
+  padding: 0;
+  background: #031109;
   cursor: pointer;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease;
 }
-.turn-notification-switch[aria-checked="true"] {
-  color: #172311;
-  background: #f3cf84;
+.table-setting-switch::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #b9b99f;
+  box-shadow: 0 2px 4px #0005;
+  transition:
+    transform 0.18s ease,
+    background 0.18s ease;
 }
-.turn-notification-switch:disabled {
+.table-setting-switch[aria-checked="true"] {
+  border-color: #f3cf84;
+  background: linear-gradient(160deg, #ffe39a, #e9b94e);
+}
+.table-setting-switch[aria-checked="true"]::after {
+  transform: translateX(20px);
+  background: #172311;
+}
+.table-setting-switch:disabled,
+.table-setting-switch[aria-disabled="true"] {
   opacity: 0.65;
   cursor: wait;
+}
+.table-setting-switch:focus-visible {
+  outline: 3px solid #f3cf84;
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .table-setting-switch,
+  .table-setting-switch::after {
+    transition: none;
+  }
 }
 .turn-notification-feedback {
   margin: 0;
@@ -1050,8 +1099,10 @@
   margin-top: 12px;
   width: 100%;
 }
-.turn-notification-device-button:focus-visible,
-.turn-notification-switch:focus-visible {
+.turn-notification-device-switch {
+  margin-top: 12px;
+}
+.turn-notification-device-button:focus-visible {
   outline: 3px solid #f3cf84;
   outline-offset: 3px;
 }

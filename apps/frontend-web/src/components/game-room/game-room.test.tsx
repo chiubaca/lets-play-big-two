@@ -9,6 +9,7 @@ import { GameRoom, type BotSettings } from "./game-room";
 
 afterEach(() => {
   cleanup();
+  localStorage.clear();
   vi.unstubAllGlobals();
 });
 
@@ -54,6 +55,43 @@ function SoloTable() {
     />
   );
 }
+
+it("offers a persistent auto-pass switch in table settings", () => {
+  render(<SoloTable />);
+  fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
+  const toggle = screen.getByRole("switch", { name: "Auto-pass" });
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+  fireEvent.click(toggle);
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+  expect(localStorage.getItem("big-two-auto-pass")).toBe("true");
+});
+
+it("does not offer auto-pass to spectators", () => {
+  render(
+    <GameRoom
+      gameState={gameState}
+      send={() => {}}
+      tableLabel="ABCDE"
+      roomCode="ABCDE"
+      user={{ id: "spectator", name: "Spectator" }}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
+  expect(screen.queryByRole("switch", { name: "Auto-pass" })).toBeNull();
+});
+
+it("uses a sound switch whose checked state reflects whether sound is on", () => {
+  render(<SoloTable />);
+  fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
+  const toggle = screen.getByRole("switch", { name: "Turn sound" });
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+  fireEvent.click(toggle);
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+  expect(localStorage.getItem("big-two-muted")).toBe("true");
+  fireEvent.click(toggle);
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+  expect(localStorage.getItem("big-two-muted")).toBe("false");
+});
 
 it("uses the current user's profile emoji at the solo table and spades for other human seats", () => {
   const { container } = render(
@@ -233,7 +271,7 @@ it("hides solo AI settings when strategies are fixed while retaining fallback in
   const settings = within(screen.getByRole("dialog"));
   expect(settings.queryByText("Opponent AI")).toBeNull();
   expect(settings.queryByRole("group", { name: /AI mode/ })).toBeNull();
-  expect(settings.getByRole("button", { name: /Turn sound/ })).toBeTruthy();
+  expect(settings.getByRole("switch", { name: "Turn sound" })).toBeTruthy();
 });
 
 it("loads account consent for a seated online Player and confirms a save without setting up this device", async () => {
@@ -368,7 +406,7 @@ it("enrolls only after an explicit device action, announces Ready, and removes w
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
-  const enable = await screen.findByRole("button", { name: "Enable on this device" });
+  const enable = await screen.findByRole("switch", { name: "Enable on this device" });
   await waitFor(() => expect(enable.getAttribute("aria-disabled")).toBe("false"));
   expect(device.enable).not.toHaveBeenCalled();
   fireEvent.click(enable);
@@ -380,7 +418,7 @@ it("enrolls only after an explicit device action, announces Ready, and removes w
   expect(
     screen.getByText("This device is set up to receive alerts. Some notifications may not arrive."),
   ).toBeTruthy();
-  const remove = screen.getByRole("button", { name: "Turn off on this device" });
+  const remove = screen.getByRole("switch", { name: "Turn off on this device" });
   await waitFor(() => expect(document.activeElement).toBe(remove));
   fireEvent.click(remove);
   await waitFor(() => expect(screen.getByText("Not enabled on this device")).toBeTruthy());
@@ -417,7 +455,7 @@ it("shows Blocked or Unavailable without a setup action and retries failed enrol
   const room = render(<GameRoom {...props} />);
   fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
   await screen.findByText("Blocked on this device");
-  expect(screen.queryByRole("button", { name: "Enable on this device" })).toBeNull();
+  expect(screen.queryByRole("switch", { name: "Enable on this device" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Close" }));
   room.rerender(<GameRoom {...props} />);
   fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
@@ -449,10 +487,10 @@ it("refreshes revoked permission when settings regain focus without requesting i
   );
   fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
   await screen.findByText("Ready on this device");
-  screen.getByRole("button", { name: "Turn off on this device" }).focus();
+  screen.getByRole("switch", { name: "Turn off on this device" }).focus();
   fireEvent.focus(window);
   await screen.findByText("Blocked on this device");
-  expect(screen.queryByRole("button", { name: "Enable on this device" })).toBeNull();
+  expect(screen.queryByRole("switch", { name: "Enable on this device" })).toBeNull();
   expect(document.activeElement).toBe(
     screen.getByRole("switch", { name: "Turn notifications for my account" }),
   );
@@ -479,11 +517,11 @@ it("keeps removal available when blocked and returns focus to the account switch
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
-  const remove = await screen.findByRole("button", { name: "Turn off on this device" });
+  const remove = await screen.findByRole("switch", { name: "Turn off on this device" });
   fireEvent.click(remove);
   await waitFor(() => expect(device.remove).toHaveBeenCalledOnce());
   await waitFor(() =>
-    expect(screen.queryByRole("button", { name: "Turn off on this device" })).toBeNull(),
+    expect(screen.queryByRole("switch", { name: "Turn off on this device" })).toBeNull(),
   );
   expect(document.activeElement).toBe(
     screen.getByRole("switch", { name: "Turn notifications for my account" }),
@@ -514,11 +552,11 @@ it("announces an explicit permission denial and moves focus from the removed set
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
-  const enable = await screen.findByRole("button", { name: "Enable on this device" });
+  const enable = await screen.findByRole("switch", { name: "Enable on this device" });
   await waitFor(() => expect(enable.getAttribute("aria-disabled")).toBe("false"));
   fireEvent.click(enable);
   await screen.findByText("Blocked on this device");
-  expect(screen.queryByRole("button", { name: "Enable on this device" })).toBeNull();
+  expect(screen.queryByRole("switch", { name: "Enable on this device" })).toBeNull();
   expect(within(screen.getByRole("dialog")).getByRole("status").textContent).toContain(
     "Notifications are blocked. Allow them in your browser settings, then try again.",
   );
@@ -578,7 +616,7 @@ it("allows an explicit retry after a failed registration and announces the failu
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: "Table settings" }));
-  const enable = await screen.findByRole("button", { name: "Enable on this device" });
+  const enable = await screen.findByRole("switch", { name: "Enable on this device" });
   await waitFor(() => expect(enable.getAttribute("aria-disabled")).toBe("false"));
   fireEvent.click(enable);
   const retry = await screen.findByRole("button", { name: "Retry device setup" });
