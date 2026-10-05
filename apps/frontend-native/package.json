@@ -1,0 +1,51 @@
+{
+  "name": "frontend-native",
+  "version": "1.1.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "dev": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "build": "expo export --platform all",
+    "check": "tsc --noEmit",
+    "test": "vp test --run",
+    "prebuild": "expo prebuild"
+  },
+  "dependencies": {
+    "@better-auth/expo": "1.5.5",
+    "@big-two/game-ai": "workspace:*",
+    "@big-two/game-core": "workspace:*",
+    "@big-two/game-state-machine": "workspace:*",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "better-auth": "catalog:",
+    "expo": "~55.0.31",
+    "expo-asset": "~55.0.20",
+    "expo-constants": "~55.0.17",
+    "expo-crypto": "~55.0.19",
+    "expo-dev-client": "~55.0.40",
+    "expo-font": "~55.0.8",
+    "expo-haptics": "~55.0.18",
+    "expo-linear-gradient": "~55.0.18",
+    "expo-linking": "~55.0.17",
+    "expo-network": "catalog:",
+    "expo-secure-store": "~55.0.18",
+    "expo-splash-screen": "~55.0.25",
+    "expo-status-bar": "~55.0.6",
+    "expo-web-browser": "~55.0.20",
+    "lucide-react-native": "catalog:",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-native": "0.83.10",
+    "react-native-safe-area-context": "~5.6.2",
+    "react-native-svg": "catalog:",
+    "react-native-web": "~0.21.0",
+    "xstate": "catalog:"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "typescript": "catalog:",
+    "vite-plus": "0.1.14"
+  }
+}

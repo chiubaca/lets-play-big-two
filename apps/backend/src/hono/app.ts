@@ -23,7 +23,11 @@ import { parseChatInput } from "../lib/chat-input";
 import { mintTurnTicket, readTurnTicket } from "../lib/turn-ticket";
 import { MAX_TURN_INSTALLS, registeredEndpoint } from "../lib/turn-push";
 
-const allowedOrigins = ["https://local.bigtwo.com", "https://big-two.chiubaca.com"];
+const allowedOrigins = [
+  "https://local.bigtwo.com",
+  "https://big-two.chiubaca.com",
+  "bigtwocrew://",
+];
 
 async function accountDeletionIsPending(userId: string) {
   const db = getDb();

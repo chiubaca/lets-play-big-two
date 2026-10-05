@@ -38,3 +38,11 @@ apps/android/*.aab
 apps/android/*.apk
 apps/android/*.idsig
 apps/android/local.properties
+
+# Expo native projects are generated from app.config.ts; signing stays outside git.
+apps/frontend-native/.expo/
+apps/frontend-native/android/
+apps/frontend-native/ios/
+apps/frontend-native/.env
+apps/frontend-native/*.jks
+apps/frontend-native/*.keystore

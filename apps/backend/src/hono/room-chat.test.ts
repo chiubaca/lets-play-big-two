@@ -208,6 +208,35 @@ it("rejects other origins and invalid JSON with actionable errors", async () => 
   expect(await malformed.json()).toMatchObject({ error: expect.stringContaining("JSON") });
 });
 
+it("allows the native app scheme but still requires authenticated cookies", async () => {
+  const nativePost = () =>
+    App.request(
+      "/api/room/chat/ABCDE",
+      {
+        method: "POST",
+        headers: {
+          Origin: "bigtwocrew://",
+          Cookie: "better-auth.session_token=native-session",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text: "hi", clientSendId }),
+      },
+      env,
+    );
+  session.mockResolvedValue(null);
+  expect((await nativePost()).status).toBe(401);
+  expect(send).not.toHaveBeenCalled();
+  session.mockResolvedValue({ user: { id: "ada" }, session: { id: "session-1" } });
+  send.mockResolvedValue({ message: { id: "ABCDE:1", text: "hi" } });
+  expect((await nativePost()).status).toBe(200);
+  const headers = session.mock.calls.at(-1)?.[0].headers as Headers;
+  expect(headers.get("Cookie")).toBe("better-auth.session_token=native-session");
+  expect(send).toHaveBeenCalledWith(
+    { roomId: "ABCDE", userId: "ada", sessionId: "session-1" },
+    { text: "hi", clientSendId },
+  );
+});
+
 it("routes authenticated upgrades and sends through the live chat object across phases and seat changes", async () => {
   session.mockResolvedValue({ user: { id: "ada" }, session: { id: "session-1" } });
   let seat: string | null = "Room seat <Ada>";

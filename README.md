@@ -1,6 +1,10 @@
 # Let's Play Big Two
 
-A web-based Big Two card game.
+A Big Two card game with web and React Native clients.
+
+The Android/iOS native app lives in [`apps/frontend-native`](apps/frontend-native/README.md).
+The existing Android TWA remains in `apps/android`; the native app is its future
+replacement, not an already-published store update.
 
 Solo play includes a TypeSafe Jev-powered opponent through the backend's Cloudflare Workers AI
 binding. If Jev is unavailable, the opponent falls back to the legal deterministic strategy.
@@ -87,6 +91,8 @@ pnpm --filter backend dev
 .
 ├── apps/
 │   ├── frontend-web/    # TanStack Start frontend
+│   ├── frontend-native/ # Expo React Native Android/iOS client
+│   ├── android/         # Preserved Bubblewrap TWA
 │   └── backend/         # Cloudflare Workers backend
 ├── packages/
 │   ├── game-core/       # Core game logic

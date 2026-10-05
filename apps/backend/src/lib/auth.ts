@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { expo } from "@better-auth/expo";
 import { username } from "better-auth/plugins";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { drizzle } from "drizzle-orm/d1";
@@ -24,7 +25,7 @@ export const auth = betterAuth({
     },
   }),
   baseURL: env.BETTER_AUTH_URL,
-  trustedOrigins: ["https://local.bigtwo.com", "https://big-two.chiubaca.com"],
+  trustedOrigins: ["https://local.bigtwo.com", "https://big-two.chiubaca.com", "bigtwocrew://"],
   advanced: {
     ipAddress: {
       ipAddressHeaders: ["cf-connecting-ip"],
@@ -67,6 +68,7 @@ export const auth = betterAuth({
     },
   },
   plugins: [
+    expo(),
     username({
       // The plugin measures UTF-16 length; the validator counts visible Unicode characters.
       minUsernameLength: 1,
