@@ -118,6 +118,7 @@ export function Button({
   labelStyle,
   ghost = false,
   icon,
+  disabledAppearance = "fade",
 }: {
   title: string;
   onPress: () => void;
@@ -129,7 +130,9 @@ export function Button({
   labelStyle?: StyleProp<TextStyle>;
   ghost?: boolean;
   icon?: ReactNode;
+  disabledAppearance?: "fade" | "muted";
 }) {
+  const muted = (disabled || busy) && disabledAppearance === "muted";
   return (
     <Pressable
       accessibilityRole="button"
@@ -141,7 +144,8 @@ export function Button({
         styles.button,
         gold && styles.goldButton,
         ghost && styles.ghostButton,
-        (disabled || busy) && styles.disabled,
+        (disabled || busy) && disabledAppearance === "fade" && styles.disabled,
+        muted && gold && { borderColor: "#c5b88e", borderBottomColor: "#9e7e49" },
         pressed && styles.pressed,
         style,
       ]}
@@ -149,11 +153,20 @@ export function Button({
       {!ghost && (
         <LinearGradient
           pointerEvents="none"
-          colors={gold ? ["#ffdc87", "#f5b943", "#d68a1c"] : ["#192014", "#000703"]}
+          colors={
+            gold
+              ? muted
+                ? ["#c5b88e", "#baa16a", "#9e7e49"]
+                : ["#ffdc87", "#f5b943", "#d68a1c"]
+              : ["#192014", "#000703"]
+          }
           locations={gold ? [0, 0.55, 1] : [0, 0.75]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0.2, y: 1 }}
-          style={[StyleSheet.absoluteFill, { borderRadius: 17 }]}
+          style={[
+            StyleSheet.absoluteFill,
+            { borderRadius: StyleSheet.flatten([styles.button, style]).borderRadius },
+          ]}
         />
       )}
       {busy ? (
@@ -161,7 +174,16 @@ export function Button({
       ) : icon ? (
         <View style={{ position: "relative", zIndex: 1 }}>{icon}</View>
       ) : (
-        <Label style={[styles.buttonText, gold && { color: "#111510" }, labelStyle]}>{title}</Label>
+        <Label
+          style={[
+            styles.buttonText,
+            gold && { color: "#111510" },
+            muted && !gold && { color: "#b5a978" },
+            labelStyle,
+          ]}
+        >
+          {title}
+        </Label>
       )}
     </Pressable>
   );
@@ -245,6 +267,7 @@ export const styles = StyleSheet.create({
     borderBottomColor: colors.goldDark,
   },
   button: {
+    overflow: "hidden",
     minHeight: 46,
     paddingHorizontal: 18,
     paddingVertical: 10,

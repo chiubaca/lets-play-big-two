@@ -14,7 +14,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
-import { Menu, Settings, CircleHelp, Smartphone } from "lucide-react-native";
+import { Menu, Settings, CircleHelp, Smartphone, Share2 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { getCardKey, getCardRank, SUITS, sortCards, detectHandType } from "@big-two/game-core";
 import { getLegalPlays } from "@big-two/game-ai";
@@ -25,7 +25,8 @@ import type {
   Player,
 } from "@big-two/game-state-machine";
 import { CasinoScreen, Label, Button, ErrorMessage, Sheet, styles as ui } from "../ui/primitives";
-import { Hand, PlayingCard, CardBacks } from "../ui/cards";
+import { Hand, PlayingCard, CardBack, CardBacks, CardSuit } from "../ui/cards";
+import { TableSurface } from "../ui/table-surface";
 import { artwork, colors, fonts } from "../ui/theme";
 import { RulesSheet } from "./rules";
 import { tableSeats } from "../table-seats";
@@ -53,12 +54,15 @@ function Seat({
   count,
   active,
   self = false,
+  compact = false,
 }: {
   player?: Player;
   count: number;
   active: boolean;
   self?: boolean;
+  compact?: boolean;
 }) {
+  const avatarSize = compact ? 32 : self ? 45 : 38;
   return (
     <View
       accessible
@@ -67,22 +71,59 @@ function Seat({
       }
       style={table.seat}
     >
-      <View style={[table.plaque, active && table.activePlaque]}>
-        <Label style={table.avatar}>
-          {player?.isBot ? "🤖" : (player?.emoji ?? (player ? "♠️" : "＋"))}
-        </Label>
-        <View style={{ flexShrink: 1 }}>
+      <LinearGradient
+        colors={["#0a1d0c", "#000c04"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[
+          table.plaque,
+          self && table.selfPlaque,
+          compact && table.compactPlaque,
+          active && table.activePlaque,
+        ]}
+      >
+        <LinearGradient
+          colors={["#101a0d", "#52462b"]}
+          style={[
+            table.avatar,
+            { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 },
+          ]}
+        >
+          <Label
+            style={{
+              fontSize: avatarSize * 0.78,
+              lineHeight: avatarSize,
+              includeFontPadding: false,
+            }}
+          >
+            {player?.isBot ? "🤖" : (player?.emoji ?? (player ? "♠️" : "＋"))}
+          </Label>
+        </LinearGradient>
+        <View style={table.playerDetails}>
           <Label
             numberOfLines={1}
-            style={{ fontFamily: fonts.strong, fontSize: 12, lineHeight: 17 }}
+            style={[table.playerName, self && { fontSize: 14 }, compact && { fontSize: 11 }]}
           >
             {player?.name ?? "Open seat"}
           </Label>
-          <Label style={{ fontSize: 11, color: colors.muted }}>♦ {count}</Label>
+          <View style={table.playerCount}>
+            <CardBack width={compact ? 10 : self ? 15 : 12} />
+            <Label
+              style={{ fontSize: compact ? 13 : self ? 20 : 17, lineHeight: compact ? 17 : 24 }}
+            >
+              {count}
+            </Label>
+          </View>
         </View>
-        {active && self && <Label style={table.turnBadge}>Your turn</Label>}
-      </View>
-      {!self && <CardBacks count={count} />}
+        {active && (
+          <View style={table.turnBadgePosition}>
+            <Label style={table.turnBadge}>
+              {self ? "Your turn" : player?.isBot ? "Thinking…" : "Playing…"}
+            </Label>
+          </View>
+        )}
+      </LinearGradient>
+      {!self && <CardBacks count={count} compact={compact} />}
     </View>
   );
 }
@@ -110,8 +151,8 @@ export function TableScreen({
   const height = window.height - insets.top - insets.bottom;
   const compact = height < 550;
   const requestedBoardWidth = Math.min(width - 16, compact ? width * 0.69 : 760);
-  const [measuredBoardWidth, setMeasuredBoardWidth] = useState(0);
-  const boardWidth = measuredBoardWidth || requestedBoardWidth;
+  const [boardSize, setBoardSize] = useState({ width: 0, height: 0 });
+  const boardWidth = boardSize.width || requestedBoardWidth;
   const context = snapshot.context;
   const current = context.players[context.currentPlayerIndex];
   const you = context.players.find((player) => player.id === userId);
@@ -252,6 +293,7 @@ export function TableScreen({
       count={count(player)}
       active={!waiting && !finished && current?.id === player?.id}
       self={self}
+      compact={compact}
     />
   );
   const shareRoom = async () => {
@@ -277,18 +319,29 @@ export function TableScreen({
             style={table.iconButton}
           />
           {roomId && (
-            <View style={{ alignItems: "center", flex: 1 }}>
-              <Label mono>ROOM CODE</Label>
+            <View style={table.roomCodePosition}>
               <Button
                 title={roomId}
+                accessibilityLabel={`Share room ${roomId}`}
+                icon={
+                  <View style={table.roomCodeContent}>
+                    <Label mono style={table.roomCodeLabel}>
+                      ROOM
+                    </Label>
+                    <Label mono style={table.roomCode}>
+                      {roomId}
+                    </Label>
+                    <Share2 color={colors.muted} size={13} />
+                  </View>
+                }
                 onPress={() =>
                   void shareRoom().catch(() => setMessage("Could not share this room."))
                 }
-                style={{ borderRadius: 10, minHeight: 40, paddingVertical: 5 }}
+                style={table.roomCodeButton}
               />
             </View>
           )}
-          {!roomId && <View style={{ flex: 1 }} />}
+          <View style={{ flex: 1 }} />
           <Button
             title="?"
             icon={<CircleHelp color={colors.gold} size={24} />}
@@ -318,27 +371,36 @@ export function TableScreen({
         )}
         <View style={[table.playArea, compact && { flexDirection: "row" }]}>
           <View
-            onLayout={({ nativeEvent }) => setMeasuredBoardWidth(nativeEvent.layout.width)}
+            onLayout={({ nativeEvent }) =>
+              setBoardSize({ width: nativeEvent.layout.width, height: nativeEvent.layout.height })
+            }
             style={[
               table.board,
-              { width: requestedBoardWidth },
+              { width: requestedBoardWidth, marginTop: compact ? 0 : Math.min(72, height * 0.075) },
               compact && { marginTop: 0, alignSelf: "stretch" },
             ]}
           >
-            <View pointerEvents="none" style={[table.shell, compact && { top: 0, transform: [] }]}>
-              <LinearGradient colors={["#123d28", "#075333", "#002b17"]} style={table.felt}>
-                <View style={table.innerRim} />
-                <View style={table.tableMark}>
-                  <Label style={{ color: "rgba(241,201,106,0.11)", fontSize: 70, lineHeight: 85 }}>
-                    ♠
-                  </Label>
-                  <Label mono style={{ color: "rgba(241,201,106,0.12)", textAlign: "center" }}>
-                    BIG PLAYS{`\n`}BIGGER FRIENDSHIPS
-                  </Label>
-                </View>
-              </LinearGradient>
+            <TableSurface width={boardWidth} height={boardSize.height} />
+            <View
+              pointerEvents="none"
+              style={[
+                table.tableMark,
+                compact && { top: "18%" },
+                pile.length > 0 && { opacity: 0.3 },
+              ]}
+            >
+              <CardSuit
+                suit="SPADE"
+                size={compact ? 65 : Math.min(110, boardWidth * 0.23)}
+                color="#97af486b"
+              />
+              <View style={table.brandRule}>
+                <View style={table.brandRuleLine} />
+                <Label style={{ color: "#b6bd60", fontSize: 8, lineHeight: 10 }}>◆</Label>
+                <View style={table.brandRuleLine} />
+              </View>
             </View>
-            <View style={[table.topSeat, compact && { top: 0 }]}>{seat(seats.top)}</View>
+            <View style={[table.topSeat, compact && { top: 10 }]}>{seat(seats.top)}</View>
             <View style={[table.leftSeat, compact && { top: "16%" }]}>{seat(seats.left)}</View>
             <View style={[table.rightSeat, compact && { top: "16%" }]}>{seat(seats.right)}</View>
             <View
@@ -397,7 +459,7 @@ export function TableScreen({
                 </ScrollView>
               ) : (
                 <>
-                  {!compact && (
+                  {!compact && pile.length > 0 && (
                     <Label mono style={{ fontSize: 8 }}>
                       CARDS TO BEAT
                     </Label>
@@ -418,7 +480,7 @@ export function TableScreen({
                       </View>
                     ))}
                   </View>
-                  {compact && (
+                  {compact && pile.length > 0 && (
                     <Label mono style={{ fontSize: 8, lineHeight: 12, marginTop: 4 }}>
                       CARDS TO BEAT
                     </Label>
@@ -427,17 +489,14 @@ export function TableScreen({
               )}
             </View>
             {!compact && !waiting && !finished && (
-              <View
-                style={[
-                  table.prompt,
-                  { bottom: compact ? "35%" : "33%", maxWidth: boardWidth * 0.57 },
-                ]}
-              >
-                <Label mono style={{ fontSize: 9, color: colors.gold }}>
+              <View style={[table.prompt, { top: "53%", width: boardWidth * 0.58, maxWidth: 340 }]}>
+                <Label accessibilityLiveRegion="polite" style={table.turnText}>
                   {spectator
                     ? "WATCHING THE TABLE"
                     : yourTurn
-                      ? "YOUR TURN"
+                      ? snapshot.value === "ROUND_FIRST_MOVE"
+                        ? "YOUR TURN · START WITH 3 ♦"
+                        : "YOUR TURN"
                       : current?.isBot
                         ? "THINKING…"
                         : `${current?.name ?? "Player"}'S TURN`}
@@ -445,7 +504,7 @@ export function TableScreen({
                 <Label style={table.centerText}>
                   {context.guardMessage ??
                     (snapshot.value === "ROUND_FIRST_MOVE"
-                      ? "First move must include 3♦"
+                      ? "Play a card or a valid combination"
                       : snapshot.value === "PLAY_NEW_ROUND"
                         ? "You lead. Play a card or combination"
                         : yourTurn
@@ -458,7 +517,7 @@ export function TableScreen({
               <View style={[table.hand, compact && { bottom: 38 }]}>
                 <Hand
                   cards={hand}
-                  width={boardWidth}
+                  width={compact ? boardWidth : boardWidth * 0.92}
                   compact={compact}
                   selected={selected}
                   disabled={!yourTurn || busy}
@@ -512,18 +571,24 @@ export function TableScreen({
               <View style={[table.actions, compact && { flexDirection: "column" }]}>
                 <Button
                   title="Pass"
+                  disabledAppearance="muted"
+                  labelStyle={table.actionText}
                   disabled={!yourTurn || !activeRound || !connected || busy}
                   onPress={() => void act({ type: "PASS_TURN", playerId: userId })}
                   style={table.action}
                 />
                 <Button
                   title="Sort"
+                  disabledAppearance="muted"
+                  labelStyle={table.actionText}
                   disabled={hidden || busy}
                   onPress={() => setSortSuit((value) => !value)}
                   style={table.action}
                 />
                 <Button
                   title="Play"
+                  disabledAppearance="muted"
+                  labelStyle={table.actionText}
                   gold
                   disabled={!yourTurn || !connected || busy || !detectHandType(selectedCards)}
                   onPress={() => void play()}
@@ -535,7 +600,7 @@ export function TableScreen({
               <Button
                 title="Need a hint?"
                 ghost
-                labelStyle={{ fontFamily: fonts.body, fontSize: 9 }}
+                labelStyle={{ fontFamily: fonts.body, fontSize: 10, color: "#a99d6e" }}
                 disabled={!yourTurn}
                 onPress={() => {
                   if (legal[0]) setSelected(legal[0].map(getCardKey));
@@ -771,7 +836,7 @@ export function TableScreen({
 }
 
 const table = StyleSheet.create({
-  page: { flex: 1, paddingHorizontal: 8, paddingTop: 8, paddingBottom: 4 },
+  page: { flex: 1, paddingHorizontal: 8, paddingTop: 12, paddingBottom: 4 },
   header: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -786,108 +851,107 @@ const table = StyleSheet.create({
     borderRadius: 24,
     paddingHorizontal: 0,
     paddingVertical: 0,
+    boxShadow: "0 5px 10px rgba(0,0,0,0.55)",
+  },
+  roomCodePosition: { position: "absolute", left: 54, right: 54, alignItems: "center", top: 3 },
+  roomCodeContent: { flexDirection: "row", gap: 6, alignItems: "center" },
+  roomCodeLabel: { fontSize: 8, letterSpacing: 0.7 },
+  roomCode: { color: colors.cream, fontSize: 12, letterSpacing: 1, flexShrink: 1 },
+  roomCodeButton: {
+    borderRadius: 18,
+    minHeight: 35,
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+    maxWidth: "100%",
   },
   playArea: { flex: 1, alignItems: "center", gap: 8 },
   board: {
     flex: 1,
-    marginTop: 58,
     padding: 6,
   },
-  shell: {
-    ...StyleSheet.absoluteFillObject,
-    top: -40,
-    borderTopLeftRadius: 66,
-    borderTopRightRadius: 66,
-    borderBottomLeftRadius: 37,
-    borderBottomRightRadius: 37,
-    borderWidth: 3,
-    borderColor: colors.goldDark,
-    backgroundColor: "#211b10",
-    borderBottomWidth: 6,
-    transform: [{ perspective: 1350 }, { rotateX: "25deg" }],
+  tableMark: {
+    position: "absolute",
+    top: "24%",
+    alignSelf: "center",
+    alignItems: "center",
+    opacity: 0.65,
   },
-  felt: {
-    ...StyleSheet.absoluteFillObject,
-    margin: 6,
-    borderTopLeftRadius: 55,
-    borderTopRightRadius: 55,
-    borderBottomLeftRadius: 29,
-    borderBottomRightRadius: 29,
-    borderWidth: 1.5,
-    borderColor: colors.gold,
-    overflow: "hidden",
-  },
-  innerRim: {
-    ...StyleSheet.absoluteFillObject,
-    margin: 5,
-    borderRadius: 36,
-    borderWidth: 1,
-    borderColor: "rgba(241,201,106,0.25)",
-  },
-  tableMark: { position: "absolute", top: "25%", alignSelf: "center", alignItems: "center" },
+  brandRule: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
+  brandRuleLine: { width: 28, height: 1, backgroundColor: "#b6bd60", opacity: 0.35 },
   seat: { alignItems: "center" },
   plaque: {
     position: "relative",
     flexDirection: "row",
-    gap: 6,
+    gap: 7,
     alignItems: "center",
-    backgroundColor: "#000d06",
     borderColor: colors.gold,
     borderWidth: 1.2,
     borderRadius: 18,
-    paddingHorizontal: 7,
+    paddingLeft: 4,
+    paddingRight: 12,
     paddingVertical: 4,
-    minWidth: 85,
-    maxWidth: 145,
+    minWidth: 110,
+    maxWidth: 155,
     borderBottomColor: colors.goldDark,
-    borderBottomWidth: 3,
+    borderBottomWidth: 2,
+    boxShadow: "0 5px 10px rgba(0,0,0,0.45)",
   },
-  activePlaque: { borderColor: colors.gold, boxShadow: "0 0 8px rgba(244,206,120,0.5)" },
+  selfPlaque: { minWidth: 136, paddingVertical: 5, paddingRight: 15, borderRadius: 22 },
+  compactPlaque: { minWidth: 100, paddingVertical: 3, paddingRight: 9 },
+  activePlaque: { borderColor: colors.gold, boxShadow: "0 0 14px rgba(244,206,120,0.2)" },
   avatar: {
-    fontSize: 25,
-    lineHeight: 34,
-    borderWidth: 1,
-    borderColor: colors.gold,
-    borderRadius: 20,
-    width: 34,
-    height: 34,
-    textAlign: "center",
+    borderWidth: 2,
+    borderColor: "#f0ca70",
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
   },
+  playerDetails: { flexShrink: 1, gap: 1 },
+  playerName: { fontFamily: fonts.body, fontSize: 12, lineHeight: 18, maxWidth: 72 },
+  playerCount: { flexDirection: "row", alignItems: "center", gap: 6 },
+  turnBadgePosition: { position: "absolute", top: -11, left: 0, right: 0, alignItems: "center" },
   turnBadge: {
-    position: "absolute",
-    top: -13,
-    alignSelf: "center",
-    backgroundColor: colors.gold,
+    backgroundColor: "#e9be66",
     color: "#172012",
-    borderRadius: 10,
-    fontSize: 9,
+    borderColor: "#f1d58a",
+    borderWidth: 1,
+    borderRadius: 8,
+    fontSize: 8,
     paddingHorizontal: 7,
-    lineHeight: 17,
+    lineHeight: 14,
     fontFamily: fonts.strong,
-    left: 15,
   },
-  topSeat: { position: "absolute", top: 4, alignSelf: "center" },
-  leftSeat: { position: "absolute", left: 3, top: "29%" },
-  rightSeat: { position: "absolute", right: 3, top: "29%" },
-  bottomSeat: { position: "absolute", alignSelf: "center", bottom: 6 },
+  topSeat: { position: "absolute", top: 12, alignSelf: "center", zIndex: 3 },
+  leftSeat: { position: "absolute", left: 18, top: "29%", zIndex: 3 },
+  rightSeat: { position: "absolute", right: 18, top: "29%", zIndex: 3 },
+  bottomSeat: { position: "absolute", alignSelf: "center", bottom: 14, zIndex: 20 },
   center: { position: "absolute", alignItems: "center", alignSelf: "center", width: "65%" },
   waiting: { width: "100%", gap: 8, alignItems: "stretch", marginTop: -15 },
-  centerText: { textAlign: "center", fontSize: 12, lineHeight: 19, color: colors.muted },
+  centerText: { textAlign: "center", fontSize: 13, lineHeight: 20, color: "#c1cba8" },
+  turnText: {
+    fontFamily: fonts.strong,
+    fontSize: 9,
+    letterSpacing: 1.1,
+    color: "#d5c38b",
+    textAlign: "center",
+    lineHeight: 14,
+  },
   prompt: {
     position: "absolute",
     alignSelf: "center",
     alignItems: "center",
-    borderColor: "rgba(241,201,106,0.15)",
+    borderColor: "#a9bd7c1f",
     borderWidth: 1,
-    padding: 10,
+    padding: 8,
     borderRadius: 12,
-    gap: 6,
-    backgroundColor: "rgba(0,25,13,0.3)",
+    gap: 4,
+    backgroundColor: "#001c0e18",
   },
-  hand: { position: "absolute", bottom: 52, alignSelf: "center" },
-  controls: { width: "100%", maxWidth: 760, paddingHorizontal: 12, gap: 5 },
+  hand: { position: "absolute", bottom: 52, alignSelf: "center", zIndex: 5 },
+  controls: { width: "100%", maxWidth: 760, paddingHorizontal: 12, paddingTop: 12, gap: 8 },
   actions: { flexDirection: "row", gap: 10 },
-  action: { flex: 1, minHeight: 49, borderRadius: 20 },
+  action: { flex: 1, minHeight: 49, borderRadius: 20, boxShadow: "0 5px 10px rgba(0,0,0,0.45)" },
+  actionText: { fontFamily: fonts.strong, fontSize: 20 },
   hint: {
     alignSelf: "center",
     borderWidth: 0,
