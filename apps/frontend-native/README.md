@@ -10,6 +10,7 @@ From the repository root:
 
 ```sh
 vp install
+vp run dev:native:setup
 vp run dev:native
 # Build/install a development client (requires platform tools):
 vp run native:android
@@ -39,10 +40,86 @@ is not the recommended target because Google sign-in requires this app's URL sch
 
 ## Backend
 
-Copy `.env.example` to `.env` to override `EXPO_PUBLIC_BACKEND_URL`. On physical
-devices, `localhost` and the Mac's `/etc/hosts` domains do not identify the
-development machine. Use a reachable HTTPS development backend and a trusted
-certificate. Do not disable TLS, CSRF or origin validation.
+### Local authentication and online play
+
+The supported native development environment uses a **named Cloudflare Tunnel**
+at `https://dev-big-two-api.chiubaca.com`, forwarding only `/api/*` (including
+WebSockets) to the local Wrangler backend on `127.0.0.1:8788`. Cloudflare supplies
+publicly trusted HTTPS, so phones/emulators need no hosts-file or local CA setup.
+Caddy and the existing web development setup are unchanged.
+
+First-time setup, from the repository root:
+
+```sh
+vp install
+cp apps/backend/.dev.vars.example apps/backend/.dev.vars # only if it doesn't exist
+# Set a real BETTER_AUTH_SECRET and Google OAuth credentials in .dev.vars.
+vp run dev:native:setup
+```
+
+Setup installs `cloudflared` with Homebrew if needed, opens Cloudflare login when
+needed (authorize `chiubaca.com`), creates/reuses the `big-two-native-dev` tunnel,
+and creates its DNS route. It never force-overwrites an existing DNS record.
+Credentials remain in `~/.cloudflared`; generated project configuration lives in
+gitignored `.native-dev/`. Do not commit or share the account certificate or
+tunnel credentials. An existing tunnel without local credentials must be restored
+securely; setup will not delete or replace it.
+
+Register this **authorized redirect URI** on your Google OAuth **web client**:
+
+```text
+https://dev-big-two-api.chiubaca.com/api/auth/callback/google
+```
+
+Google returns to that HTTPS backend callback; Better Auth then redirects to the
+installed development app's `bigtwocrew://` scheme. No Google redirect URI for the
+custom app scheme is needed for this system-browser flow.
+
+```sh
+vp run dev:native
+```
+
+This starts the tunnel, Wrangler, and Metro together. Metro inherits the terminal
+for its QR code and keyboard commands (`a` / `i`). `Ctrl+C` stops the whole group;
+the other services also stop if one exits. Ports `8788` and `8081` must be free,
+so stop `dev:local` before running this environment. No Caddy process is started.
+Build/install the development client with `native:android` or `native:ios` as
+described above. Physical devices also need network access to Metro on your Mac
+(normally the same LAN); the API tunnel does not tunnel Metro.
+
+The launcher sets `EXPO_PUBLIC_BACKEND_URL` for Metro and loads a generated
+`BETTER_AUTH_URL` override **after** the backend's existing `.dev.vars` secrets.
+It does not edit either frontend `.env` or the web backend's `.dev.vars`.
+For your own Cloudflare zone, use
+`NATIVE_DEV_HOSTNAME=dev-api.example.com vp run dev:native:setup` and register that
+hostname's Google callback instead. Use a distinct tunnel/credentials per developer
+machine (set `NATIVE_DEV_TUNNEL_NAME` during setup); do not run multiple connectors
+with different local backends for the same
+development hostname.
+
+**Security:** this exposes the local API publicly while running. The existing
+Wrangler configuration uses **remote D1 and remote Workers AI**, not an isolated
+native development database. Use test accounts; account/profile deletion and other
+mutations affect that remote database. AI requests can incur charges. Configure a
+dedicated development database before using destructive QA flows. Do not disable
+TLS, CSRF, or origin validation. An interactive Cloudflare Access login in front of
+the API is not compatible with the current native HTTP/WebSocket client.
+
+Troubleshooting:
+
+- DNS conflicts: choose an unused development hostname; setup will not replace
+  another service's record. DNS remains after shutdown, but no connector runs.
+- `502` / `1033`: check the Wrangler/tunnel logs and that `dev:native` is running.
+- Google redirect mismatch: add the exact callback above to the OAuth web client
+  identified by `GOOGLE_CLIENT_ID` in `.dev.vars`.
+- API reachable but app cannot load: check Metro/LAN connectivity separately.
+- Remote-binding login errors: see [local development troubleshooting](../../agent/LOCAL_DEV.md).
+
+### Using another backend
+
+For standalone Metro (`vp run frontend-native#dev`), copy `.env.example` to `.env`
+to override `EXPO_PUBLIC_BACKEND_URL`. The default is production. The full
+`dev:native` launcher overrides that value with the configured tunnel URL.
 
 The backend now includes Better Auth's Expo plugin and trusts `bigtwocrew://`.
 **Deploy that backend change before testing native authentication against
@@ -64,6 +141,8 @@ iOS HTTPS links still open the web app. No placeholder Team ID is configured.
 
 - Current web casino artwork, Inter/Fraunces/IBM Plex Mono fonts, home modes,
   sign-in/registration, membership profile editors and illustrated rules.
+- Sticky home navigation and logo overlap, scroll-driven fade/scale/blur, and
+  live reduced-motion support. See [motion parity and QA](../../docs/native-home-motion.md).
 - Solo play with three deterministic bots, legal hints, rank/suit sorting,
   selected-card lift, results and a full-target accessible card picker.
 - Pass & Play for 2–4 seats, editable human names and optional bots. Private
@@ -83,8 +162,8 @@ iOS HTTPS links still open the web app. No placeholder Team ID is configured.
   enrollment is not falsely reported as ready. Existing web/TWA push remains.
 - Jev inference/strategy selection: native offline bots use the deterministic
   shared strategy. No inference credits are consumed by native solo play.
-- Web audio, 3D gold-spade animation, confetti, holographic card tilt and sticky
-  logo scroll effects are not ported. Native selection uses haptics instead.
+- Web audio, 3D gold-spade animation, confetti and holographic card tilt are not
+  ported. Native selection uses haptics instead.
 - Persistent sound preferences need follow-up. Auto-pass preferences are saved
   locally; chat displays an unread count while its panel is closed.
 

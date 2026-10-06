@@ -13,7 +13,8 @@
     "dev:setup": "./scripts/setup-local-dev.sh",
     "dev:local": "./scripts/start-dev.sh",
     "dev:stop": "./scripts/stop-dev.sh",
-    "dev:native": "vp run frontend-native#dev",
+    "dev:native:setup": "node scripts/native-dev.mjs setup",
+    "dev:native": "node scripts/native-dev.mjs start",
     "native:android": "vp run frontend-native#android",
     "native:ios": "vp run frontend-native#ios"
   },

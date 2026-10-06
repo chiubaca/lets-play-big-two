@@ -2,8 +2,8 @@ import { useState } from "react";
 import { Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
 import { ArrowRight, Bot, LogIn, UsersRound, Wifi } from "lucide-react-native";
 import { authClient, useRooms } from "../network";
-import { Brand } from "../ui/brand";
-import { Button, CasinoScreen, ErrorMessage, Field, Label, Panel, Sheet } from "../ui/primitives";
+import { HomeScrollScene } from "../ui/home-scroll-scene";
+import { Button, ErrorMessage, Field, Label, Panel, Sheet } from "../ui/primitives";
 import { colors, fonts } from "../ui/theme";
 import { MembershipCard } from "./profile";
 
@@ -127,40 +127,110 @@ export function HomeScreen({
   };
 
   return (
-    <CasinoScreen scroll>
-      <View style={[styles.nav, { width: Math.min(width - 28, 620) }]}>
-        {session ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Open account menu for ${displayName}`}
-            onPress={() => {
-              setError(null);
-              setSheet("account");
-            }}
-          >
-            <MembershipCard name={displayName} emoji={session.user.emoji ?? "♠️"} compact />
-          </Pressable>
-        ) : (
-          <View>
-            <Button
-              title="Sign in"
-              disabled={pending}
-              busy={pending}
-              onPress={onAuth}
-              style={styles.signIn}
-              labelStyle={{ fontSize: 12, lineHeight: 18 }}
-            />
-            {!pending && (
-              <View pointerEvents="none" style={styles.signInIcon}>
-                <LogIn color={colors.gold} size={16} />
-              </View>
-            )}
+    <HomeScrollScene
+      nav={
+        <View pointerEvents="box-none" style={[styles.nav, { width: Math.min(width - 28, 620) }]}>
+          {session ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Open account menu for ${displayName}`}
+              onPress={() => {
+                setError(null);
+                setSheet("account");
+              }}
+            >
+              <MembershipCard name={displayName} emoji={session.user.emoji ?? "♠️"} compact />
+            </Pressable>
+          ) : (
+            <View>
+              <Button
+                title="Sign in"
+                disabled={pending}
+                busy={pending}
+                onPress={onAuth}
+                style={styles.signIn}
+                labelStyle={{ fontSize: 12, lineHeight: 18 }}
+              />
+              {!pending && (
+                <View pointerEvents="none" style={styles.signInIcon}>
+                  <LogIn color={colors.gold} size={16} />
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+      }
+      footer={
+        <View style={[styles.footer, { width: Math.min(width - 28, 520) }]}>
+          <Label style={styles.legal}>© {new Date().getFullYear()} Big Two Crew</Label>
+          <View style={styles.legalLinks}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setSheet("privacy")}
+              style={styles.legalLink}
+            >
+              <Label style={styles.legal}>Privacy</Label>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={session ? deleteAccount : onAuth}
+              style={styles.legalLink}
+            >
+              <Label style={styles.legal}>Account & data deletion</Label>
+            </Pressable>
           </View>
-        )}
-      </View>
-      <View style={styles.brand}>
-        <Brand width={Math.min(width - 24, 410)} />
-      </View>
+        </View>
+      }
+      overlays={
+        <>
+          <Sheet
+            visible={sheet === "account"}
+            onClose={() => {
+              if (!busy) setSheet(null);
+            }}
+            title="Members’ table"
+          >
+            <Label>{displayName}</Label>
+            <Button title="Profile" disabled={!!busy} onPress={profile} />
+            <Button title="Delete account" disabled={!!busy} onPress={deleteAccount} />
+            <Button
+              title="Log out"
+              busy={busy === "signout"}
+              disabled={!!busy}
+              onPress={() => void signOut()}
+            />
+            <ErrorMessage message={error} />
+          </Sheet>
+          <Sheet
+            visible={sheet === "privacy"}
+            onClose={() => setSheet(null)}
+            title="Privacy policy"
+          >
+            <Label mono>Effective 19 September 2026</Label>
+            <Label style={styles.privacy}>
+              This policy explains how Big Two Crew handles information when you play on the web or
+              in the Android app. You can play solo or pass-and-play without creating an account.
+            </Label>
+            {privacySections.map((section) => (
+              <View key={section.title} style={{ gap: 7 }}>
+                <Label heading style={{ fontSize: 20, lineHeight: 28 }}>
+                  {section.title}
+                </Label>
+                <Label style={styles.privacy}>{section.copy}</Label>
+              </View>
+            ))}
+            <Button
+              title="Account & data deletion"
+              onPress={() => {
+                setSheet(null);
+                if (session) deleteAccount();
+                else onAuth();
+              }}
+            />
+          </Sheet>
+        </>
+      }
+    >
       <View style={[styles.modes, { width: Math.min(width - 28, 520) }]}>
         <Mode
           title="Solo play"
@@ -264,67 +334,7 @@ export function HomeScreen({
           )}
         </Panel>
       </View>
-      <View style={[styles.footer, { width: Math.min(width - 28, 520) }]}>
-        <Label style={styles.legal}>© {new Date().getFullYear()} Big Two Crew</Label>
-        <View style={styles.legalLinks}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setSheet("privacy")}
-            style={styles.legalLink}
-          >
-            <Label style={styles.legal}>Privacy</Label>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={session ? deleteAccount : onAuth}
-            style={styles.legalLink}
-          >
-            <Label style={styles.legal}>Account & data deletion</Label>
-          </Pressable>
-        </View>
-      </View>
-      <Sheet
-        visible={sheet === "account"}
-        onClose={() => {
-          if (!busy) setSheet(null);
-        }}
-        title="Members’ table"
-      >
-        <Label>{displayName}</Label>
-        <Button title="Profile" disabled={!!busy} onPress={profile} />
-        <Button title="Delete account" disabled={!!busy} onPress={deleteAccount} />
-        <Button
-          title="Log out"
-          busy={busy === "signout"}
-          disabled={!!busy}
-          onPress={() => void signOut()}
-        />
-        <ErrorMessage message={error} />
-      </Sheet>
-      <Sheet visible={sheet === "privacy"} onClose={() => setSheet(null)} title="Privacy policy">
-        <Label mono>Effective 19 September 2026</Label>
-        <Label style={styles.privacy}>
-          This policy explains how Big Two Crew handles information when you play on the web or in
-          the Android app. You can play solo or pass-and-play without creating an account.
-        </Label>
-        {privacySections.map((section) => (
-          <View key={section.title} style={{ gap: 7 }}>
-            <Label heading style={{ fontSize: 20, lineHeight: 28 }}>
-              {section.title}
-            </Label>
-            <Label style={styles.privacy}>{section.copy}</Label>
-          </View>
-        ))}
-        <Button
-          title="Account & data deletion"
-          onPress={() => {
-            setSheet(null);
-            if (session) deleteAccount();
-            else onAuth();
-          }}
-        />
-      </Sheet>
-    </CasinoScreen>
+    </HomeScrollScene>
   );
 }
 
@@ -374,7 +384,6 @@ const styles = StyleSheet.create({
     paddingLeft: 36,
   },
   signInIcon: { position: "absolute", left: 13, top: 11 },
-  brand: { alignItems: "center", marginTop: 17, marginBottom: 4 },
   modes: { width: "100%", maxWidth: 520, gap: 18 },
   mode: {
     minHeight: 92,

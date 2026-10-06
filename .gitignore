@@ -26,6 +26,7 @@ dist-ssr
 
 apps/backend/.wrangler
 apps/backend/.dev.vars
+.native-dev/
 
 # Android release signing and build artifacts
 apps/android/.gradle/

@@ -64,6 +64,28 @@ The stop script matches process names (`caddy`, `wrangler`, `vite`, and
 `concurrently`), so it can also stop matching development processes from
 other projects.
 
+## Native development
+
+Native development uses a named Cloudflare Tunnel instead of Caddy/local hosts
+entries, giving physical devices and emulators a stable, trusted HTTPS API URL:
+<https://dev-big-two-api.chiubaca.com>.
+
+```sh
+vp run dev:native:setup # one-time Cloudflare login, tunnel creation, DNS setup
+vp run dev:native       # tunnel + local Wrangler backend + Metro
+```
+
+Configure backend secrets in `apps/backend/.dev.vars` first, and add
+`https://dev-big-two-api.chiubaca.com/api/auth/callback/google` to your Google OAuth
+web client's authorized redirect URIs. The launcher applies native-only URL
+overrides without changing web environment files. Stop `dev:local` before starting
+native development because both use port `8788`. `Ctrl+C` stops the native service
+group, including the tunnel; it is not installed as an always-on system service.
+
+The local API is public while the tunnel runs and still uses the configured remote
+D1/AI bindings. See [the native README](../apps/frontend-native/README.md#local-authentication-and-online-play)
+for credentials, platform builds, security notes, and troubleshooting.
+
 ## Troubleshooting
 
 - If Vite reports that port `5173` is busy and switches to another port, stop

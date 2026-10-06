@@ -48,29 +48,15 @@ export function Label({
 export function CasinoScreen({
   children,
   scroll = false,
+  backdrop,
 }: {
   children: ReactNode;
   scroll?: boolean;
+  backdrop?: ReactNode;
 }) {
-  const { width, height } = useWindowDimensions();
-  const landscape = width > 760 && width > height;
-  const ratio = landscape ? 1672 / 941 : 1024 / 1536;
-  const backdropHeight = Math.max(height, width / ratio);
-  const backdropWidth = backdropHeight * ratio;
   return (
     <View style={[styles.screen, { backgroundColor: colors.background, overflow: "hidden" }]}>
-      <Image
-        accessible={false}
-        source={landscape ? artwork.landscape : artwork.portrait}
-        resizeMode="stretch"
-        style={{
-          position: "absolute",
-          top: 0,
-          left: (width - backdropWidth) / 2,
-          width: backdropWidth,
-          height: backdropHeight,
-        }}
-      />
+      {backdrop ?? <CasinoBackdrop />}
       <SafeAreaView style={styles.screen}>
         {scroll ? (
           <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
@@ -81,6 +67,35 @@ export function CasinoScreen({
         )}
       </SafeAreaView>
     </View>
+  );
+}
+
+export function CasinoBackdrop({
+  blurRadius = 0,
+  overscan = 0,
+}: {
+  blurRadius?: number;
+  overscan?: number;
+}) {
+  const { width, height } = useWindowDimensions();
+  const landscape = width > 760 && width > height;
+  const ratio = landscape ? 1672 / 941 : 1024 / 1536;
+  const backdropHeight = Math.max(height + overscan * 2, (width + overscan * 2) / ratio);
+  const backdropWidth = backdropHeight * ratio;
+  return (
+    <Image
+      accessible={false}
+      blurRadius={blurRadius}
+      source={landscape ? artwork.landscape : artwork.portrait}
+      resizeMode="stretch"
+      style={{
+        position: "absolute",
+        top: landscape && overscan ? (height - backdropHeight) / 2 : -overscan,
+        left: (width - backdropWidth) / 2,
+        width: backdropWidth,
+        height: backdropHeight,
+      }}
+    />
   );
 }
 

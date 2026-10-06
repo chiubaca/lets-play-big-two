@@ -1,16 +1,25 @@
 import { Image, StyleSheet, View } from "react-native";
 import { artwork } from "./theme";
 
-export function Brand({ width = 360 }: { width?: number }) {
+export function Brand({
+  width = 360,
+  blurRadius = 0,
+  accessible = true,
+}: {
+  width?: number;
+  blurRadius?: number;
+  accessible?: boolean;
+}) {
   return (
     <View
-      accessible
-      accessibilityLabel="Big Two Crew"
+      accessible={accessible}
+      accessibilityLabel={accessible ? "Big Two Crew" : undefined}
       pointerEvents="none"
       style={{ width, height: width * 1.06 }}
     >
       <Image
         accessible={false}
+        blurRadius={blurRadius}
         source={artwork.spade}
         resizeMode="contain"
         style={[
@@ -20,12 +29,14 @@ export function Brand({ width = 360 }: { width?: number }) {
       />
       <Image
         accessible={false}
+        blurRadius={blurRadius}
         source={artwork.title}
         resizeMode="contain"
         style={[brand.layer, { top: width * 0.3074, height: width * 0.725275 }]}
       />
       <Image
         accessible={false}
+        blurRadius={blurRadius}
         source={artwork.crew}
         resizeMode="contain"
         style={[
