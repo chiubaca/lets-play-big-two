@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { ensureAndroidDevice } from "./android-emulator.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const stateDir = join(root, ".native-dev");
@@ -205,7 +206,7 @@ export async function supervise(commands, env) {
   }
 }
 
-async function start() {
+async function start(android = false) {
   const config = readConfig();
   if (!existsSync(join(root, "apps/backend/.dev.vars"))) {
     throw new Error(
@@ -223,6 +224,7 @@ async function start() {
       );
     }
   }
+  const androidSdk = android ? (await ensureAndroidDevice()).sdk : undefined;
   writeConfig(stateDir, config);
   console.log(`Native API: https://${config.hostname}`);
   console.log(
@@ -231,6 +233,10 @@ async function start() {
   console.log(
     "Metro runs on your LAN; connect a development build, not Expo Go. Ctrl+C stops all three services.",
   );
+  if (android) {
+    console.log("First install or native changes: run vp run native:android in another terminal.");
+    console.log("For an already installed development client, press a in Metro to open the app.");
+  }
   process.exitCode = await supervise(
     [
       {
@@ -246,7 +252,11 @@ async function start() {
         interactive: true,
       },
     ],
-    { ...process.env, EXPO_PUBLIC_BACKEND_URL: `https://${config.hostname}` },
+    {
+      ...process.env,
+      ...(androidSdk ? { ANDROID_HOME: androidSdk } : {}),
+      EXPO_PUBLIC_BACKEND_URL: `https://${config.hostname}`,
+    },
   );
 }
 
@@ -256,8 +266,10 @@ function main(task) {
       return setup();
     case "start":
       return start();
+    case "android":
+      return start(true);
     default:
-      throw new Error("Usage: node scripts/native-dev.mjs setup|start");
+      throw new Error("Usage: node scripts/native-dev.mjs setup|start|android");
   }
 }
 

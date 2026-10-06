@@ -5,7 +5,7 @@ These instructions describe the supported local development setup on macOS.
 ## Prerequisites
 
 - macOS
-- Node.js `>=22.12.0`
+- Node.js 22.13+ (22.x), 24.3+ (24.x), or 25+
 - Vite+ (`vp`)
 - Homebrew (used to install Caddy, mkcert, and nss)
 
@@ -73,7 +73,15 @@ entries, giving physical devices and emulators a stable, trusted HTTPS API URL:
 ```sh
 vp run dev:native:setup # one-time Cloudflare login, tunnel creation, DNS setup
 vp run dev:native       # tunnel + local Wrangler backend + Metro
+vp run dev:native:android # same services, automatically start/wait for Android
 ```
+
+The Android launcher reuses a connected device/emulator or boots the first virtual
+device from Android Studio's Device Manager. Create a virtual device there once;
+set `NATIVE_DEV_AVD` to choose one when several exist. It finds the SDK using
+`ANDROID_HOME`, `ANDROID_SDK_ROOT`, or `~/Library/Android/sdk`. In another terminal,
+run `vp run native:android` for the first install or after native changes; otherwise
+press `a` in Metro. The emulator stays open when the services stop.
 
 Configure backend secrets in `apps/backend/.dev.vars` first, and add
 `https://dev-big-two-api.chiubaca.com/api/auth/callback/google` to your Google OAuth

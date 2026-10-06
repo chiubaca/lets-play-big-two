@@ -778,7 +778,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#dcb87566",
   },
-  inspectTarget: { ...StyleSheet.absoluteFillObject, zIndex: 1 },
+  inspectTarget: { ...StyleSheet.absoluteFill, zIndex: 1 },
   enlargedCard: { minHeight: 300, padding: 28, gap: 35 },
   watermark: { position: "absolute", width: 148, height: 148, right: 15, top: 46, opacity: 0.12 },
   top: {

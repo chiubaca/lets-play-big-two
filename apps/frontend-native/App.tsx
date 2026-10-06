@@ -363,7 +363,7 @@ export default function App() {
   }, [loaded, error]);
   return (
     <SafeAreaProvider>
-      <StatusBar style="light" backgroundColor={colors.background} />
+      <StatusBar style="light" />
       <AppErrorBoundary>
         {loaded || error ? (
           <GameApp />

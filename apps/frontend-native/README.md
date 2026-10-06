@@ -1,6 +1,6 @@
 # Big Two Crew — React Native
 
-An Expo SDK 55 / React Native app for **Android and iOS**. Screens use native
+An Expo SDK 57 / React Native 0.86 app for **Android and iOS**. Screens use native
 views, text, inputs and touch controls—not a WebView. Metro consumes the same
 workspace rules, legal-move strategy and XState machine as the web app.
 
@@ -12,15 +12,31 @@ From the repository root:
 vp install
 vp run dev:native:setup
 vp run dev:native
+# Android: automatically boot an existing emulator before starting services
+vp run dev:native:android
 # Build/install a development client (requires platform tools):
 vp run native:android
 vp run native:ios
 ```
 
 Android requires Android Studio, its SDK, Java 17 and a device/emulator. iOS
-requires full Xcode, command-line tools configured to Xcode, CocoaPods and a
-simulator/device. Expo generates native projects inside **this** app; it does
+requires Xcode 26.4+, command-line tools configured to Xcode, CocoaPods and an
+iOS 16.4+ simulator/device. Expo generates native projects inside **this** app; it does
 not use or overwrite `apps/android`.
+
+Use either `dev:native` or `dev:native:android`, not both. The Android launcher
+reuses a connected device/emulator or boots the first configured virtual device,
+then waits up to three minutes for Android to finish booting. Create a virtual
+device once in Android Studio → Device Manager. To select one explicitly:
+
+```sh
+NATIVE_DEV_AVD=BigTwoCrew_API_36 vp run dev:native:android
+```
+
+The SDK is resolved from `ANDROID_HOME`, `ANDROID_SDK_ROOT`, or
+`~/Library/Android/sdk`. Install/build with `vp run native:android` in a second
+terminal on first use or after native changes. Otherwise press `a` in Metro to
+open the installed development client. `Ctrl+C` stops the services, not the emulator.
 
 Use a clean emulator/test device for debug builds: a locally signed debug app
 cannot be installed over the Play-signed TWA with the same application ID.
@@ -182,6 +198,24 @@ cookies or localStorage into native storage: users sign in again and online
 room membership is recovered from the server.
 
 ## Builds and release gates
+
+After upgrading SDK/native dependencies, stop Metro, run `vp run prebuild` from
+this app, then rebuild with `vp run native:android` or `vp run native:ios` from
+the root. Old development clients cannot load the SDK 57 runtime. The prebuild
+script uses `--no-clean --no-install` to preserve existing native folders and
+leave dependency installation to Vite+. SDK 57's plain `expo prebuild` clears
+those folders by default; use it only after checking/backing up manual changes.
+Native authentication/network flows and Android edge-to-edge appearance need
+device QA because SDK 57 changes the native fetch implementation and StatusBar API.
+
+Use Java 17 for local Android builds. Java 25 can fail the native prefab/CMake
+step with `WARNING: A restricted method in java.lang.System has been called`.
+For Homebrew's `openjdk@17`, set the JDK explicitly before rebuilding:
+
+```sh
+export JAVA_HOME="$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home"
+export PATH="$JAVA_HOME/bin:$PATH"
+```
 
 ```sh
 # From apps/frontend-native:
