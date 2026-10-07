@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Image, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
 import { Bot, UserRound } from "lucide-react-native";
-import { Button, CasinoScreen, ErrorMessage, Field, Label, Panel, Sheet } from "../ui/primitives";
+import { Button, CasinoScreen, Field, Label, Panel, Sheet } from "../ui/primitives";
 import { artwork, colors, fonts } from "../ui/theme";
 
 export interface PassSetupConfig {
@@ -12,6 +12,8 @@ export interface PassSetupScreenProps {
   onStart: (config: PassSetupConfig) => void;
   onResume?: () => void;
   initialConfig?: PassSetupConfig;
+  /** Keep true until saved configuration is read, before mounting the editable setup. */
+  loading?: boolean;
 }
 
 export function PassSetupScreen({
@@ -19,8 +21,38 @@ export function PassSetupScreen({
   onStart,
   onResume,
   initialConfig,
+  loading = false,
 }: PassSetupScreenProps) {
   const { width } = useWindowDimensions();
+  return (
+    <CasinoScreen scroll>
+      <View style={styles.nav}>
+        <Button title="‹ Home" onPress={onHome} />
+      </View>
+      <Image
+        source={artwork.pass}
+        accessibilityLabel="Pass and Play"
+        resizeMode="contain"
+        style={{ width: Math.min(width - 32, 620), height: Math.min(width - 32, 620) * 0.491 }}
+      />
+      {loading ? (
+        <Panel style={styles.panel}>
+          <Label accessibilityLiveRegion="polite">Loading saved setup…</Label>
+        </Panel>
+      ) : (
+        <PassSetupEditor onStart={onStart} onResume={onResume} initialConfig={initialConfig} />
+      )}
+    </CasinoScreen>
+  );
+}
+
+function PassSetupEditor({
+  onStart,
+  onResume,
+  initialConfig,
+}: Pick<PassSetupScreenProps, "onStart" | "onResume" | "initialConfig">) {
+  const { width, fontScale } = useWindowDimensions();
+  const stackedSeats = width < 360 || fontScale > 1.25;
   const initialPlayers = initialConfig?.players;
   const configuredPlayers =
     initialPlayers &&
@@ -53,16 +85,7 @@ export function PassSetupScreen({
   const valid = !duplicate && !missing && humans.every((name) => name.length <= 24);
 
   return (
-    <CasinoScreen scroll>
-      <View style={styles.nav}>
-        <Button title="‹ Home" onPress={onHome} />
-      </View>
-      <Image
-        source={artwork.pass}
-        accessibilityLabel="Pass and Play"
-        resizeMode="contain"
-        style={{ width: Math.min(width - 32, 620), height: Math.min(width - 32, 620) * 0.491 }}
-      />
+    <>
       <Panel style={styles.panel}>
         <Label heading style={styles.section}>
           Number of players
@@ -88,22 +111,23 @@ export function PassSetupScreen({
         </Label>
         <View style={{ gap: 10 }}>
           {names.slice(0, count).map((name, index) => (
-            <View key={index} style={styles.seat}>
-              <View style={styles.avatar}>
-                {bots[index] ? (
-                  <Bot color={colors.gold} size={25} />
-                ) : (
-                  <UserRound color={colors.gold} size={25} />
-                )}
-              </View>
-              <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                <Label style={{ fontFamily: fonts.strong, fontSize: 12 }}>Player {index + 1}</Label>
-                {bots[index] ? (
-                  <Label style={{ color: colors.muted }}>AI {index + 1}</Label>
-                ) : (
+            <View key={index} style={[styles.seat, stackedSeats && styles.stackedSeat]}>
+              <View style={[styles.seatContent, stackedSeats && styles.stackedContent]}>
+                <View style={styles.avatar}>
+                  {bots[index] ? (
+                    <Bot color={colors.gold} size={25} />
+                  ) : (
+                    <UserRound color={colors.gold} size={25} />
+                  )}
+                </View>
+                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                  <Label style={{ fontFamily: fonts.strong, fontSize: 12 }}>
+                    Player {index + 1}
+                  </Label>
                   <Field
                     accessibilityLabel={`Player ${index + 1} name`}
-                    value={name}
+                    value={bots[index] ? `AI ${index + 1}` : name}
+                    editable={!bots[index]}
                     maxLength={24}
                     placeholder="Enter a name"
                     autoCorrect={false}
@@ -114,7 +138,7 @@ export function PassSetupScreen({
                     }
                     style={styles.name}
                   />
-                )}
+                </View>
               </View>
               <Button
                 title={bots[index] ? "Bot ⌄" : "Human ⌄"}
@@ -125,19 +149,28 @@ export function PassSetupScreen({
             </View>
           ))}
         </View>
-        <ErrorMessage
-          message={
-            duplicate && !missing
-              ? "Use a different name for each player."
-              : missing
-                ? "Enter a name for each human player."
-                : null
-          }
-        />
+        {/* Keep both messages in flow so wrapping and font scaling are reserved too. */}
+        <View>
+          {[
+            { message: "Use a different name for each player.", visible: duplicate && !missing },
+            { message: "Enter a name for each human player.", visible: missing },
+          ].map(({ message, visible }) => (
+            <Label
+              key={message}
+              accessibilityRole={visible ? "alert" : undefined}
+              accessibilityLiveRegion={visible ? "polite" : "none"}
+              accessibilityElementsHidden={!visible}
+              importantForAccessibility={visible ? "auto" : "no-hide-descendants"}
+              style={[styles.error, { opacity: visible ? 1 : 0 }]}
+            >
+              {message}
+            </Label>
+          ))}
+        </View>
         <Label style={styles.hint}>
           Cards stay hidden between turns. Pass the device, then press Ready when it’s yours.
         </Label>
-        {onResume && <Button title="Resume saved game" onPress={onResume} />}
+        <Button title="Resume saved game" disabled={!onResume} onPress={() => onResume?.()} />
         <Button
           title="Start game →"
           gold
@@ -184,7 +217,7 @@ export function PassSetupScreen({
           <Label style={styles.hint}>The first seat is always a human player.</Label>
         )}
       </Sheet>
-    </CasinoScreen>
+    </>
   );
 }
 
@@ -216,9 +249,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#061e14",
   },
   avatar: { width: 36, height: 42, alignItems: "center", justifyContent: "center" },
+  seatContent: { flex: 1, minWidth: 0, flexDirection: "row", gap: 8, alignItems: "center" },
+  stackedSeat: { flexDirection: "column", alignItems: "stretch" },
+  stackedContent: { flex: 0 },
   name: {
     borderWidth: 0,
-    minHeight: 38,
+    minHeight: 48,
     paddingHorizontal: 0,
     backgroundColor: "transparent",
     fontSize: 13,
@@ -226,4 +262,5 @@ const styles = StyleSheet.create({
   },
   type: { paddingHorizontal: 10, borderRadius: 15, minWidth: 89 },
   hint: { fontSize: 12, lineHeight: 19, color: colors.muted },
+  error: { color: "#ffb3a8", fontSize: 13, lineHeight: 20 },
 });

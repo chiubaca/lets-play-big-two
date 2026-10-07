@@ -4,6 +4,7 @@ import { ArrowRight, Bot, LogIn, UsersRound, Wifi } from "lucide-react-native";
 import { authClient, useRooms } from "../network";
 import { HomeScrollScene } from "../ui/home-scroll-scene";
 import { Button, ErrorMessage, Field, Label, Panel, Sheet } from "../ui/primitives";
+import { StatusSlot } from "../ui/status-slot";
 import { colors, fonts } from "../ui/theme";
 import { MembershipCard } from "./profile";
 
@@ -68,6 +69,7 @@ export function HomeScreen({
 }: HomeScreenProps) {
   const { width } = useWindowDimensions();
   const rooms = useRooms();
+  const roomRows = session ? rooms.rooms : [];
   const [roomCode, setRoomCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"create" | "signout" | null>(null);
@@ -91,6 +93,11 @@ export function HomeScreen({
     }
   };
   const join = () => {
+    if (pending) return;
+    if (!session) {
+      onAuth();
+      return;
+    }
     const code = roomCode.trim().toUpperCase();
     if (!code) {
       setError("Enter the room code from your friend.");
@@ -125,6 +132,18 @@ export function HomeScreen({
     setSheet(null);
     (onDeleteAccount ?? onProfile)();
   };
+  const roomError = session ? rooms.error : null;
+  const roomStatus = !session
+    ? pending
+      ? "Checking membership…"
+      : "Sign in to see your tables."
+    : rooms.loading
+      ? roomRows.length === 0
+        ? "Loading your tables…"
+        : "Refreshing your tables…"
+      : roomRows.length === 0
+        ? "No tables yet. Create or join one."
+        : "Tables refresh automatically.";
 
   return (
     <HomeScrollScene
@@ -146,16 +165,13 @@ export function HomeScreen({
               <Button
                 title="Sign in"
                 disabled={pending}
-                busy={pending}
                 onPress={onAuth}
                 style={styles.signIn}
                 labelStyle={{ fontSize: 12, lineHeight: 18 }}
               />
-              {!pending && (
-                <View pointerEvents="none" style={styles.signInIcon}>
-                  <LogIn color={colors.gold} size={16} />
-                </View>
-              )}
+              <View pointerEvents="none" style={styles.signInIcon}>
+                <LogIn color={colors.gold} size={16} />
+              </View>
             </View>
           )}
         </View>
@@ -256,82 +272,109 @@ export function HomeScreen({
               <Label style={styles.modeDetail}>Create a room and play together in real time.</Label>
             </View>
           </View>
-          {session ? (
-            <>
-              <Button
-                title="＋ Create room"
-                gold
-                busy={busy === "create"}
-                disabled={!!busy}
-                onPress={() => void create()}
-              />
-              <Label style={styles.codeLabel}>Have a code?</Label>
-              <View style={[styles.join, width <= 440 && styles.joinStack]}>
-                <Field
-                  accessibilityLabel="Room code"
-                  value={roomCode}
-                  maxLength={8}
-                  placeholder="ABCDE"
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                  onChangeText={(value) => {
-                    setRoomCode(value.toUpperCase());
-                    setError(null);
-                  }}
-                  onSubmitEditing={join}
-                  returnKeyType="go"
-                  style={[styles.code, width <= 440 && styles.codeStack]}
-                />
-                <Button title="Join →" onPress={join} />
-              </View>
-              <ErrorMessage message={error} />
-              <View style={styles.tables}>
-                <View style={styles.tableHeading}>
-                  <Label heading style={{ fontSize: 19, lineHeight: 26 }}>
-                    Your tables
-                  </Label>
-                  <Label mono>{rooms.rooms.length}</Label>
+          <Button
+            title={session ? "＋ Create room" : "Sign in for multiplayer"}
+            gold
+            busy={busy === "create"}
+            disabled={pending || !!busy}
+            onPress={session ? () => void create() : onAuth}
+          />
+          <Label style={styles.codeLabel}>Have a code?</Label>
+          <View style={[styles.join, width <= 440 && styles.joinStack]}>
+            <Field
+              accessibilityLabel="Room code"
+              editable={!pending}
+              value={roomCode}
+              maxLength={8}
+              placeholder="ABCDE"
+              autoCapitalize="characters"
+              autoCorrect={false}
+              onChangeText={(value) => {
+                setRoomCode(value.toUpperCase());
+                setError(null);
+              }}
+              onSubmitEditing={join}
+              returnKeyType="go"
+              style={[styles.code, width <= 440 && styles.codeStack]}
+            />
+            <Button title="Join →" disabled={pending} onPress={session ? join : onAuth} />
+          </View>
+          <StatusSlot testID="home-room-action-status">
+            <ErrorMessage message={error} />
+          </StatusSlot>
+          <View style={styles.tables}>
+            <View style={styles.tableHeading}>
+              <Label heading style={{ fontSize: 19, lineHeight: 26 }}>
+                Your tables
+              </Label>
+              <Label mono>{session ? roomRows.length : "—"}</Label>
+            </View>
+            <StatusSlot testID="home-tables-status">
+              <View style={styles.tableStatus}>
+                <View style={{ flex: 1 }}>
+                  {roomError ? (
+                    <ErrorMessage message={roomError.message} />
+                  ) : (
+                    <Label style={styles.note}>{roomStatus}</Label>
+                  )}
                 </View>
-                {rooms.loading && rooms.rooms.length === 0 ? (
-                  <Label style={styles.note}>Loading your tables…</Label>
-                ) : rooms.error ? (
-                  <>
-                    <ErrorMessage message={rooms.error.message} />
-                    <Button title="Try again" onPress={() => void rooms.refresh()} />
-                  </>
-                ) : rooms.rooms.length === 0 ? (
-                  <Label style={styles.note}>No tables yet. Create one or join with a code.</Label>
-                ) : (
-                  rooms.rooms.map((room) => (
-                    <Pressable
-                      key={room.roomId}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Open table ${room.roomId}, ${room.playerCount} of 4 players`}
-                      onPress={() => onRoom(room.roomId)}
-                      style={styles.table}
-                    >
-                      <View style={{ flex: 1, gap: 4 }}>
-                        <Label mono style={{ color: colors.gold }}>
-                          {room.roomId}
-                        </Label>
-                        <Label style={styles.note}>
-                          {room.status === "waiting"
-                            ? "Waiting for players"
-                            : room.status === "finished"
-                              ? "Game finished"
-                              : "Game in progress"}{" "}
-                          · {room.playerCount} / 4 players
-                        </Label>
-                      </View>
-                      <ArrowRight color={colors.gold} size={18} />
-                    </Pressable>
-                  ))
-                )}
+                <View
+                  pointerEvents={roomError ? "auto" : "none"}
+                  accessibilityElementsHidden={!roomError}
+                  importantForAccessibility={roomError ? "auto" : "no-hide-descendants"}
+                  style={!roomError && styles.hidden}
+                >
+                  <Button
+                    title="Try again"
+                    disabled={!roomError || rooms.loading}
+                    onPress={() => void rooms.refresh()}
+                    style={styles.retry}
+                    labelStyle={{ fontSize: 12, lineHeight: 18 }}
+                  />
+                </View>
               </View>
-            </>
-          ) : (
-            <Button title="Sign in for multiplayer" gold disabled={pending} onPress={onAuth} />
-          )}
+            </StatusSlot>
+            {(!session || roomRows.length === 0) && (
+              <View testID="home-table-placeholder" style={styles.table}>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Label mono style={{ color: colors.gold }}>
+                    {session && !pending && !rooms.loading && !roomError
+                      ? "No tables yet"
+                      : "Saved tables"}
+                  </Label>
+                  <Label style={styles.note}>Rooms you join appear here.</Label>
+                </View>
+                <View style={styles.hidden} accessibilityElementsHidden>
+                  <ArrowRight color={colors.gold} size={18} />
+                </View>
+              </View>
+            )}
+            {session &&
+              roomRows.map((room) => (
+                <Pressable
+                  key={room.roomId}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open table ${room.roomId}, ${room.playerCount} of 4 players`}
+                  onPress={() => onRoom(room.roomId)}
+                  style={styles.table}
+                >
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Label mono style={{ color: colors.gold }}>
+                      {room.roomId}
+                    </Label>
+                    <Label style={styles.note}>
+                      {room.status === "waiting"
+                        ? "Waiting for players"
+                        : room.status === "finished"
+                          ? "Game finished"
+                          : "Game in progress"}{" "}
+                      · {room.playerCount} / 4 players
+                    </Label>
+                  </View>
+                  <ArrowRight color={colors.gold} size={18} />
+                </Pressable>
+              ))}
+          </View>
         </Panel>
       </View>
     </HomeScrollScene>
@@ -431,6 +474,9 @@ const styles = StyleSheet.create({
   codeStack: { flex: 0, width: "100%" },
   tables: { borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 13, gap: 10 },
   tableHeading: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  tableStatus: { flexDirection: "row", alignItems: "center", gap: 8 },
+  retry: { minHeight: 40, paddingVertical: 6, paddingHorizontal: 10 },
+  hidden: { opacity: 0 },
   table: {
     flexDirection: "row",
     alignItems: "center",

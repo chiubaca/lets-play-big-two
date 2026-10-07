@@ -126,16 +126,24 @@ afterEach(async () => {
 });
 
 describe("native home scroll scene", () => {
+  it("allocates navigation in scroll flow before any layout event, without a measured spacer", async () => {
+    await mount();
+    const scroll = host("AnimatedScrollView");
+    const nav = renderer.root.findByProps({ testID: "home-nav-overlay" });
+    expect((scroll.children[0] as typeof nav).props.testID).toBe("home-nav-overlay");
+    expect(nav.props.style.position).not.toBe("absolute");
+    expect(nav.props.style.height).toBeUndefined();
+    expect(nav.props.onLayout).toBeUndefined();
+    expect(scroll.props.stickyHeaderIndices).toEqual([0]);
+  });
+
   it("uses native scroll animation, sticky navigation, and only one accessible logo", async () => {
     await mount();
     const scroll = host("AnimatedScrollView");
     expect(scroll.props.onScroll.options).toEqual({ useNativeDriver: true });
-    expect(scroll.props.stickyHeaderIndices).toBeUndefined();
+    expect(scroll.props.stickyHeaderIndices).toEqual([0]);
     const nav = renderer.root.findByProps({ testID: "home-nav-overlay" });
     expect(nav.props.pointerEvents).toBe("box-none");
-    expect(nav.props.style[1].transform[0].translateY.evaluate()).toBe(14);
-    scroll.props.onScroll({ nativeEvent: { contentOffset: { y: 100 } } });
-    expect(nav.props.style[1].transform[0].translateY.evaluate()).toBe(0);
     expect(scroll.props.removeClippedSubviews).toBe(false);
     expect(renderer.root.findAllByProps({ accessibilityLabel: "Big Two Crew" })).toHaveLength(1);
     expect(renderer.root.findByProps({ testID: "home-logo" }).props.accessibilityRole).toBe(

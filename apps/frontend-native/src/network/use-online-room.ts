@@ -42,22 +42,27 @@ function isRoomState(value: unknown): value is RoomGameState {
 }
 
 export function useOnlineRoom({ roomId, focused = true }: OnlineRoomOptions): OnlineRoomResult {
-  const { data: session } = useSession();
+  const { data: session, isPending } = useSession();
   const user = session?.user;
   const viewerId = user?.id;
   const foreground = useForeground();
-  const enabled = foreground && focused;
+  const enabled = foreground && focused && !isPending;
   const key = `${roomId}:${viewerId ?? ""}`;
+  const access = useRef({ key, enabled, authenticated: !isPending });
+  access.current = { key, enabled, authenticated: !isPending };
   const [state, setState] = useState<{
     key: string;
     gameState?: RoomGameState;
     loading: boolean;
     error: Error | null;
   }>({ key, loading: false, error: null });
+  // Clear rather than merely hide a previous account's private snapshot. A
+  // later sign-in to the same ID still requires a fresh authenticated response.
+  if (state.key !== key) setState({ key, loading: false, error: null });
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
   const refresh = useCallback(async () => {
-    if (!viewerId || !enabled) return;
+    if (!viewerId || !enabled || !access.current.enabled || access.current.key !== key) return;
     const current = ++generation.current;
     controller.current?.abort();
     const abort = new AbortController();
@@ -92,6 +97,7 @@ export function useOnlineRoom({ roomId, focused = true }: OnlineRoomOptions): On
     enabled,
     onOpen: () => void refresh(),
     onMessage: (data) => {
+      if (!access.current.enabled) return;
       const gameState = parseSocketJSON(data);
       if (!isRoomState(gameState)) return;
       // A slower HTTP response must never overwrite a newer socket snapshot.
@@ -100,15 +106,16 @@ export function useOnlineRoom({ roomId, focused = true }: OnlineRoomOptions): On
       setState({ key, gameState, loading: false, error: null });
     },
   });
-  useRoomFocus(roomId, viewerId, enabled);
+  useRoomFocus(roomId, viewerId, foreground && focused, !isPending);
   const chat = useRoomChat({ roomId, viewerId, enabled });
   const send = useCallback(
     async (event: GameEvent) => {
-      if (!viewerId) throw new Error("Sign in to act at the table");
+      if (!viewerId || access.current.key !== key) throw new Error("Sign in to act at the table");
+      if (!access.current.authenticated) throw new Error("Wait for your session to be confirmed");
       await api.action(roomId, event);
       await refresh();
     },
-    [roomId, viewerId, refresh],
+    [roomId, viewerId, key, refresh],
   );
   const gameState = viewerId && state.key === key ? state.gameState : undefined;
   return {
@@ -125,13 +132,15 @@ export function useOnlineRoom({ roomId, focused = true }: OnlineRoomOptions): On
     refresh,
     send,
     join: async () => {
-      if (!user) throw new Error("Sign in to join a room");
+      if (!user || access.current.key !== key) throw new Error("Sign in to join a room");
+      if (!access.current.authenticated) throw new Error("Wait for your session to be confirmed");
       await api.joinRoom(roomId, user);
       await refresh();
     },
     // Explicit only: unmounting/returning to the lobby never sends LEAVE_GAME.
     leave: async () => {
-      if (!user) throw new Error("Sign in to leave a room");
+      if (!user || access.current.key !== key) throw new Error("Sign in to leave a room");
+      if (!access.current.authenticated) throw new Error("Wait for your session to be confirmed");
       await api.leaveRoom(roomId, user.id);
       await refresh();
     },

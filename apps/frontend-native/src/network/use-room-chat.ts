@@ -59,7 +59,14 @@ export function useRoomChat({
   const sendPending = useRef(false);
   const retrySend = useRef<ChatInput | null>(null);
   const identity = useRef(key);
+  // A sign-out and return to the same key is a new private visit. Key equality
+  // alone must not let an earlier send publish or clear this visit's retry.
+  const sendEpoch = useRef(0);
+  if (identity.current !== key) ++sendEpoch.current;
   identity.current = key;
+  const epoch = sendEpoch.current;
+  const active = useRef(enabled);
+  active.current = enabled;
 
   const publish = useCallback(
     (next: ChatMessage[]) => {
@@ -87,7 +94,7 @@ export function useRoomChat({
   }, [key]);
 
   const refresh = useCallback(async () => {
-    if (!viewerId || !enabled) return;
+    if (!viewerId || !enabled || !active.current || identity.current !== key) return;
     const current = ++generation.current;
     controller.current?.abort();
     const abort = new AbortController();
@@ -151,6 +158,7 @@ export function useRoomChat({
     enabled,
     onOpen: () => void refresh(),
     onMessage: (data) => {
+      if (!active.current) return;
       const frame = parseSocketJSON(data);
       if (!isChatFrame(frame)) return;
       if (syncing.current) buffered.current.push(frame);
@@ -160,7 +168,16 @@ export function useRoomChat({
 
   const loadOlder = useCallback(async () => {
     const before = messages.current[0]?.order;
-    if (!viewerId || !enabled || !before || syncing.current || olderPending.current) return;
+    if (
+      !viewerId ||
+      !enabled ||
+      !active.current ||
+      identity.current !== key ||
+      !before ||
+      syncing.current ||
+      olderPending.current
+    )
+      return;
     const current = generation.current;
     olderPending.current = true;
     setState((previous) => ({ ...previous, loadingOlder: true, error: null }));
@@ -183,7 +200,14 @@ export function useRoomChat({
 
   const send = useCallback(
     async (input: string | ChatInput) => {
-      if (!viewerId || !enabled) throw new Error("Open the room while signed in to send chat");
+      if (
+        !viewerId ||
+        !enabled ||
+        !active.current ||
+        identity.current !== key ||
+        sendEpoch.current !== epoch
+      )
+        throw new Error("Open the room while signed in to send chat");
       if (sendPending.current) throw new Error("A message is already being sent");
       const message =
         typeof input === "string"
@@ -198,24 +222,24 @@ export function useRoomChat({
         const accepted = await api.sendChat(roomId, message);
         if (!isChatFrame(accepted) || accepted.type !== "message")
           throw new Error("Could not confirm the message. Keep your draft and retry.");
-        if (identity.current === key) {
+        if (identity.current === key && sendEpoch.current === epoch) {
           retrySend.current = null;
           if (syncing.current) buffered.current.push(accepted);
           publish(mergeChat(messages.current, [accepted], redacted.current));
         }
         return accepted;
       } catch (cause) {
-        if (identity.current === key)
+        if (identity.current === key && sendEpoch.current === epoch)
           setState((previous) => ({ ...previous, error: asError(cause) }));
         throw asError(cause);
       } finally {
-        if (identity.current === key) {
+        if (identity.current === key && sendEpoch.current === epoch) {
           sendPending.current = false;
           setState((previous) => ({ ...previous, sending: false }));
         }
       }
     },
-    [roomId, viewerId, enabled, key, publish],
+    [roomId, viewerId, enabled, key, publish, epoch],
   );
 
   return {

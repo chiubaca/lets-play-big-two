@@ -135,6 +135,7 @@ export function Button({
   const muted = (disabled || busy) && disabledAppearance === "muted";
   return (
     <Pressable
+      accessible
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? title}
       accessibilityState={{ disabled: disabled || busy, busy }}
@@ -169,21 +170,36 @@ export function Button({
           ]}
         />
       )}
-      {busy ? (
-        <ActivityIndicator color={gold ? colors.panel : colors.gold} />
-      ) : icon ? (
-        <View style={{ position: "relative", zIndex: 1 }}>{icon}</View>
-      ) : (
-        <Label
-          style={[
-            styles.buttonText,
-            gold && { color: "#111510" },
-            muted && !gold && { color: "#b5a978" },
-            labelStyle,
-          ]}
+      <View
+        pointerEvents="none"
+        accessible={false}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={[styles.buttonContent, busy && styles.hiddenContent]}
+      >
+        {icon ?? (
+          <Label
+            style={[
+              styles.buttonText,
+              gold && { color: "#111510" },
+              muted && !gold && { color: "#b5a978" },
+              labelStyle,
+            ]}
+          >
+            {title}
+          </Label>
+        )}
+      </View>
+      {busy && (
+        <View
+          pointerEvents="none"
+          accessible={false}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={[StyleSheet.absoluteFill, styles.buttonSpinner]}
         >
-          {title}
-        </Label>
+          <ActivityIndicator color={gold ? colors.panel : colors.gold} />
+        </View>
       )}
     </Pressable>
   );
@@ -222,13 +238,15 @@ export function Sheet({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        // Android's modal already resizes for the keyboard; avoid subtracting it twice.
+        enabled={Platform.OS === "ios"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.overlay}
       >
         <SafeAreaView style={styles.sheetSafe}>
           <Panel style={styles.sheet}>
-            <View style={styles.row}>
-              <Label heading style={{ flex: 1 }}>
+            <View style={[styles.row, styles.sheetHeader]}>
+              <Label heading style={{ flex: 1, minWidth: 0 }}>
                 {title}
               </Label>
               <Button
@@ -239,6 +257,8 @@ export function Sheet({
               />
             </View>
             <ScrollView
+              style={styles.sheetBody}
+              automaticallyAdjustKeyboardInsets={false}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ gap: 14, paddingBottom: 4 }}
             >
@@ -283,6 +303,9 @@ export const styles = StyleSheet.create({
   goldButton: { backgroundColor: colors.gold, borderColor: "#ffe6a0" },
   ghostButton: { borderWidth: 0, borderBottomWidth: 0, backgroundColor: "transparent" },
   buttonText: { color: colors.gold, fontFamily: fonts.display, fontSize: 18 },
+  buttonContent: { zIndex: 1, maxWidth: "100%" },
+  hiddenContent: { opacity: 0 },
+  buttonSpinner: { zIndex: 2, alignItems: "center", justifyContent: "center" },
   disabled: { opacity: 0.45 },
   pressed: { opacity: 0.8, transform: [{ translateY: 1 }] },
   input: {
@@ -298,8 +321,11 @@ export const styles = StyleSheet.create({
   },
   error: { color: "#ffb3a8", fontFamily: fonts.body, fontSize: 13, lineHeight: 20 },
   overlay: { flex: 1, backgroundColor: "rgba(0,5,2,0.6)", justifyContent: "center", padding: 16 },
-  sheetSafe: { width: "100%", maxWidth: 520, alignSelf: "center", maxHeight: "92%" },
-  sheet: { flexShrink: 1, padding: 20, borderRadius: 22 },
+  // Size the frame from the available viewport, never the changing menu contents.
+  sheetSafe: { width: "100%", maxWidth: 520, alignSelf: "center", height: "92%", maxHeight: 720 },
+  sheet: { flex: 1, minHeight: 0, padding: 20, borderRadius: 22 },
+  sheetHeader: { flexShrink: 0 },
+  sheetBody: { flex: 1, minHeight: 0 },
   row: { flexDirection: "row", gap: 10, alignItems: "center" },
-  close: { width: 46, paddingHorizontal: 0, borderRadius: 23 },
+  close: { width: 46, flexShrink: 0, paddingHorizontal: 0, borderRadius: 23 },
 });

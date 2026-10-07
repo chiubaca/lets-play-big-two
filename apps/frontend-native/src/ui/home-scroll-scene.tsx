@@ -36,7 +36,6 @@ export function HomeScrollScene({
   const [copy, setCopy] = useState<LayoutRectangle>(emptyLayout);
   const [stage, setStage] = useState<LayoutRectangle>(emptyLayout);
   const [foreground, setForeground] = useState<LayoutRectangle>(emptyLayout);
-  const [navHeight, setNavHeight] = useState(0);
   const logoWidth = homeLogoWidth(width, height);
   const motion = homeScrollMotion({
     stageY: copy.y + stage.y,
@@ -55,11 +54,6 @@ export function HomeScrollScene({
     outputRange: [0, motion.maxOverlap],
     extrapolate: "clamp",
   });
-  const navTranslateY = scrollY.interpolate({
-    inputRange: [0, 14],
-    outputRange: [14, 0],
-    extrapolate: "clamp",
-  });
 
   return (
     <CasinoScreen
@@ -76,16 +70,9 @@ export function HomeScrollScene({
       }
     >
       <View style={styles.viewport}>
-        <Animated.View
-          testID="home-nav-overlay"
-          pointerEvents="box-none"
-          onLayout={(event) => setNavHeight(event.nativeEvent.layout.height)}
-          style={[styles.nav, { transform: [{ translateY: navTranslateY }] }]}
-        >
-          {nav}
-        </Animated.View>
         <Animated.ScrollView
           contentContainerStyle={styles.scroll}
+          stickyHeaderIndices={[0]}
           keyboardShouldPersistTaps="handled"
           scrollEventThrottle={16}
           removeClippedSubviews={false}
@@ -93,7 +80,9 @@ export function HomeScrollScene({
             useNativeDriver: true,
           })}
         >
-          <View pointerEvents="none" style={{ height: navHeight }} />
+          <View testID="home-nav-overlay" pointerEvents="box-none" style={styles.nav}>
+            {nav}
+          </View>
           <View
             testID="home-copy"
             style={styles.copy}
@@ -160,7 +149,7 @@ export function HomeScrollScene({
 const styles = StyleSheet.create({
   viewport: { flex: 1 },
   scroll: { flexGrow: 1, padding: 14, alignItems: "center" },
-  nav: { position: "absolute", top: 0, left: 14, right: 14, alignItems: "center", zIndex: 5 },
+  nav: { width: "100%", alignItems: "center", zIndex: 5 },
   copy: { width: "100%", alignItems: "center", marginTop: 16 },
   stage: { alignItems: "center", marginTop: 17, marginBottom: 4, zIndex: 0 },
   foreground: { width: "100%", alignItems: "center", marginTop: 16, zIndex: 1 },

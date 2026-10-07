@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { ChevronDown, Pencil } from "lucide-react-native";
 import { authClient } from "../network";
 import { Button, CasinoScreen, ErrorMessage, Field, Label, Sheet } from "../ui/primitives";
+import { StatusSlot } from "../ui/status-slot";
 import { artwork, colors, fonts } from "../ui/theme";
 import { usernameError } from "./auth";
 import type { HomeSession } from "./home";
@@ -604,7 +605,13 @@ export function ProfileScreen({ session, onHome, initialEditor }: ProfileScreenP
             onInspect={() => setInspecting(true)}
           />
           <Label style={styles.caption}>Your seat at the members’ table.</Label>
-          {notice && <Label style={styles.notice}>{notice}</Label>}
+          <StatusSlot testID="profile-notice">
+            {notice && (
+              <Label accessibilityLiveRegion="polite" style={styles.notice}>
+                {notice}
+              </Label>
+            )}
+          </StatusSlot>
           <Label style={styles.email}>{user.email}</Label>
           <Button
             title="Account & data deletion"
@@ -708,7 +715,9 @@ export function ProfileScreen({ session, onHome, initialEditor }: ProfileScreenP
             />
           </>
         )}
-        <ErrorMessage message={error} />
+        <StatusSlot testID="profile-editor-status">
+          <ErrorMessage message={error} />
+        </StatusSlot>
         <View style={styles.actions}>
           <Button title="Cancel" disabled={busy} onPress={cancel} style={{ flex: 1 }} />
           {editor === "delete" ? (

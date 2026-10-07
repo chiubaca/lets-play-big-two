@@ -5,6 +5,7 @@ import Svg, { Path } from "react-native-svg";
 import { authClient } from "../network";
 import { NATIVE_ORIGIN } from "../network/config";
 import { Button, ErrorMessage, Field, Label, Sheet } from "../ui/primitives";
+import { StatusSlot } from "../ui/status-slot";
 import { colors, fonts } from "../ui/theme";
 
 export interface AuthSuccessUser {
@@ -49,6 +50,7 @@ export function AuthSheet({
     if (!visible || !session || !awaitingSocial.current) return;
     awaitingSocial.current = false;
     setBusy(null);
+    setPassword("");
     onSuccess({
       id: session.user.id,
       displayName: session.user.displayUsername ?? session.user.username ?? session.user.name,
@@ -206,7 +208,9 @@ export function AuthSheet({
           </View>
         </View>
       </View>
-      <ErrorMessage message={error} />
+      <StatusSlot testID="auth-status">
+        <ErrorMessage message={error} />
+      </StatusSlot>
       <Button
         title={signUp ? "Create account" : "Sign in"}
         gold

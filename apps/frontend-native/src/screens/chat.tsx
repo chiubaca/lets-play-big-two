@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, View } f
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RoomChatResult } from "../network";
 import { Button, ErrorMessage, Field, Label } from "../ui/primitives";
+import { StatusSlot } from "../ui/status-slot";
 import { colors, fonts } from "../ui/theme";
 
 export function ChatScreen({
@@ -39,20 +40,33 @@ export function ChatScreen({
       <SafeAreaView style={styles.screen}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          enabled={Platform.OS === "ios"}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
               <Label heading>Room chat</Label>
-              <Label mono>
-                {roomId} · {chat.connection === "connected" ? "LIVE" : "RECONNECTING"}
-              </Label>
+              <View testID="chat-connection-status">
+                <Label
+                  mono
+                  accessible={false}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                  style={{ opacity: 0 }}
+                >
+                  {roomId} · RECONNECTING
+                </Label>
+                <Label mono style={{ position: "absolute", top: 0, left: 0, right: 0 }}>
+                  {roomId} · {chat.connection === "connected" ? "LIVE" : "RECONNECTING"}
+                </Label>
+              </View>
             </View>
             <Button title="×" accessibilityLabel="Close room chat" onPress={onClose} />
           </View>
           <ScrollView
             ref={list}
-            style={{ flex: 1 }}
+            style={{ flex: 1, minHeight: 0 }}
+            automaticallyAdjustKeyboardInsets={false}
             contentContainerStyle={styles.messages}
             keyboardShouldPersistTaps="handled"
             onScroll={({ nativeEvent }) => {
@@ -97,8 +111,27 @@ export function ChatScreen({
             ))}
           </ScrollView>
           <View style={styles.composer}>
-            <ErrorMessage message={sendError ?? chat.error?.message} />
-            {chat.error && <Button title="Retry connection" onPress={() => void chat.refresh()} />}
+            <View style={styles.statusRow}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <StatusSlot testID="chat-status">
+                  <ErrorMessage message={sendError ?? chat.error?.message} />
+                </StatusSlot>
+              </View>
+              <View
+                pointerEvents={chat.error ? "auto" : "none"}
+                accessibilityElementsHidden={!chat.error}
+                importantForAccessibility={chat.error ? "auto" : "no-hide-descendants"}
+                style={{ opacity: chat.error ? 1 : 0, flexShrink: 0 }}
+              >
+                <Button
+                  title="Retry"
+                  accessibilityLabel="Retry connection"
+                  disabled={!chat.error || chat.loading}
+                  busy={chat.loading}
+                  onPress={() => void chat.refresh()}
+                />
+              </View>
+            </View>
             <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
               <Field
                 accessibilityLabel="Chat message"
@@ -110,7 +143,8 @@ export function ChatScreen({
                 style={{ flex: 1, maxHeight: 110, paddingVertical: 12 }}
               />
               <Button
-                title={sendError ? "Retry" : "Send"}
+                title="Send"
+                accessibilityLabel={sendError ? "Retry message" : "Send"}
                 gold
                 busy={chat.sending}
                 disabled={!draft.trim() || chat.connection !== "connected"}
@@ -143,4 +177,5 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   composer: { padding: 12, gap: 8, borderTopWidth: 1, borderColor: colors.line },
+  statusRow: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 0 },
 });

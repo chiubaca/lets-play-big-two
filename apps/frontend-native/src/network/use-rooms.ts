@@ -17,20 +17,23 @@ export interface RoomsResult {
 }
 
 export function useRooms(): RoomsResult {
-  const { data: session } = useSession();
+  const { data: session, isPending } = useSession();
   const user = session?.user;
   const viewerId = user?.id;
   const active = useForeground();
+  const access = useRef({ viewerId, authenticated: !isPending });
+  access.current = { viewerId, authenticated: !isPending };
   const [state, setState] = useState<{
     viewerId?: string;
     rooms: RoomSummary[];
     loading: boolean;
     error: Error | null;
   }>({ rooms: [], loading: false, error: null });
+  if (state.viewerId !== viewerId) setState({ viewerId, rooms: [], loading: false, error: null });
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
   const refresh = useCallback(async () => {
-    if (!viewerId) return;
+    if (!viewerId || !access.current.authenticated || access.current.viewerId !== viewerId) return;
     const current = ++generation.current;
     controller.current?.abort();
     const abort = new AbortController();
@@ -51,14 +54,15 @@ export function useRooms(): RoomsResult {
     }
   }, [viewerId]);
   useEffect(() => {
-    if (active && viewerId) void refresh();
-    const timer = active && viewerId ? setInterval(() => void refresh(), 15_000) : undefined;
+    if (active && viewerId && !isPending) void refresh();
+    const timer =
+      active && viewerId && !isPending ? setInterval(() => void refresh(), 15_000) : undefined;
     return () => {
       ++generation.current;
       controller.current?.abort();
       clearInterval(timer);
     };
-  }, [active, viewerId, refresh]);
+  }, [active, viewerId, isPending, refresh]);
 
   return {
     rooms: state.viewerId === viewerId && viewerId ? state.rooms : [],
@@ -66,18 +70,22 @@ export function useRooms(): RoomsResult {
     error: state.viewerId === viewerId ? state.error : null,
     refresh,
     createRoom: async () => {
-      if (!user) throw new Error("Sign in to create a room");
+      if (!user || access.current.viewerId !== viewerId)
+        throw new Error("Sign in to create a room");
+      if (!access.current.authenticated) throw new Error("Wait for your session to be confirmed");
       const room = await api.createRoom();
       await refresh();
       return room;
     },
     joinRoom: async (roomId) => {
-      if (!user) throw new Error("Sign in to join a room");
+      if (!user || access.current.viewerId !== viewerId) throw new Error("Sign in to join a room");
+      if (!access.current.authenticated) throw new Error("Wait for your session to be confirmed");
       await api.joinRoom(roomId, user);
       await refresh();
     },
     leaveRoom: async (roomId) => {
-      if (!user) throw new Error("Sign in to leave a room");
+      if (!user || access.current.viewerId !== viewerId) throw new Error("Sign in to leave a room");
+      if (!access.current.authenticated) throw new Error("Wait for your session to be confirmed");
       await api.leaveRoom(roomId, user.id);
       await refresh();
     },

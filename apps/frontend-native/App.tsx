@@ -65,13 +65,16 @@ function LocalTable({
       game.redeal();
     }
   }, [game.ready, game.redeal, newDeal]);
-  if (!game.ready || !game.snapshot) return <LoadingScreen error={game.error} onHome={onHome} />;
-  const current = game.snapshot.context.players[game.snapshot.context.currentPlayerIndex];
+  const ready = game.ready && !!game.snapshot;
+  const current = game.snapshot?.context.players[game.snapshot.context.currentPlayerIndex];
   const userId =
     mode === "solo"
       ? LOCAL_HUMAN_ID
       : (game.visiblePlayerId ?? game.handoffPlayerId ?? current?.id ?? "local-1");
-  const snapshot = { ...game.snapshot, handCounts: game.handCounts, spectatorCount: 0 };
+  const snapshot =
+    ready && game.snapshot
+      ? { ...game.snapshot, handCounts: game.handCounts, spectatorCount: 0 }
+      : undefined;
   return (
     <TableScreen
       snapshot={snapshot}
@@ -91,14 +94,22 @@ function OnlineTable({
   roomId,
   session,
   onHome,
+  pending,
+  onSignIn,
 }: {
   roomId: string;
-  session: NativeSession;
+  session: NativeSession | null;
   onHome: () => void;
+  pending: boolean;
+  onSignIn: () => void;
 }) {
   const room = useOnlineRoom({ roomId });
   const [chatOpen, setChatOpen] = useState(false);
   const [lastReadOrder, setLastReadOrder] = useState<number | null>(null);
+  useEffect(() => {
+    setChatOpen(false);
+    setLastReadOrder(null);
+  }, [session?.user.id]);
   useEffect(() => {
     if (
       chatOpen ||
@@ -106,28 +117,22 @@ function OnlineTable({
     )
       setLastReadOrder(room.chat.messages.at(-1)?.order ?? 0);
   }, [chatOpen, lastReadOrder, room.chat.loading, room.chat.connection, room.chat.messages]);
-  if (!room.gameState)
-    return (
-      <LoadingScreen
-        error={room.error?.message}
-        onHome={onHome}
-        onRetry={room.error ? () => void room.refresh() : undefined}
-      />
-    );
   return (
     <>
       <TableScreen
-        snapshot={room.gameState}
-        userId={session.user.id}
-        userName={session.user.displayUsername ?? session.user.username ?? session.user.name}
-        userEmoji={session.user.emoji}
+        snapshot={session ? room.gameState : undefined}
+        userId={session?.user.id ?? ""}
+        userName={session?.user.displayUsername ?? session?.user.username ?? session?.user.name}
+        userEmoji={session?.user.emoji}
         mode="online"
         roomId={roomId}
         connected={room.connection === "connected"}
-        error={room.error?.message}
+        error={session ? room.error?.message : undefined}
         send={room.send}
         onHome={onHome}
-        onChat={() => setChatOpen(true)}
+        onRetry={() => void room.refresh()}
+        onSignIn={!session && !pending ? onSignIn : undefined}
+        onChat={session ? () => setChatOpen(true) : undefined}
         chatUnread={
           lastReadOrder === null
             ? 0
@@ -135,7 +140,8 @@ function OnlineTable({
         }
       />
       <ChatScreen
-        visible={chatOpen}
+        key={session?.user.id ?? "signed-out"}
+        visible={chatOpen && !!session}
         roomId={roomId}
         chat={room.chat}
         onClose={() => setChatOpen(false)}
@@ -144,11 +150,13 @@ function OnlineTable({
   );
 }
 
-function GameApp() {
+export function GameApp() {
   const { data: session, isPending } = useSession();
   const [route, setRoute] = useState<NativeRoute>({ name: "home" });
   const [authOpen, setAuthOpen] = useState(false);
   const [passConfig, setPassConfig] = useState<OfflineGameConfig>();
+  const [passConfigReady, setPassConfigReady] = useState(false);
+  const [passSaveCheckedRoute, setPassSaveCheckedRoute] = useState<string | null>(null);
   const [newPassDeal, setNewPassDeal] = useState(false);
   const [canResumePass, setCanResumePass] = useState(false);
   const [welcome, setWelcome] = useState<string | null>(null);
@@ -172,7 +180,10 @@ function GameApp() {
       .then((saved) => {
         if (mounted) setCanResumePass(!!saved);
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => {
+        if (mounted) setPassSaveCheckedRoute(route.name);
+      });
     return () => {
       mounted = false;
     };
@@ -220,7 +231,8 @@ function GameApp() {
           /* A corrupt setup is replaced when a new table is started. */
         }
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => setPassConfigReady(true));
   }, []);
 
   let screen: ReactNode;
@@ -229,7 +241,7 @@ function GameApp() {
     screen = (
       <LocalTable mode="pass-and-play" config={passConfig} newDeal={newPassDeal} onHome={home} />
     );
-  else if (route.name === "pass-setup")
+  else if (route.name === "pass-setup" && passConfigReady && passSaveCheckedRoute === route.name)
     screen = (
       <PassSetupScreen
         onHome={home}
@@ -259,27 +271,16 @@ function GameApp() {
         initialEditor={route.editor}
       />
     );
-  else if (route.name === "room" && session)
+  else if (route.name === "room")
     screen = (
       <OnlineTable
-        key={`${session.user.id}:${route.roomId}`}
+        key={route.roomId}
         roomId={route.roomId}
         session={session}
         onHome={home}
+        pending={isPending}
+        onSignIn={() => setAuthOpen(true)}
       />
-    );
-  else if (route.name === "room" && !isPending)
-    screen = (
-      <CasinoScreen>
-        <View style={{ flex: 1, justifyContent: "center", padding: 24 }}>
-          <Panel>
-            <Label heading>Take your seat</Label>
-            <Label>Sign in to watch or join room {route.roomId}.</Label>
-            <Button title="Sign in" gold onPress={() => setAuthOpen(true)} />
-            <Button title="Return to lobby" onPress={home} />
-          </Panel>
-        </View>
-      </CasinoScreen>
     );
   else
     screen = (
@@ -297,7 +298,38 @@ function GameApp() {
 
   return (
     <>
-      {screen}
+      <View
+        style={{ flex: 1 }}
+        accessibilityElementsHidden={
+          route.name === "pass-setup" && (!passConfigReady || passSaveCheckedRoute !== route.name)
+        }
+        importantForAccessibility={
+          route.name === "pass-setup" && (!passConfigReady || passSaveCheckedRoute !== route.name)
+            ? "no-hide-descendants"
+            : "auto"
+        }
+      >
+        {screen}
+      </View>
+      {route.name === "pass-setup" && (!passConfigReady || passSaveCheckedRoute !== route.name) && (
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: "rgba(0,5,2,0.6)",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 12,
+          }}
+          accessibilityViewIsModal
+        >
+          <ActivityIndicator color={colors.gold} />
+          <Label accessibilityLiveRegion="polite">Loading saved setup…</Label>
+        </View>
+      )}
       {welcome && (
         <View
           pointerEvents="none"

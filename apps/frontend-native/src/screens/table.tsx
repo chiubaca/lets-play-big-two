@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AppState,
+  ActivityIndicator,
   Image,
   Modal,
   ScrollView,
@@ -14,7 +15,15 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
-import { Menu, Settings, CircleHelp, Smartphone, Share2 } from "lucide-react-native";
+import {
+  Menu,
+  Settings,
+  CircleHelp,
+  Smartphone,
+  Share2,
+  MessageCircle,
+  Eye,
+} from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { getCardKey, getCardRank, SUITS, sortCards, detectHandType } from "@big-two/game-core";
 import { getLegalPlays } from "@big-two/game-ai";
@@ -24,6 +33,7 @@ import type {
   RoomGameState,
   Player,
 } from "@big-two/game-state-machine";
+import { bigTwoGameMachine } from "@big-two/game-state-machine";
 import { CasinoScreen, Label, Button, ErrorMessage, Sheet, styles as ui } from "../ui/primitives";
 import { Hand, PlayingCard, CardBack, CardBacks, CardSuit } from "../ui/cards";
 import { TableSurface } from "../ui/table-surface";
@@ -32,7 +42,7 @@ import { RulesSheet } from "./rules";
 import { tableSeats } from "../table-seats";
 
 type TableProps = {
-  snapshot: BigTwoGameMachineSnapshot | RoomGameState;
+  snapshot?: BigTwoGameMachineSnapshot | RoomGameState;
   userId: string;
   userName?: string;
   userEmoji?: string | null;
@@ -47,7 +57,21 @@ type TableProps = {
   onChat?: () => void;
   chatUnread?: number;
   onReveal?: () => void;
+  onRetry?: () => void;
+  onSignIn?: () => void;
 };
+
+// Only geometry is shown before hydration; never fabricate a dealt/private hand.
+const emptyTable: BigTwoGameMachineSnapshot = bigTwoGameMachine.resolveState({
+  value: "WAITING_FOR_PLAYERS",
+  context: {
+    players: [],
+    currentPlayerIndex: 0,
+    cardPile: [],
+    roundMode: null,
+    consecutivePasses: 0,
+  },
+});
 
 function Seat({
   player,
@@ -55,12 +79,16 @@ function Seat({
   active,
   self = false,
   compact = false,
+  waiting = false,
+  showBacks = true,
 }: {
   player?: Player;
   count: number;
   active: boolean;
   self?: boolean;
   compact?: boolean;
+  waiting?: boolean;
+  showBacks?: boolean;
 }) {
   const avatarSize = compact ? 32 : self ? 45 : 38;
   return (
@@ -69,7 +97,7 @@ function Seat({
       accessibilityLabel={
         player ? `${player.name}, ${count} cards${active ? ", current turn" : ""}` : "Open seat"
       }
-      style={table.seat}
+      style={[table.seat, waiting && table.waitingSeat]}
     >
       <LinearGradient
         colors={["#0a1d0c", "#000c04"]}
@@ -79,6 +107,7 @@ function Seat({
           table.plaque,
           self && table.selfPlaque,
           compact && table.compactPlaque,
+          waiting && table.waitingPlaque,
           active && table.activePlaque,
         ]}
       >
@@ -123,13 +152,13 @@ function Seat({
           </View>
         )}
       </LinearGradient>
-      {!self && <CardBacks count={count} compact={compact} />}
+      {!self && showBacks && <CardBacks count={count} compact={compact} />}
     </View>
   );
 }
 
 export function TableScreen({
-  snapshot,
+  snapshot: loadedSnapshot,
   userId,
   userName = "Player",
   userEmoji,
@@ -144,12 +173,24 @@ export function TableScreen({
   onChat,
   chatUnread = 0,
   onReveal,
+  onRetry,
+  onSignIn,
 }: TableProps) {
+  const snapshot: BigTwoGameMachineSnapshot | RoomGameState = loadedSnapshot ?? emptyTable;
+  const loading = !loadedSnapshot;
+  const spectatorCount =
+    loadedSnapshot && "spectatorCount" in loadedSnapshot ? loadedSnapshot.spectatorCount : 0;
+  const roomNotice =
+    loadedSnapshot && "roomNotice" in loadedSnapshot ? loadedSnapshot.roomNotice : null;
   const window = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const width = window.width - insets.left - insets.right;
   const height = window.height - insets.top - insets.bottom;
-  const compact = height < 550;
+  const compact = width > height && height < 550;
+  const shortWaiting = height < 650;
+  const densePortrait = shortWaiting && !compact;
+  const compressedLandscape = compact && height < 380;
+  const Controls = compact ? ScrollView : View;
   const requestedBoardWidth = Math.min(width - 16, compact ? width * 0.69 : 760);
   const [boardSize, setBoardSize] = useState({ width: 0, height: 0 });
   const boardWidth = boardSize.width || requestedBoardWidth;
@@ -160,7 +201,8 @@ export function TableScreen({
   const isHost = context.players.find((player) => !player.isBot)?.id === userId;
   const waiting = snapshot.value === "WAITING_FOR_PLAYERS";
   const finished = snapshot.value === "GAME_END";
-  const yourTurn = !hidden && !spectator && !finished && !waiting && current?.id === userId;
+  const playable = !loading && !spectator && !waiting && !finished;
+  const yourTurn = playable && !hidden && current?.id === userId;
   const [selected, setSelected] = useState<string[]>([]);
   const [sortSuit, setSortSuit] = useState(false);
   const [panel, setPanel] = useState<"menu" | "help" | "settings" | "results" | "cards" | null>(
@@ -204,8 +246,8 @@ export function TableScreen({
     context.consecutivePasses,
   ]);
   const counts =
-    "handCounts" in snapshot
-      ? snapshot.handCounts
+    loadedSnapshot && "handCounts" in loadedSnapshot
+      ? loadedSnapshot.handCounts
       : Object.fromEntries(context.players.map((player) => [player.id, player.hand.length]));
   const seats = tableSeats(context.players, userId);
   const handoff =
@@ -261,7 +303,7 @@ export function TableScreen({
   }, []);
 
   const act = async (event: GameEvent) => {
-    if (busy) return false;
+    if (busy || loading) return false;
     setBusy(true);
     setMessage(null);
     try {
@@ -293,7 +335,9 @@ export function TableScreen({
       count={count(player)}
       active={!waiting && !finished && current?.id === player?.id}
       self={self}
-      compact={compact}
+      compact={compact || densePortrait || (waiting && width < 360)}
+      waiting={waiting}
+      showBacks={!densePortrait && !compressedLandscape}
     />
   );
   const shareRoom = async () => {
@@ -310,7 +354,13 @@ export function TableScreen({
         accessibilityElementsHidden={handoff}
         importantForAccessibility={handoff ? "no-hide-descendants" : "auto"}
       >
-        <View style={[table.header, compact && { minHeight: 49 }]}>
+        <View
+          style={[
+            table.header,
+            mode === "online" && table.onlineHeader,
+            compact && { minHeight: mode === "online" ? 72 : 49 },
+          ]}
+        >
           <Button
             title="☰"
             icon={<Menu color={colors.gold} size={24} />}
@@ -318,8 +368,35 @@ export function TableScreen({
             onPress={() => setPanel("menu")}
             style={table.iconButton}
           />
+          {mode === "online" && (
+            <Button
+              title="Room chat"
+              accessibilityLabel={chatUnread ? `Room chat, ${chatUnread} unread` : "Room chat"}
+              icon={
+                <View>
+                  <MessageCircle color={colors.gold} size={24} />
+                  {chatUnread > 0 && (
+                    <Label style={table.chatBadge}>{chatUnread > 9 ? "9+" : chatUnread}</Label>
+                  )}
+                </View>
+              }
+              disabled={loading || !onChat}
+              onPress={() => onChat?.()}
+              style={table.iconButton}
+            />
+          )}
+          {mode === "online" && (
+            <View
+              accessible
+              accessibilityLabel={loading ? "Loading spectators" : `${spectatorCount} watching`}
+              style={table.spectators}
+            >
+              <Eye color={colors.muted} size={13} />
+              <Label style={table.spectatorCount}>{loading ? "–" : spectatorCount}</Label>
+            </View>
+          )}
           {roomId && (
-            <View style={table.roomCodePosition}>
+            <View style={[table.roomCodePosition, mode === "online" && !compact && { top: 49 }]}>
               <Button
                 title={roomId}
                 accessibilityLabel={`Share room ${roomId}`}
@@ -357,26 +434,27 @@ export function TableScreen({
             style={table.iconButton}
           />
         </View>
-        {mode === "online" && (
-          <View style={[ui.row, { justifyContent: "center", minHeight: 30 }]}>
-            <Label mono>{connected ? "● LIVE TABLE" : "RECONNECTING…"}</Label>
-            {onChat && (
-              <Button
-                title={chatUnread ? `Room chat · ${chatUnread}` : "Room chat"}
-                onPress={onChat}
-                style={{ minHeight: 30, paddingVertical: 3, borderRadius: 10 }}
-              />
-            )}
-          </View>
+        {mode === "online" && !loading && !connected && (
+          <Label
+            mono
+            style={[table.connectionStatus, compact && { top: 58 }]}
+            accessibilityLiveRegion="polite"
+          >
+            RECONNECTING…
+          </Label>
         )}
         <View style={[table.playArea, compact && { flexDirection: "row" }]}>
           <View
+            testID="table-board"
             onLayout={({ nativeEvent }) =>
               setBoardSize({ width: nativeEvent.layout.width, height: nativeEvent.layout.height })
             }
             style={[
               table.board,
-              { width: requestedBoardWidth, marginTop: compact ? 0 : Math.min(72, height * 0.075) },
+              {
+                width: requestedBoardWidth,
+                marginTop: compact ? 0 : 16,
+              },
               compact && { marginTop: 0, alignSelf: "stretch" },
             ]}
           >
@@ -386,6 +464,7 @@ export function TableScreen({
               style={[
                 table.tableMark,
                 compact && { top: "18%" },
+                waiting && shortWaiting && { opacity: 0.18 },
                 pile.length > 0 && { opacity: 0.3 },
               ]}
             >
@@ -400,29 +479,54 @@ export function TableScreen({
                 <View style={table.brandRuleLine} />
               </View>
             </View>
-            <View style={[table.topSeat, compact && { top: 10 }]}>{seat(seats.top)}</View>
-            <View style={[table.leftSeat, compact && { top: "16%" }]}>{seat(seats.left)}</View>
-            <View style={[table.rightSeat, compact && { top: "16%" }]}>{seat(seats.right)}</View>
-            <View
-              style={[
-                table.center,
-                waiting ? { top: "20%", bottom: "16%" } : { top: compact ? "28%" : "34%" },
-              ]}
-            >
-              {waiting ? (
-                <ScrollView
-                  style={{ width: "100%", flex: 1 }}
-                  contentContainerStyle={table.waiting}
-                >
-                  <Label heading style={{ fontSize: 20, textAlign: "center" }}>
-                    Waiting for players
+            {loading ? (
+              <ScrollView style={table.waitingScroll} contentContainerStyle={table.loading}>
+                <Label heading style={{ textAlign: "center" }} accessibilityLiveRegion="polite">
+                  {onSignIn
+                    ? "Take your seat"
+                    : error
+                      ? "Couldn’t open the table"
+                      : "Taking your seat…"}
+                </Label>
+                {onSignIn ? (
+                  <>
+                    <Label style={table.centerText}>Sign in to watch or join room {roomId}.</Label>
+                    <Button title="Sign in" gold onPress={onSignIn} />
+                  </>
+                ) : error ? (
+                  <ErrorMessage message={error} />
+                ) : (
+                  <ActivityIndicator color={colors.gold} />
+                )}
+                {error && onRetry && <Button title="Retry" gold onPress={onRetry} />}
+                <Button title="Return to lobby" onPress={onHome} />
+              </ScrollView>
+            ) : waiting ? (
+              <ScrollView
+                style={table.waitingScroll}
+                contentContainerStyle={[table.waiting, shortWaiting && table.shortWaiting]}
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={table.waitingSeatRow}>{seat(seats.top)}</View>
+                <View style={[table.waitingSpacer, shortWaiting && { minHeight: 0 }]} />
+                <View style={table.waitingSideSeats}>
+                  <View style={table.waitingSideSeat}>{seat(seats.left)}</View>
+                  <View style={[table.waitingSideSeat, { alignItems: "flex-end" }]}>
+                    {seat(seats.right)}
+                  </View>
+                </View>
+                <View style={[table.waitingSpacer, shortWaiting && { minHeight: 0 }]} />
+                <View style={[table.waitingPrompt, shortWaiting && { padding: 8, gap: 4 }]}>
+                  <Label style={table.centerText} accessibilityLiveRegion="polite">
+                    {`Waiting for players · ${context.players.length} of 4 seats filled`}
                   </Label>
-                  <Label style={table.centerText}>{context.players.length} of 4 seats filled</Label>
                   {spectator && context.players.length < 4 && (
                     <Button
                       title="Join Table"
-                      gold
                       busy={busy}
+                      disabled={!connected}
+                      style={table.smallButton}
+                      labelStyle={table.smallButtonText}
                       onPress={() =>
                         void act({
                           type: "JOIN_GAME",
@@ -435,17 +539,22 @@ export function TableScreen({
                   )}
                   {isHost && (
                     <>
-                      <Button
-                        title="Fill with bots"
-                        disabled={context.players.length >= 4}
-                        busy={busy}
-                        onPress={() => void act({ type: "FILL_WITH_BOTS" })}
-                      />
+                      {context.players.length < 4 && (
+                        <Button
+                          title="Fill with bots"
+                          disabled={!connected}
+                          busy={busy}
+                          style={table.smallButton}
+                          labelStyle={table.smallButtonText}
+                          onPress={() => void act({ type: "FILL_WITH_BOTS" })}
+                        />
+                      )}
                       <Button
                         title="Deal Cards"
-                        gold
-                        disabled={context.players.length < 2}
+                        disabled={context.players.length < 2 || !connected}
                         busy={busy}
+                        style={table.smallButton}
+                        labelStyle={table.smallButtonText}
                         onPress={() => void act({ type: "START_GAME" })}
                       />
                     </>
@@ -453,13 +562,38 @@ export function TableScreen({
                   {!isHost && !spectator && (
                     <Label style={table.centerText}>Waiting for the host to deal.</Label>
                   )}
-                  {"spectatorCount" in snapshot && mode === "online" && (
-                    <Label mono>{snapshot.spectatorCount} watching</Label>
+                  {spectator && context.players.length >= 4 && (
+                    <Label style={table.centerText}>All seats are taken · watching the table</Label>
                   )}
-                </ScrollView>
-              ) : (
-                <>
-                  {!compact && pile.length > 0 && (
+                </View>
+                <View style={[table.waitingBottomSpacer, shortWaiting && { minHeight: 0 }]} />
+                <View style={table.waitingSeatRow}>{seat(seats.bottom, !spectator)}</View>
+              </ScrollView>
+            ) : (
+              <>
+                <View style={[table.topSeat, compact && { top: compressedLandscape ? 0 : 10 }]}>
+                  {seat(seats.top)}
+                </View>
+                <View
+                  style={[
+                    table.leftSeat,
+                    compact && { top: "16%" },
+                    densePortrait && { top: "22%" },
+                  ]}
+                >
+                  {seat(seats.left)}
+                </View>
+                <View
+                  style={[
+                    table.rightSeat,
+                    compact && { top: "16%" },
+                    densePortrait && { top: "22%" },
+                  ]}
+                >
+                  {seat(seats.right)}
+                </View>
+                <View style={[table.center, { top: compact || densePortrait ? "28%" : "34%" }]}>
+                  {!compact && !densePortrait && pile.length > 0 && (
                     <Label mono style={{ fontSize: 8 }}>
                       CARDS TO BEAT
                     </Label>
@@ -475,143 +609,214 @@ export function TableScreen({
                       >
                         <PlayingCard
                           card={card}
-                          width={compact ? 44 : Math.min(64, boardWidth * 0.12)}
+                          width={
+                            compressedLandscape
+                              ? 22
+                              : densePortrait
+                                ? 32
+                                : compact
+                                  ? 44
+                                  : Math.min(64, boardWidth * 0.12)
+                          }
                         />
                       </View>
                     ))}
                   </View>
-                  {compact && pile.length > 0 && (
+                  {compact && !compressedLandscape && pile.length > 0 && (
                     <Label mono style={{ fontSize: 8, lineHeight: 12, marginTop: 4 }}>
                       CARDS TO BEAT
                     </Label>
                   )}
-                </>
-              )}
-            </View>
-            {!compact && !waiting && !finished && (
-              <View style={[table.prompt, { top: "53%", width: boardWidth * 0.58, maxWidth: 340 }]}>
-                <Label accessibilityLiveRegion="polite" style={table.turnText}>
-                  {spectator
-                    ? "WATCHING THE TABLE"
-                    : yourTurn
-                      ? snapshot.value === "ROUND_FIRST_MOVE"
-                        ? "YOUR TURN · START WITH 3 ♦"
-                        : "YOUR TURN"
-                      : current?.isBot
-                        ? "THINKING…"
-                        : `${current?.name ?? "Player"}'S TURN`}
-                </Label>
-                <Label style={table.centerText}>
-                  {context.guardMessage ??
-                    (snapshot.value === "ROUND_FIRST_MOVE"
-                      ? "Play a card or a valid combination"
-                      : snapshot.value === "PLAY_NEW_ROUND"
-                        ? "You lead. Play a card or combination"
+                </View>
+                {!compact && !densePortrait && !waiting && !finished && (
+                  <View
+                    style={[table.prompt, { top: "53%", width: boardWidth * 0.58, maxWidth: 340 }]}
+                  >
+                    <Label accessibilityLiveRegion="polite" style={table.turnText}>
+                      {spectator
+                        ? "WATCHING THE TABLE"
                         : yourTurn
+                          ? snapshot.value === "ROUND_FIRST_MOVE"
+                            ? "YOUR TURN · START WITH 3 ♦"
+                            : "YOUR TURN"
+                          : current?.isBot
+                            ? "THINKING…"
+                            : `${current?.name ?? "Player"}'S TURN`}
+                    </Label>
+                    <Label style={table.centerText}>
+                      {context.guardMessage ??
+                        (snapshot.value === "ROUND_FIRST_MOVE"
                           ? "Play a card or a valid combination"
-                          : "Waiting for the next play")}
-                </Label>
+                          : snapshot.value === "PLAY_NEW_ROUND"
+                            ? "You lead. Play a card or combination"
+                            : yourTurn
+                              ? "Play a card or a valid combination"
+                              : "Waiting for the next play")}
+                    </Label>
+                  </View>
+                )}
+                {!waiting && !spectator && (
+                  <View style={[table.hand, compact && { bottom: 38 }]}>
+                    <Hand
+                      cards={hand}
+                      width={
+                        compressedLandscape
+                          ? boardWidth * 0.75
+                          : compact
+                            ? boardWidth
+                            : boardWidth * 0.92
+                      }
+                      compact={compact || densePortrait}
+                      selected={selected}
+                      disabled={!yourTurn || busy}
+                      onToggle={(card) => {
+                        if (!yourTurn || busy) return;
+                        if (Platform.OS !== "web")
+                          void Haptics.selectionAsync().catch(() => undefined);
+                        setSelected((previous) =>
+                          previous.includes(getCardKey(card))
+                            ? previous.filter((key) => key !== getCardKey(card))
+                            : [...previous, getCardKey(card)],
+                        );
+                      }}
+                    />
+                  </View>
+                )}
+                <View style={table.bottomSeat}>{seat(seats.bottom, !spectator)}</View>
+                {finished && (
+                  <View style={table.finish}>
+                    <Label heading>{context.winner?.name} wins!</Label>
+                    <Button title="Results" onPress={() => setPanel("results")} />
+                    {(mode !== "online" || isHost) && (
+                      <Button
+                        title="Play again"
+                        gold
+                        onPress={() => {
+                          if (onRedeal) onRedeal();
+                          else void act({ type: "RESET_GAME" });
+                        }}
+                      />
+                    )}
+                  </View>
+                )}
+              </>
+            )}
+          </View>
+          <Controls
+            style={[
+              table.controls,
+              compact && {
+                width: width * 0.25,
+                alignSelf: "stretch",
+                paddingTop: 0,
+                flexGrow: 0,
+                flexShrink: 0,
+              },
+            ]}
+            {...(compact
+              ? {
+                  contentContainerStyle: { gap: 8, paddingVertical: 12 },
+                  keyboardShouldPersistTaps: "handled" as const,
+                }
+              : {})}
+          >
+            {shortWaiting && (
+              <View
+                style={{ height: 40 * (window.fontScale ?? 1), opacity: playable ? 1 : 0 }}
+                accessibilityElementsHidden={!playable}
+                importantForAccessibility={!playable ? "no-hide-descendants" : "auto"}
+                pointerEvents={playable ? "auto" : "none"}
+              >
+                <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}>
+                  <Label style={table.centerText}>
+                    {context.guardMessage ??
+                      (yourTurn
+                        ? snapshot.value === "ROUND_FIRST_MOVE"
+                          ? "Your turn · include 3♦"
+                          : "Your turn · choose your cards"
+                        : `${current?.name ?? "Player"}'s turn`)}
+                  </Label>
+                </ScrollView>
               </View>
             )}
-            {!waiting && !spectator && (
-              <View style={[table.hand, compact && { bottom: 38 }]}>
-                <Hand
-                  cards={hand}
-                  width={compact ? boardWidth : boardWidth * 0.92}
-                  compact={compact}
-                  selected={selected}
-                  disabled={!yourTurn || busy}
-                  onToggle={(card) => {
-                    if (!yourTurn || busy) return;
-                    if (Platform.OS !== "web") void Haptics.selectionAsync().catch(() => undefined);
-                    setSelected((previous) =>
-                      previous.includes(getCardKey(card))
-                        ? previous.filter((key) => key !== getCardKey(card))
-                        : [...previous, getCardKey(card)],
-                    );
+            <View
+              testID="table-action-slot"
+              pointerEvents={playable ? "auto" : "none"}
+              accessibilityElementsHidden={!playable}
+              importantForAccessibility={!playable ? "no-hide-descendants" : "auto"}
+              style={[
+                table.actions,
+                compact && { flexDirection: "column" },
+                !playable && { opacity: 0 },
+              ]}
+            >
+              <Button
+                title="Pass"
+                disabledAppearance="muted"
+                labelStyle={table.actionText}
+                disabled={!yourTurn || !activeRound || !connected || busy}
+                onPress={() => void act({ type: "PASS_TURN", playerId: userId })}
+                style={table.action}
+              />
+              <Button
+                title="Sort"
+                disabledAppearance="muted"
+                labelStyle={table.actionText}
+                disabled={!playable || hidden || busy}
+                onPress={() => setSortSuit((value) => !value)}
+                style={table.action}
+              />
+              <Button
+                title="Play"
+                disabledAppearance="muted"
+                labelStyle={table.actionText}
+                gold
+                disabled={!yourTurn || !connected || busy || !detectHandType(selectedCards)}
+                onPress={() => void play()}
+                style={table.action}
+              />
+            </View>
+            {mode === "solo" && (
+              <View
+                accessibilityElementsHidden={!playable}
+                importantForAccessibility={!playable ? "no-hide-descendants" : "auto"}
+                pointerEvents={playable ? "auto" : "none"}
+              >
+                <Button
+                  title="Need a hint?"
+                  ghost
+                  labelStyle={{ fontFamily: fonts.body, fontSize: 10, color: "#a99d6e" }}
+                  disabled={!yourTurn}
+                  onPress={() => {
+                    if (legal[0]) setSelected(legal[0].map(getCardKey));
+                    else setMessage("No beating move. You can pass.");
                   }}
+                  style={[table.hint, !playable && { opacity: 0 }]}
                 />
               </View>
             )}
-            <View style={table.bottomSeat}>{seat(seats.bottom, !spectator)}</View>
-            {finished && (
-              <View style={table.finish}>
-                <Label heading>{context.winner?.name} wins!</Label>
-                <Button title="Results" onPress={() => setPanel("results")} />
-                {(mode !== "online" || isHost) && (
-                  <Button
-                    title="Play again"
-                    gold
-                    onPress={() => {
-                      if (onRedeal) onRedeal();
-                      else void act({ type: "RESET_GAME" });
-                    }}
-                  />
-                )}
-              </View>
-            )}
-          </View>
-          <View
-            style={[table.controls, compact && { width: width * 0.25, justifyContent: "center" }]}
-          >
-            <ErrorMessage
-              message={message ?? error ?? ("roomNotice" in snapshot ? snapshot.roomNotice : null)}
-            />
-            {compact && !waiting && !finished && (
-              <Label style={table.centerText}>
-                {context.guardMessage ??
-                  (yourTurn
-                    ? snapshot.value === "ROUND_FIRST_MOVE"
-                      ? "Your turn · include 3♦"
-                      : "Your turn · choose your cards"
-                    : `${current?.name ?? "Player"}'s turn`)}
+            {!loading && spectator && (
+              <Label style={[table.centerText, table.spectatorStatus]}>
+                You are watching as a spectator.
               </Label>
             )}
-            {!spectator && !waiting && !finished && (
-              <View style={[table.actions, compact && { flexDirection: "column" }]}>
-                <Button
-                  title="Pass"
-                  disabledAppearance="muted"
-                  labelStyle={table.actionText}
-                  disabled={!yourTurn || !activeRound || !connected || busy}
-                  onPress={() => void act({ type: "PASS_TURN", playerId: userId })}
-                  style={table.action}
-                />
-                <Button
-                  title="Sort"
-                  disabledAppearance="muted"
-                  labelStyle={table.actionText}
-                  disabled={hidden || busy}
-                  onPress={() => setSortSuit((value) => !value)}
-                  style={table.action}
-                />
-                <Button
-                  title="Play"
-                  disabledAppearance="muted"
-                  labelStyle={table.actionText}
-                  gold
-                  disabled={!yourTurn || !connected || busy || !detectHandType(selectedCards)}
-                  onPress={() => void play()}
-                  style={table.action}
-                />
-              </View>
-            )}
-            {mode === "solo" && !finished && (
-              <Button
-                title="Need a hint?"
-                ghost
-                labelStyle={{ fontFamily: fonts.body, fontSize: 10, color: "#a99d6e" }}
-                disabled={!yourTurn}
-                onPress={() => {
-                  if (legal[0]) setSelected(legal[0].map(getCardKey));
-                  else setMessage("No beating move. You can pass.");
-                }}
-                style={table.hint}
-              />
-            )}
-            {spectator && <Label style={table.centerText}>You are watching as a spectator.</Label>}
-          </View>
+          </Controls>
         </View>
+        {!loading && (message ?? error ?? roomNotice) && (
+          <View
+            style={[
+              table.notice,
+              {
+                top: compact ? (mode === "online" ? 96 : 66) : mode === "online" ? 116 : 96,
+                maxHeight: height * 0.22,
+              },
+            ]}
+          >
+            <ScrollView keyboardShouldPersistTaps="handled">
+              <ErrorMessage message={message ?? error ?? roomNotice} />
+            </ScrollView>
+          </View>
+        )}
       </View>
       <RulesSheet visible={panel === "help" && !handoff} onClose={() => setPanel(null)} />
       <Sheet
@@ -706,7 +911,7 @@ export function TableScreen({
                         onPress={() => setRemoveBot(bot)}
                       />
                     ))}
-                {(mode !== "online" || isHost) && (
+                {!loading && (mode !== "online" || isHost) && (
                   <Button
                     title="New game"
                     onPress={() => {
@@ -853,6 +1058,41 @@ const table = StyleSheet.create({
     paddingVertical: 0,
     boxShadow: "0 5px 10px rgba(0,0,0,0.55)",
   },
+  onlineHeader: { minHeight: 96 },
+  spectators: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    minHeight: 42,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 20,
+    backgroundColor: "#071b10",
+  },
+  spectatorCount: { fontSize: 11, color: colors.muted },
+  chatBadge: {
+    position: "absolute",
+    top: -6,
+    right: -8,
+    backgroundColor: colors.gold,
+    color: colors.panel,
+    borderRadius: 7,
+    paddingHorizontal: 3,
+    fontSize: 9,
+    lineHeight: 14,
+    fontFamily: fonts.strong,
+  },
+  connectionStatus: {
+    position: "absolute",
+    top: 82,
+    left: 8,
+    right: 8,
+    textAlign: "center",
+    fontSize: 9,
+    zIndex: 30,
+  },
   roomCodePosition: { position: "absolute", left: 54, right: 54, alignItems: "center", top: 3 },
   roomCodeContent: { flexDirection: "row", gap: 6, alignItems: "center" },
   roomCodeLabel: { fontSize: 8, letterSpacing: 0.7 },
@@ -879,6 +1119,8 @@ const table = StyleSheet.create({
   brandRule: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
   brandRuleLine: { width: 28, height: 1, backgroundColor: "#b6bd60", opacity: 0.35 },
   seat: { alignItems: "center" },
+  waitingSeat: { flexShrink: 1, maxWidth: "100%" },
+  waitingPlaque: { minWidth: 0, maxWidth: "100%", flexShrink: 1 },
   plaque: {
     position: "relative",
     flexDirection: "row",
@@ -926,7 +1168,37 @@ const table = StyleSheet.create({
   rightSeat: { position: "absolute", right: 18, top: "29%", zIndex: 3 },
   bottomSeat: { position: "absolute", alignSelf: "center", bottom: 14, zIndex: 20 },
   center: { position: "absolute", alignItems: "center", alignSelf: "center", width: "65%" },
-  waiting: { width: "100%", gap: 8, alignItems: "stretch", marginTop: -15 },
+  waitingScroll: { flex: 1 },
+  loading: { flexGrow: 1, justifyContent: "center", alignItems: "center", padding: 24, gap: 16 },
+  waiting: { flexGrow: 1, paddingHorizontal: 12, paddingVertical: 14, gap: 12 },
+  shortWaiting: { paddingVertical: 8, gap: 8 },
+  waitingSeatRow: { alignItems: "center" },
+  waitingSideSeats: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
+  waitingSideSeat: { flex: 1, minWidth: 0, alignItems: "flex-start" },
+  waitingSpacer: { flexGrow: 3, minHeight: 12 },
+  waitingBottomSpacer: { flexGrow: 1, minHeight: 12 },
+  waitingPrompt: {
+    alignSelf: "center",
+    width: "65%",
+    maxWidth: 340,
+    padding: 12,
+    gap: 8,
+    alignItems: "center",
+    borderColor: "#a9bd7c1f",
+    borderWidth: 1,
+    borderRadius: 11,
+    backgroundColor: "#001c0e18",
+  },
+  smallButton: {
+    minHeight: 44,
+    borderRadius: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: "#c5a461",
+  },
+  smallButtonText: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18 },
   centerText: { textAlign: "center", fontSize: 13, lineHeight: 20, color: "#c1cba8" },
   turnText: {
     fontFamily: fonts.strong,
@@ -949,6 +1221,19 @@ const table = StyleSheet.create({
   },
   hand: { position: "absolute", bottom: 52, alignSelf: "center", zIndex: 5 },
   controls: { width: "100%", maxWidth: 760, paddingHorizontal: 12, paddingTop: 12, gap: 8 },
+  spectatorStatus: { position: "absolute", top: 12, left: 12, right: 12 },
+  notice: {
+    position: "absolute",
+    top: 62,
+    left: 16,
+    right: 16,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    zIndex: 40,
+  },
   actions: { flexDirection: "row", gap: 10 },
   action: { flex: 1, minHeight: 49, borderRadius: 20, boxShadow: "0 5px 10px rgba(0,0,0,0.45)" },
   actionText: { fontFamily: fonts.strong, fontSize: 20 },
