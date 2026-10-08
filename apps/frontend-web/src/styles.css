@@ -356,7 +356,7 @@
 
   /* Fluid playing card — scales smoothly from mobile to desktop */
   .playing-card-fluid {
-    container-type: inline-size;
+    container-type: size;
     width: clamp(2.25rem, 6vw, 4.5rem);
     height: clamp(3.25rem, 8.5vw, 6.5rem);
     padding: clamp(0.125rem, 0.35vw, 0.375rem);
@@ -371,7 +371,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 1px;
+    gap: 1cqh;
     line-height: 1;
   }
 
@@ -385,13 +385,20 @@
 
   .playing-card-fluid .card-value {
     font-family: var(--font-heading);
-    font-size: 29cqw;
+    font-size: min(26cqw, 17cqh);
     letter-spacing: -0.06em;
   }
 
   .playing-card-fluid .card-suit {
-    font-family: var(--font-heading);
-    font-size: 24cqw;
+    display: block;
+    width: min(18cqw, 10cqh);
+    height: min(18cqw, 10cqh);
+  }
+
+  .playing-card-fluid svg {
+    display: block;
+    width: 100%;
+    height: 100%;
   }
 
   .playing-card-fluid .card-center {
@@ -399,8 +406,8 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    font-family: var(--font-heading);
-    font-size: 66cqw;
+    width: min(48cqw, 32cqh);
+    height: min(48cqw, 32cqh);
   }
 
   /* Fluid mini card back for opponent panels */

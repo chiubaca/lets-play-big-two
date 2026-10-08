@@ -1,16 +1,28 @@
+import { spawnSync } from "node:child_process";
+import { EventEmitter } from "node:events";
 import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createInterface } from "node:readline";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   backendArgs,
   defaultHostname,
+  ensurePortsAvailable,
+  main,
   parseTunnels,
+  portListeners,
   supervise,
   tunnelConfig,
   validateConfig,
   writeConfig,
 } from "./native-dev.mjs";
+
+vi.mock("node:child_process", async (importOriginal) => ({
+  ...(await importOriginal()),
+  spawnSync: vi.fn(),
+}));
+vi.mock("node:readline", () => ({ createInterface: vi.fn() }));
 
 const config = {
   hostname: defaultHostname,
@@ -20,6 +32,192 @@ const config = {
 const directories = [];
 afterEach(() => {
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true });
+  vi.restoreAllMocks();
+  vi.mocked(spawnSync).mockReset();
+  vi.mocked(createInterface).mockReset();
+});
+
+describe("native development ports", () => {
+  function options() {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    return {
+      listeners: vi.fn(() => []),
+      confirm: vi.fn(async () => false),
+      kill: vi.fn(),
+      wait: vi.fn(async () => {}),
+    };
+  }
+
+  it("checks only TCP listeners and deduplicates PIDs", () => {
+    vi.mocked(spawnSync).mockReturnValue({ status: 0, stdout: "123\n123\n456\n", stderr: "" });
+    expect(portListeners(8788)).toEqual([123, 456]);
+    expect(spawnSync).toHaveBeenCalledWith("lsof", ["-nP", "-t", "-iTCP:8788", "-sTCP:LISTEN"], {
+      encoding: "utf8",
+      timeout: 10000,
+    });
+  });
+
+  it("accepts lsof's no-match exit but reports inspection failures", () => {
+    vi.mocked(spawnSync).mockReturnValue({ status: 1, stdout: "", stderr: "" });
+    expect(portListeners(8788)).toEqual([]);
+    vi.mocked(spawnSync).mockReturnValue({ status: 1, stdout: "", stderr: "permission denied" });
+    expect(() => portListeners(8788)).toThrow("permission denied");
+    vi.mocked(spawnSync).mockReturnValue({ error: new Error("lsof missing") });
+    expect(() => portListeners(8788)).toThrow("lsof missing");
+  });
+
+  it.each(["", "invalid", "0", "1", "-123", String(process.pid)])(
+    "refuses unsafe listener output %j",
+    (stdout) => {
+      vi.mocked(spawnSync).mockReturnValue({ status: 0, stdout, stderr: "" });
+      expect(() => portListeners(8788)).toThrow("safely identify");
+    },
+  );
+
+  it("starts without prompting when both ports are free", async () => {
+    const deps = options();
+    await ensurePortsAvailable(deps);
+    expect(deps.listeners.mock.calls).toEqual([[8788], [8081]]);
+    expect(deps.confirm).not.toHaveBeenCalled();
+    expect(deps.kill).not.toHaveBeenCalled();
+  });
+
+  it("does not kill or continue when confirmation is declined", async () => {
+    const deps = options();
+    deps.listeners.mockReturnValue([123]);
+    await expect(ensurePortsAvailable(deps)).rejects.toThrow("Stop the existing dev server");
+    expect(deps.confirm).toHaveBeenCalledWith("Port 8788 is already in use (PID 123).");
+    expect(deps.kill).not.toHaveBeenCalled();
+  });
+
+  it("requires explicit authorization in non-interactive terminals", async () => {
+    const deps = options();
+    vi.spyOn(process, "stdin", "get").mockReturnValue({ isTTY: false });
+    deps.listeners.mockReturnValue([123]);
+    await expect(ensurePortsAvailable({ ...deps, confirm: undefined })).rejects.toThrow(
+      "--kill-ports",
+    );
+    expect(deps.kill).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["y", true],
+    [" YES ", true],
+    ["", false],
+    ["no", false],
+  ])("handles the interactive answer %j", async (answer, accepted) => {
+    const deps = options();
+    vi.spyOn(process, "stdin", "get").mockReturnValue({ isTTY: true });
+    vi.spyOn(process, "stdout", "get").mockReturnValue({ isTTY: true });
+    const terminal = new EventEmitter();
+    terminal.close = vi.fn(() => terminal.emit("close"));
+    terminal.question = vi.fn((message, callback) => callback(answer));
+    vi.mocked(createInterface).mockReturnValue(terminal);
+    deps.listeners.mockReturnValueOnce([123]).mockReturnValueOnce([123]);
+    const result = ensurePortsAvailable({ ...deps, confirm: undefined });
+    if (accepted) {
+      await result;
+      expect(deps.kill).toHaveBeenCalledWith(123, "SIGTERM");
+    } else {
+      await expect(result).rejects.toThrow("Stop the existing dev server");
+      expect(deps.kill).not.toHaveBeenCalled();
+    }
+    expect(terminal.question).toHaveBeenCalledWith(
+      expect.stringContaining("[y/N]"),
+      expect.any(Function),
+    );
+    expect(terminal.close).toHaveBeenCalled();
+  });
+
+  it("declines on EOF instead of hanging at the prompt", async () => {
+    const deps = options();
+    vi.spyOn(process, "stdin", "get").mockReturnValue({ isTTY: true });
+    vi.spyOn(process, "stdout", "get").mockReturnValue({ isTTY: true });
+    const terminal = new EventEmitter();
+    terminal.question = vi.fn(() => terminal.emit("close"));
+    vi.mocked(createInterface).mockReturnValue(terminal);
+    deps.listeners.mockReturnValue([123]);
+    await expect(ensurePortsAvailable({ ...deps, confirm: undefined })).rejects.toThrow(
+      "Stop the existing dev server",
+    );
+    expect(deps.kill).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("clears both ports with killPorts=%s", async (killPorts) => {
+    const deps = options();
+    deps.confirm.mockResolvedValue(true);
+    deps.listeners.mockImplementation((port) =>
+      deps.kill.mock.calls.some(([pid]) => pid === port) ? [] : [port],
+    );
+    await ensurePortsAvailable({ ...deps, killPorts });
+    expect(deps.kill.mock.calls).toEqual([
+      [8788, "SIGTERM"],
+      [8081, "SIGTERM"],
+    ]);
+    expect(deps.confirm).toHaveBeenCalledTimes(killPorts ? 0 : 2);
+  });
+
+  it("escalates only listeners that remain after the grace period", async () => {
+    const deps = options();
+    deps.listeners.mockImplementation((port) => {
+      if (port === 8081 || deps.kill.mock.calls.some(([, signal]) => signal === "SIGKILL"))
+        return [];
+      return deps.kill.mock.calls.length ? [456] : [123, 456];
+    });
+    await ensurePortsAvailable({ ...deps, killPorts: true });
+    expect(deps.kill.mock.calls).toEqual([
+      [123, "SIGTERM"],
+      [456, "SIGTERM"],
+      [456, "SIGKILL"],
+    ]);
+    expect(deps.wait).toHaveBeenCalledTimes(21);
+  });
+
+  it("does not kill a new listener that takes over a port", async () => {
+    const deps = options();
+    deps.listeners.mockReturnValueOnce([123]).mockReturnValue([456]);
+    await expect(ensurePortsAvailable({ ...deps, killPorts: true })).rejects.toThrow(
+      "new listener",
+    );
+    expect(deps.kill).not.toHaveBeenCalled();
+  });
+
+  it("tolerates listeners exiting before the signal arrives", async () => {
+    const deps = options();
+    deps.listeners.mockReturnValueOnce([123]).mockReturnValueOnce([123]);
+    deps.kill.mockImplementation(() => {
+      throw Object.assign(new Error("gone"), { code: "ESRCH" });
+    });
+    await ensurePortsAvailable({ ...deps, killPorts: true });
+  });
+
+  it("does not force-kill a replacement listener after SIGTERM", async () => {
+    const deps = options();
+    deps.listeners.mockImplementation(() => (deps.kill.mock.calls.length ? [456] : [123]));
+    await expect(ensurePortsAvailable({ ...deps, killPorts: true })).rejects.toThrow(
+      "new listener",
+    );
+    expect(deps.kill.mock.calls).toEqual([[123, "SIGTERM"]]);
+  });
+
+  it("reports signal permission errors and ports that stay occupied", async () => {
+    const deps = options();
+    deps.listeners.mockReturnValue([123]);
+    deps.kill.mockImplementationOnce(() => {
+      throw new Error("permission denied");
+    });
+    await expect(ensurePortsAvailable({ ...deps, killPorts: true })).rejects.toThrow(
+      "permission denied",
+    );
+    await expect(ensurePortsAvailable({ ...deps, killPorts: true })).rejects.toThrow(
+      "still in use",
+    );
+  });
+
+  it("rejects unsupported CLI flags before starting or setting up services", () => {
+    expect(() => main("android", ["--kill-port"])).toThrow("Usage:");
+    expect(() => main("setup", ["--kill-ports"])).toThrow("Usage:");
+  });
 });
 
 describe("native development tunnel", () => {

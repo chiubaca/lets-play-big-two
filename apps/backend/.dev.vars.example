@@ -9,3 +9,6 @@ GOOGLE_CLIENT_SECRET=secret
 VAPID_PUBLIC_KEY=
 VAPID_PRIVATE_KEY=
 VAPID_SUBJECT=mailto:notifications@example.com
+
+# Optional Expo enhanced push security token (backend only; never EXPO_PUBLIC_*).
+EXPO_ACCESS_TOKEN=

@@ -22,6 +22,7 @@ import { createRoomCode } from "../lib/room-code";
 import { parseChatInput } from "../lib/chat-input";
 import { mintTurnTicket, readTurnTicket } from "../lib/turn-ticket";
 import { MAX_TURN_INSTALLS, registeredEndpoint } from "../lib/turn-push";
+import { expoEndpoint, expoTokenSchema } from "../lib/expo-turn-push";
 
 const allowedOrigins = [
   "https://local.bigtwo.com",
@@ -57,6 +58,17 @@ const subscriptionSchema = z
     generation: z.number().int().nonnegative(),
   })
   .strict();
+
+const enrollmentSchema = z.union([
+  subscriptionSchema,
+  z
+    .object({
+      transport: z.literal("expo"),
+      token: expoTokenSchema,
+      generation: z.number().int().nonnegative(),
+    })
+    .strict(),
+]);
 
 function validSubscription(input: z.infer<typeof subscriptionSchema>) {
   let url: URL;
@@ -287,10 +299,13 @@ export const App = new Hono<{ Bindings: Cloudflare.Env }>()
         error instanceof RangeError ? 413 : 400,
       );
     }
-    const parsed = subscriptionSchema.safeParse(body);
-    if (!parsed.success || !validSubscription(parsed.data))
+    const parsed = enrollmentSchema.safeParse(body);
+    if (!parsed.success || ("endpoint" in parsed.data && !validSubscription(parsed.data)))
       return c.json({ error: "Invalid subscription" }, 400);
-    const { endpoint, keys, generation } = parsed.data;
+    const { generation } = parsed.data;
+    const endpoint =
+      "token" in parsed.data ? expoEndpoint(parsed.data.token) : parsed.data.endpoint;
+    const keys = "keys" in parsed.data ? parsed.data.keys : { p256dh: "", auth: "" };
     const id = await endpointId(endpoint);
     // One statement ties the registration to the live originating session and current consent generation.
     let result: Record<string, unknown> | null;

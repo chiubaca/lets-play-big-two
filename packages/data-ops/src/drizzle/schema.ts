@@ -64,3 +64,17 @@ export const usersToRoomsTable = sqliteTable(
   },
   (table) => [uniqueIndex("users_to_rooms_user_room_unique").on(table.userId, table.roomId)],
 );
+
+export const turnPushReceiptTable = sqliteTable(
+  "turnPushReceipt",
+  {
+    id: text("id").primaryKey(),
+    endpointId: text("endpoint_id")
+      .notNull()
+      .references(() => turnNotificationRegistrationTable.endpointId, { onDelete: "cascade" }),
+    enrollmentId: text("enrollment_id").notNull(),
+    checkAt: integer("check_at").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+  },
+  (table) => [index("turn_push_receipt_check_idx").on(table.checkAt)],
+);

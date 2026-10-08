@@ -490,15 +490,6 @@
 .game-room .played-card {
   padding: 0;
 }
-.game-room .played-card .card-value {
-  font-size: 36cqw;
-}
-.game-room .played-card .card-suit {
-  font-size: 22cqw;
-}
-.game-room .played-card .card-center {
-  font-size: 58cqw;
-}
 .game-room .hand-card {
   position: absolute;
   left: 50%;

@@ -54,6 +54,40 @@ WebSocket headers; online flows are supported in the development client, not
 the browser preview. Use the existing web app for browser online play. Expo Go
 is not the recommended target because Google sign-in requires this app's URL scheme.
 
+### Expo MCP visual verification
+
+The `expo-mcp` development dependency enables simulator screenshots and app
+interaction through [Expo MCP](https://docs.expo.dev/mcp/). The project-local
+`expo-local` OpenCode server runs the package's stdio bridge against Metro at
+`http://localhost:8081`. Start the native environment normally and open the
+development client, then check `/mcps` → `expo-local`. This bridge works without
+restarting Metro with an MCP flag or sending screenshots through the remote
+server. Its configuration adds the default macOS Android SDK's `platform-tools`
+to `PATH`; adjust that path in `opencode.json` if your SDK is elsewhere.
+
+For Expo's remote documentation and account tools, register the remote server
+in OpenCode once:
+
+```sh
+opencode mcp add expo --global --url https://mcp.expo.dev/mcp
+```
+
+In OpenCode, open `/mcps`, select `expo`, and sign in using the same Expo account
+as `vp exec expo whoami` (run that command from this app's directory).
+To expose local tools through the **remote** server instead of `expo-local`,
+stop any existing native development session before restarting from the root:
+
+```sh
+EXPO_UNSTABLE_MCP_SERVER=1 vp run dev:native:android
+# Or, for an iOS simulator:
+EXPO_UNSTABLE_MCP_SERVER=1 vp run dev:native
+```
+
+Open the development client, then reconnect the `expo` server in `/mcps` so it
+discovers the local tools. Reconnect after starting or stopping Metro. Local
+screenshots and automation data are proxied through Expo's remote MCP server;
+use test accounts and avoid displaying sensitive data during verification.
+
 ## Backend
 
 ### Local authentication and online play
@@ -170,12 +204,101 @@ iOS HTTPS links still open the web app. No placeholder Team ID is configured.
 - Room chat with history/older pages, foreground reconnection, retry-safe sends,
   redaction and keyboard-aware native presentation. Returning to the lobby does
   not relinquish a seat. Room focus heartbeats follow app foreground state.
+- Opt-in Android/iOS turn notifications through Expo Push Service, sharing web's
+  account consent, session-bound enrollment, focus suppression and verified return.
+
+### Turn push notifications: credentials and rollout
+
+Native uses `expo-notifications` and Expo's FCM/APNs gateway; web/TWA still uses
+Web Push. **Code setup does not provision platform credentials or deploy changes.**
+
+1. Link this app to your real EAS project (`vp dlx eas-cli init` from this app).
+   Set `EXPO_PUBLIC_EAS_PROJECT_ID` to that project's UUID in `.env` for local
+   builds and in the EAS environment for cloud builds. The app config embeds it
+   as `extra.eas.projectId`. This ID is public, not a signing credential.
+2. Android: register `com.chiubaca.bigtwocrew` in Firebase, download its
+   `google-services.json`, and set `GOOGLE_SERVICES_JSON` to the file path (for
+   example `./google-services.json`, or an EAS **file** environment variable).
+   Upload the matching **FCM v1 service account key** to EAS using
+   `vp dlx eas-cli credentials --platform android`. Never put the service account
+   key in the app, `EXPO_PUBLIC_*`, or Git. Retain the existing Play signing identity.
+3. iOS: configure the real Apple team, provisioning profile and APNs push key
+   through `vp dlx eas-cli credentials --platform ios`. The notifications plugin
+   supplies the APNs entitlement on prebuild; Xcode uses production in archives.
+4. Apply backend migration `0010_turn_push_receipts.sql` **before** deploying the
+   updated backend. From `apps/backend`, the existing remote database command is
+   `vp exec wrangler d1 migrations apply lets-play-big-two-db --remote`.
+   This affects the real database; review pending migrations first. Native
+   registration itself uses the existing table: `endpoint` is a namespaced
+   `expo:<token>` address, and Web Push key fields are empty for native installs.
+5. Keep the backend's existing `VAPID_PRIVATE_KEY` configured: native reuses it
+   for encrypted return tickets, not for FCM/APNs encryption. Native sending
+   does not require `VAPID_PUBLIC_KEY` or `VAPID_SUBJECT`. If you enable Expo's
+   enhanced push security, set **backend-only** `EXPO_ACCESS_TOKEN` in `.dev.vars`
+   and the deployed Worker's secrets (`vp exec wrangler secret put EXPO_ACCESS_TOKEN`).
+6. Stop Metro, run `vp run prebuild` from this app, and rebuild the development
+   client with `vp run native:android` / `vp run native:ios` from the root. The old
+   binary does not contain the new native notification module. Do not use Expo Go.
+
+If Android reports `Cannot find native module 'ExpoPushTokenManager'` (sometimes
+followed by an undefined `useTurnNotifications` import), the installed development
+client is missing `expo-notifications`. Restarting Metro or reloading JavaScript
+cannot add native modules. Rebuild/install the app with Java 17 as described below;
+if Metro is already running, add `--no-bundler` to the Android build command.
+Update the existing debug app in place rather than uninstalling or clearing its data.
+
+If Android reports `Unable to get Firebase Messaging instance` / `Default FirebaseApp
+is not initialized`, the installed app lacks Firebase's native configuration. An EAS
+project ID alone is not enough, and calling `FirebaseApp.initializeApp` from JavaScript
+is not the fix. Download `google-services.json` for Firebase's Android app with package
+`com.chiubaca.bigtwocrew`, place it at `apps/frontend-native/google-services.json`
+(gitignored), and set this in `apps/frontend-native/.env`:
+
+```dotenv
+GOOGLE_SERVICES_JSON=./google-services.json
+```
+
+Stop Metro, then from `apps/frontend-native` run `vp run prebuild`. From the root,
+run `vp run native:android` to rebuild/install, then restart `vp run dev:native:android`.
+If Metro is already running, use `vp run native:android -- --no-bundler`. Reloading
+JavaScript cannot add Firebase resources to an existing binary. Configure the matching
+FCM v1 service account key in EAS as described above before testing push delivery;
+that server credential is separate from the app's `google-services.json`.
+
+In an online table's Settings, enable **Turn notifications for my account**, then
+**Enable notifications on this device**. Account-on alone never requests OS
+permission or registers a device. Device-off affects only this install;
+account-off revokes all web and native installs. A fresh sign-in requires explicit
+device enrollment again. Missing EAS configuration, permission denial and failed
+enrollment never display Ready. System settings are rechecked when resuming.
+
+The minute cron checks Expo receipts after 15 minutes, retires
+`DeviceNotRegistered` enrollments and expires receipt tracking after 24 hours.
+Provider errors are logged by safe error code only. Expo's token mapping is
+refreshed on resume/native token rotation only while enrollment remains live.
+If the Expo address itself changes, the previous address is retired and the user
+must explicitly enable the device again; this never silently restores device-off.
+
+Native background notifications use OS-visible, generic alerts, not unreliable
+silent/background JS. Eligibility/focus is checked immediately before sending,
+with a TTL bounded by the Turn's deadline. Foreground alerts additionally verify
+the current Turn before display and are suppressed in the open room. Unlike the
+web service worker, a terminated native app cannot recheck before the OS displays
+an alert; a Turn may have changed in transit. Delivery is best effort. Taps in both
+warm and cold starts use the existing encrypted, account/enrollment/seat-checked
+return endpoint, never an arbitrary URL or room claimed by a push payload.
+Signed-out taps wait for sign-in; wrong-account, revoked and missing-room taps
+offer lobby recovery without exposing a private table.
+
+Device QA before release: permission allow/deny and Android channel-off; account
+on versus device-on; device-off and web/native account-off; sign-out/sign-in and
+account deletion; foreground room suppression, lobby/background and terminated
+delivery; cold/warm taps, wrong account, expired rooms and changed Turns; and
+receipt cleanup after token invalidation. Use test accounts: local development
+still uses remote D1. This setup has not sent test pushes or changed credentials.
 
 ### Not yet at web feature parity
 
-- **Native turn push notifications:** the current backend sends Web Push, not
-  APNs/FCM/Expo push. The settings panel states this explicitly; native device
-  enrollment is not falsely reported as ready. Existing web/TWA push remains.
 - Jev inference/strategy selection: native offline bots use the deterministic
   shared strategy. No inference credits are consumed by native solo play.
 - Web audio, 3D gold-spade animation, confetti and holographic card tilt are not
@@ -187,7 +310,7 @@ iOS HTTPS links still open the web app. No placeholder Team ID is configured.
 
 `apps/android` remains the Bubblewrap TWA project, including its signing setup
 and store assets. Native Android keeps **`com.chiubaca.bigtwocrew`**, with
-version code **3** above the TWA's **2**, so a later signed native bundle can
+version code **4** above the previous native release's **3** and the TWA's **2**, so a signed native bundle can
 update the existing Play listing. The same ID means the two apps **cannot be
 installed side by side**; preserving the TWA means retaining its source and
 release path, not using a second production application ID.

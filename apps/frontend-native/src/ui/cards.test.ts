@@ -55,6 +55,31 @@ describe("native table cards", () => {
     expect(onPress).toHaveBeenCalledOnce();
   });
 
+  it.each([36, 48, 70, 110])(
+    "keeps the center clear of both corners at width %i",
+    async (width) => {
+      await act(async () => {
+        renderer = create(
+          createElement(PlayingCard, { card: { suit: "CLUB", value: "10" }, width }),
+        );
+      });
+      const pressable = hosts("Pressable")[0]!;
+      const borderWidth = pressable.props.style[0].borderWidth;
+      const faceHeight = width * 1.48 - borderWidth * 2;
+      const suits = renderer.root.findAllByType(CardSuit);
+      const rankStyle = Object.assign({}, ...hosts("Text")[0]!.props.style);
+      const cornerHeight = rankStyle.lineHeight + suits[0]!.props.size;
+      const centerTop = (faceHeight - suits[2]!.props.size) / 2;
+
+      expect(suits[0]!.props.size).toBe(suits[1]!.props.size);
+      expect(suits[0]!.parent!.props.style[0].top).toBe("5%");
+      expect(suits[1]!.parent!.props.style[1].bottom).toBe("5%");
+      expect(faceHeight * 0.05 + cornerHeight).toBeLessThan(centerTop);
+      expect(suits[2]!.parent!.props.style?.transform).toBeUndefined();
+      expect(pressable.props.testID).toBe("playing-card-10:CLUB");
+    },
+  );
+
   it("does not enable cards while the hand is disabled", async () => {
     const onToggle = vi.fn();
     await act(async () => {

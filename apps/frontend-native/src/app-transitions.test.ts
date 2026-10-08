@@ -40,6 +40,12 @@ vi.mock("./screens/auth", () => ({ AuthSheet: "AuthSheet" }));
 vi.mock("./screens/profile", () => ({ ProfileScreen: "ProfileScreen" }));
 vi.mock("./screens/pass-setup", () => ({ PassSetupScreen: "PassSetupScreen" }));
 vi.mock("./screens/chat", () => ({ ChatScreen: "ChatScreen" }));
+vi.mock("./notifications/use-turn-notifications", () => ({
+  useTurnNotifications: () => ({ device: null, returning: false }),
+}));
+vi.mock("./notifications/turn-settings", () => ({
+  TurnNotificationSettings: "TurnNotificationSettings",
+}));
 vi.mock("./ui/theme", () => ({ colors: { gold: "gold" } }));
 vi.mock("./ui/primitives", () => ({
   Button: "Button",
@@ -47,6 +53,7 @@ vi.mock("./ui/primitives", () => ({
   ErrorMessage: "ErrorMessage",
   Label: "Label",
   Panel: "Panel",
+  Sheet: "Sheet",
 }));
 
 let renderer: ReactTestRenderer;

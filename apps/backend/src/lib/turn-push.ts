@@ -1,4 +1,5 @@
 import { buildPushPayload } from "@block65/webcrypto-web-push";
+import { sendExpoTurnPush } from "./expo-turn-push";
 
 export type Enrollment = {
   endpoint_id: string;
@@ -63,6 +64,8 @@ export async function sendTurnPush(
   stillEligible: () => Promise<boolean>,
 ): Promise<"sent" | "retired" | "retry"> {
   if (Date.now() >= deadline) return "retired";
+  if (registration.endpoint.startsWith("expo:"))
+    return sendExpoTurnPush(env, registration, notice, deadline, stillEligible);
   if (!env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY || !env.VAPID_SUBJECT) return "retry";
   // Endpoint is stored only after allowlist validation at enrollment. Never accept a URL from a push.
   const payload = await buildPushPayload(

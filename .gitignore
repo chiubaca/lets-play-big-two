@@ -47,3 +47,5 @@ apps/frontend-native/ios/
 apps/frontend-native/.env
 apps/frontend-native/*.jks
 apps/frontend-native/*.keystore
+apps/frontend-native/google-services.json
+apps/frontend-native/GoogleService-Info.plist

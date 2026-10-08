@@ -5,6 +5,8 @@ import { getCardKey, type Card } from "@big-two/game-core";
 import { colors, fonts } from "./theme";
 import { handLayout } from "./hand-layout";
 
+const cardBorderWidth = 2;
+
 export function CardSuit({
   suit,
   size,
@@ -53,8 +55,10 @@ export function PlayingCard({
 }) {
   const color = card.suit === "DIAMOND" || card.suit === "HEART" ? "#d50918" : "#111";
   const names: Record<string, string> = { J: "jack", Q: "queen", K: "king", A: "ace" };
+  const faceWidth = width - cardBorderWidth * 2;
   return (
     <Pressable
+      testID={`playing-card-${getCardKey(card)}`}
       disabled={!onPress}
       onPress={onPress}
       accessibilityRole={onPress ? "button" : undefined}
@@ -66,15 +70,18 @@ export function PlayingCard({
         {[false, true].map((bottom) => (
           <View key={String(bottom)} style={[cardStyles.corner, bottom && cardStyles.bottomCorner]}>
             <Text
-              style={[cardStyles.rank, { color, fontSize: width * 0.29, lineHeight: width * 0.32 }]}
+              style={[
+                cardStyles.rank,
+                { color, fontSize: faceWidth * 0.24, lineHeight: faceWidth * 0.26 },
+              ]}
             >
               {card.value}
             </Text>
-            <CardSuit suit={card.suit} size={width * 0.24} color={color} />
+            <CardSuit suit={card.suit} size={faceWidth * 0.15} color={color} />
           </View>
         ))}
-        <View style={{ transform: [{ translateX: width * 0.08 }, { translateY: width * 0.03 }] }}>
-          <CardSuit suit={card.suit} size={width * 0.58} color={color} />
+        <View>
+          <CardSuit suit={card.suit} size={faceWidth * 0.46} color={color} />
         </View>
       </View>
     </Pressable>
@@ -184,20 +191,24 @@ export function CardBacks({ count, compact = false }: { count: number; compact?:
 
 const cardStyles = StyleSheet.create({
   card: {
-    borderWidth: 2,
+    borderWidth: cardBorderWidth,
     borderColor: "#111",
     borderRadius: 6,
     overflow: "hidden",
     boxShadow: "0 3px 5px rgba(0,0,0,0.4)",
   },
-  selected: { borderColor: colors.gold, borderWidth: 2, boxShadow: "0 0 9px #f1c96a" },
+  selected: {
+    borderColor: colors.gold,
+    borderWidth: cardBorderWidth,
+    boxShadow: "0 0 9px #f1c96a",
+  },
   face: { flex: 1, backgroundColor: "#fff", justifyContent: "center", alignItems: "center" },
-  corner: { position: "absolute", top: "4%", left: "5%", alignItems: "center" },
+  corner: { position: "absolute", top: "5%", left: "7%", alignItems: "center" },
   bottomCorner: {
     top: undefined,
     left: undefined,
-    bottom: "4%",
-    right: "5%",
+    bottom: "5%",
+    right: "7%",
     transform: [{ rotate: "180deg" }],
   },
   rank: { fontFamily: fonts.display, includeFontPadding: false },

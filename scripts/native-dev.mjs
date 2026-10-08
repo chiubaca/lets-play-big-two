@@ -2,6 +2,8 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { createInterface } from "node:readline";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ensureAndroidDevice } from "./android-emulator.mjs";
 
@@ -206,24 +208,89 @@ export async function supervise(commands, env) {
   }
 }
 
-async function start(android = false) {
+export function portListeners(port) {
+  const result = spawnSync("lsof", ["-nP", "-t", `-iTCP:${port}`, "-sTCP:LISTEN"], {
+    encoding: "utf8",
+    timeout: 10000,
+  });
+  if (result.error) throw result.error;
+  if (result.status === 1 && !result.stdout.trim() && !result.stderr.trim()) return [];
+  if (result.status !== 0) {
+    throw new Error(`Could not check port ${port}: ${result.stderr.trim() || result.status}`);
+  }
+  const pids = result.stdout.trim().split(/\s+/).map(Number);
+  if (pids.some((pid) => !Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid)) {
+    throw new Error(`Could not safely identify listeners on port ${port}.`);
+  }
+  return [...new Set(pids)];
+}
+
+function confirmPortKill(message) {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error(`${message} Stop the listeners manually or rerun with --kill-ports.`);
+  }
+  const terminal = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolveAnswer) => {
+    terminal.once("close", () => resolveAnswer(false));
+    terminal.once("SIGINT", () => terminal.close());
+    terminal.question(`${message} Stop these processes? [y/N] `, (answer) => {
+      resolveAnswer(/^y(?:es)?$/i.test(answer.trim()));
+      terminal.close();
+    });
+  });
+}
+
+export async function ensurePortsAvailable({
+  killPorts = false,
+  listeners = portListeners,
+  confirm = confirmPortKill,
+  kill = (pid, signal) => process.kill(pid, signal),
+  wait = sleep,
+} = {}) {
+  for (const port of [8788, 8081]) {
+    const pids = listeners(port);
+    if (!pids.length) continue;
+    const message = `Port ${port} is already in use (PID ${pids.join(", ")}).`;
+    if (!killPorts && !(await confirm(message))) {
+      throw new Error(`${message} Stop the existing dev server before starting native dev.`);
+    }
+    console.log(`Stopping listeners on port ${port} (PID ${pids.join(", ")})…`);
+    let remaining = listeners(port);
+    for (const signal of ["SIGTERM", "SIGKILL"]) {
+      if (remaining.some((pid) => !pids.includes(pid))) {
+        throw new Error(`Port ${port} has a new listener. Retry to authorize stopping it.`);
+      }
+      for (const pid of remaining) {
+        try {
+          kill(pid, signal);
+        } catch (error) {
+          if (error.code !== "ESRCH") throw error;
+        }
+      }
+      // Give listeners five seconds to exit gracefully before forcing them to stop.
+      for (
+        let attempt = 0;
+        remaining.length && attempt < (signal === "SIGTERM" ? 20 : 4);
+        attempt++
+      ) {
+        await wait(250);
+        remaining = listeners(port);
+      }
+      if (!remaining.length) break;
+    }
+    if (remaining.length)
+      throw new Error(`Port ${port} is still in use. Stop its listeners manually.`);
+  }
+}
+
+async function start(android = false, killPorts = false) {
   const config = readConfig();
   if (!existsSync(join(root, "apps/backend/.dev.vars"))) {
     throw new Error(
       "Copy apps/backend/.dev.vars.example to .dev.vars and set BETTER_AUTH_SECRET first.",
     );
   }
-  for (const port of [8788, 8081]) {
-    const listener = spawnSync("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN"], {
-      stdio: "ignore",
-    });
-    if (listener.error) throw listener.error;
-    if (listener.status === 0) {
-      throw new Error(
-        `Port ${port} is already in use. Stop the existing dev server before starting native dev.`,
-      );
-    }
-  }
+  await ensurePortsAvailable({ killPorts });
   const androidSdk = android ? (await ensureAndroidDevice()).sdk : undefined;
   writeConfig(stateDir, config);
   console.log(`Native API: https://${config.hostname}`);
@@ -260,22 +327,25 @@ async function start(android = false) {
   );
 }
 
-function main(task) {
+export function main(task, flags = []) {
+  if (flags.some((flag) => flag !== "--kill-ports") || (task === "setup" && flags.length)) {
+    throw new Error("Usage: node scripts/native-dev.mjs setup|start|android [--kill-ports]");
+  }
   switch (task) {
     case "setup":
       return setup();
     case "start":
-      return start();
+      return start(false, flags.includes("--kill-ports"));
     case "android":
-      return start(true);
+      return start(true, flags.includes("--kill-ports"));
     default:
-      throw new Error("Usage: node scripts/native-dev.mjs setup|start|android");
+      throw new Error("Usage: node scripts/native-dev.mjs setup|start|android [--kill-ports]");
   }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
-    await main(process.argv[2]);
+    await main(process.argv[2], process.argv.slice(3));
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;

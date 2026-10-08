@@ -14,10 +14,13 @@ import { ProfileScreen } from "./src/screens/profile";
 import { PassSetupScreen } from "./src/screens/pass-setup";
 import { TableScreen } from "./src/screens/table";
 import { ChatScreen } from "./src/screens/chat";
-import { Button, CasinoScreen, ErrorMessage, Label, Panel } from "./src/ui/primitives";
+import { Button, CasinoScreen, ErrorMessage, Label, Panel, Sheet } from "./src/ui/primitives";
 import { colors } from "./src/ui/theme";
 import { routeFromURL, type NativeRoute } from "./src/navigation";
 import { getStorageKey } from "./src/game/game-persistence";
+import { useTurnNotifications } from "./src/notifications/use-turn-notifications";
+import { TurnNotificationSettings } from "./src/notifications/turn-settings";
+import type { TurnDevice } from "./src/notifications/turn-device";
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 const PASS_CONFIG_KEY = "big-two-native-pass-config-v1";
@@ -96,12 +99,14 @@ function OnlineTable({
   onHome,
   pending,
   onSignIn,
+  notificationDevice,
 }: {
   roomId: string;
   session: NativeSession | null;
   onHome: () => void;
   pending: boolean;
   onSignIn: () => void;
+  notificationDevice: TurnDevice | null;
 }) {
   const room = useOnlineRoom({ roomId });
   const [chatOpen, setChatOpen] = useState(false);
@@ -133,6 +138,19 @@ function OnlineTable({
         onRetry={() => void room.refresh()}
         onSignIn={!session && !pending ? onSignIn : undefined}
         onChat={session ? () => setChatOpen(true) : undefined}
+        notificationSettings={
+          notificationDevice ? (
+            <TurnNotificationSettings key={session?.user.id} device={notificationDevice} />
+          ) : (
+            <Label>
+              {pending
+                ? "Checking your session…"
+                : session
+                  ? "Use a native development or release build for turn notifications."
+                  : "Sign in to manage turn notifications."}
+            </Label>
+          )
+        }
         chatUnread={
           lastReadOrder === null
             ? 0
@@ -161,6 +179,16 @@ export function GameApp() {
   const [canResumePass, setCanResumePass] = useState(false);
   const [welcome, setWelcome] = useState<string | null>(null);
   const welcomedUser = useRef<string | undefined>(undefined);
+  const openNotificationRoom = useCallback((roomId: string) => {
+    setAuthOpen(false);
+    setRoute({ name: "room", roomId });
+  }, []);
+  const notifications = useTurnNotifications(
+    session,
+    isPending,
+    route.name === "room" ? route.roomId : undefined,
+    openNotificationRoom,
+  );
   const home = useCallback(() => {
     setAuthOpen(false);
     setRoute({ name: "home" });
@@ -280,6 +308,7 @@ export function GameApp() {
         onHome={home}
         pending={isPending}
         onSignIn={() => setAuthOpen(true)}
+        notificationDevice={notifications.device}
       />
     );
   else
@@ -362,6 +391,35 @@ export function GameApp() {
           }
         }}
       />
+      <Sheet
+        visible={notifications.returning && !authOpen}
+        title="Open your table"
+        onClose={notifications.close}
+      >
+        <Label>
+          {isPending
+            ? "Checking your session…"
+            : !session
+              ? "Sign in with the account that received this notification."
+              : notifications.error
+                ? "Could not open this notification."
+                : "Verifying your notification…"}
+        </Label>
+        <ErrorMessage message={notifications.error} />
+        {!session && !isPending && (
+          <Button title="Sign in" gold onPress={() => setAuthOpen(true)} />
+        )}
+        {notifications.error && session && (
+          <Button title="Try again" onPress={notifications.retry} />
+        )}
+        <Button
+          title="Return to lobby"
+          onPress={() => {
+            notifications.close();
+            home();
+          }}
+        />
+      </Sheet>
     </>
   );
 }

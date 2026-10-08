@@ -414,3 +414,86 @@ it("does not return or log subscription secrets if registration storage fails", 
     failure.mockRestore();
   }
 });
+
+const nativePayload = (generation = 0, token = "ExponentPushToken[native-device]") =>
+  JSON.stringify({ transport: "expo", token, generation });
+
+it("enrolls native addresses with the same account/session/generation gates as web", async () => {
+  expect((await request("/api/turn-notifications/device", "POST", nativePayload())).status).toBe(
+    409,
+  );
+  await request("/api/turn-notifications/preference", "PUT", '{"enabled":true}');
+  const enrolled = await App.request(
+    "/api/turn-notifications/device",
+    {
+      method: "POST",
+      headers: { Origin: "bigtwocrew://", "Content-Type": "application/json" },
+      body: nativePayload(),
+    },
+    env,
+  );
+  expect(enrolled.status).toBe(200);
+  expect(await enrolled.json()).toEqual({ registered: true });
+  const row = sqlite
+    .prepare("SELECT endpoint_id, endpoint, p256dh, auth FROM turnNotificationRegistration")
+    .get() as { endpoint_id: string };
+  expect(row).toMatchObject({
+    endpoint: "expo:ExponentPushToken[native-device]",
+    p256dh: "",
+    auth: "",
+  });
+  expect(
+    await (await request(`/api/turn-notifications/device?endpointId=${row.endpoint_id}`)).json(),
+  ).toEqual({ registered: true, generation: 0 });
+  signIn("ben", "ben-1");
+  await request("/api/turn-notifications/preference", "PUT", '{"enabled":true}');
+  expect((await request("/api/turn-notifications/device", "POST", nativePayload())).status).toBe(
+    409,
+  );
+  signIn("ada", "ada-1");
+  await request("/api/turn-notifications/preference", "PUT", '{"enabled":false}');
+  await request("/api/turn-notifications/preference", "PUT", '{"enabled":true}');
+  expect((await request("/api/turn-notifications/device", "POST", nativePayload())).status).toBe(
+    409,
+  );
+  expect((await request("/api/turn-notifications/device", "POST", nativePayload(1))).status).toBe(
+    200,
+  );
+  await request(
+    "/api/turn-notifications/device",
+    "DELETE",
+    JSON.stringify({ endpointId: row.endpoint_id }),
+  );
+  expect(sqlite.prepare("SELECT * FROM turnNotificationRegistration").all()).toEqual([]);
+});
+
+it("does not treat arbitrary URLs or mixed web/native payloads as Expo tokens", async () => {
+  for (const token of [
+    "https://exp.host/--/api/v2/push/send",
+    "ExpoPushToken[bad\nvalue]",
+    "ExpoPushToken[]",
+    "ExpoPushToken[" + "x".repeat(300) + "]",
+  ])
+    expect(
+      (await request("/api/turn-notifications/device", "POST", nativePayload(0, token))).status,
+    ).toBe(400);
+  expect(
+    (
+      await request(
+        "/api/turn-notifications/device",
+        "POST",
+        JSON.stringify({ ...JSON.parse(nativePayload()), endpoint }),
+      )
+    ).status,
+  ).toBe(400);
+  const response = await App.request(
+    "/api/turn-notifications/device",
+    {
+      method: "POST",
+      headers: { Origin: "https://evil.test", "Content-Type": "application/json" },
+      body: nativePayload(),
+    },
+    env,
+  );
+  expect(response.status).toBe(403);
+});

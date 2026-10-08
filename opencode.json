@@ -4,5 +4,17 @@
     "external_directory": {
       "~/Projects/big-two-app/**": "allow"
     }
+  },
+  "mcp": {
+    "servers": {
+      "expo-local": {
+        "type": "local",
+        "command": ["vp", "exec", "expo-mcp", "--dev-server-url", "http://localhost:8081"],
+        "cwd": "apps/frontend-native",
+        "environment": {
+          "PATH": "{env:HOME}/Library/Android/sdk/platform-tools:{env:PATH}"
+        }
+      }
+    }
   }
 }

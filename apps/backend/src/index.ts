@@ -5,6 +5,7 @@ import { WorkerEntrypoint } from "cloudflare:workers";
 import { App } from "./hono/app";
 import { sweepRooms } from "./lib/room-expiry";
 import { repairTurnAlarms } from "./lib/turn-alarm-repair";
+import { checkExpoTurnReceipts } from "./lib/expo-turn-push";
 
 export { BigTwoRoomObject, RoomChatObject };
 
@@ -22,7 +23,11 @@ export default class BigTwoBackend extends WorkerEntrypoint<Env> {
     try {
       await sweepRooms(this.env);
     } finally {
-      await repairTurnAlarms(this.env);
+      try {
+        await repairTurnAlarms(this.env);
+      } finally {
+        await checkExpoTurnReceipts(this.env);
+      }
     }
   }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AppState,
   ActivityIndicator,
@@ -59,6 +59,7 @@ type TableProps = {
   onReveal?: () => void;
   onRetry?: () => void;
   onSignIn?: () => void;
+  notificationSettings?: ReactNode;
 };
 
 // Only geometry is shown before hydration; never fabricate a dealt/private hand.
@@ -175,6 +176,7 @@ export function TableScreen({
   onReveal,
   onRetry,
   onSignIn,
+  notificationSettings,
 }: TableProps) {
   const snapshot: BigTwoGameMachineSnapshot | RoomGameState = loadedSnapshot ?? emptyTable;
   const loading = !loadedSnapshot;
@@ -952,12 +954,7 @@ export function TableScreen({
                 {yourTurn && <Button title="Choose cards" onPress={() => setPanel("cards")} />}
               </>
             )}
-            {mode === "online" && (
-              <Label style={{ color: colors.muted }}>
-                Native turn notifications are not available in this build. Web notification
-                preferences are unchanged.
-              </Label>
-            )}
+            {mode === "online" && notificationSettings}
           </>
         )}
         {panel === "cards" && yourTurn && (

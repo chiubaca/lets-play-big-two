@@ -90,6 +90,18 @@ overrides without changing web environment files. Stop `dev:local` before starti
 native development because both use port `8788`. `Ctrl+C` stops the native service
 group, including the tunnel; it is not installed as an always-on system service.
 
+If backend port `8788` or Metro port `8081` is busy, the launcher shows the listener
+PIDs and asks before stopping them (default: no). To stop listeners automatically:
+
+```sh
+vp run dev:native:android -- --kill-ports
+# Also supported: vp run dev:native -- --kill-ports
+```
+
+This stops only listeners on those two ports, including services from other projects.
+It sends `SIGTERM`, waits up to five seconds, then uses `SIGKILL` if needed. Without
+an interactive terminal, busy ports require `--kill-ports` or manual cleanup.
+
 The local API is public while the tunnel runs and still uses the configured remote
 D1/AI bindings. See [the native README](../apps/frontend-native/README.md#local-authentication-and-online-play)
 for credentials, platform builds, security notes, and troubleshooting.
