@@ -1,6 +1,6 @@
 {
   "name": "frontend-native",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "private": true,
   "main": "index.ts",
   "scripts": {
@@ -11,7 +11,8 @@
     "build": "expo export --platform all",
     "check": "tsc --noEmit",
     "test": "vp test --run",
-    "prebuild": "expo prebuild --no-clean --no-install"
+    "prebuild": "expo prebuild --no-clean --no-install",
+    "update:preview": "vp dlx -- eas-cli update --channel preview --environment preview --platform android"
   },
   "dependencies": {
     "@better-auth/expo": "1.5.5",
@@ -35,6 +36,7 @@
     "expo-secure-store": "~57.0.4",
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
+    "expo-updates": "catalog:",
     "expo-web-browser": "~57.0.3",
     "lucide-react-native": "catalog:",
     "react": "19.2.3",

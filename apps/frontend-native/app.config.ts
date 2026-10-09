@@ -1,9 +1,21 @@
 import type { ExpoConfig } from "expo/config";
 
+const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? "feb26247-9b9f-4d68-b9a3-760409a03453";
+
 const config: ExpoConfig = {
   name: "Big Two Crew",
-  slug: "big-two-crew",
-  version: "1.1.1",
+  owner: "chiubaca",
+  slug: "lets-play-big-two",
+  version: "1.1.2",
+  // Bump the app version and rebuild whenever native dependencies/configuration change.
+  runtimeVersion: { policy: "appVersion" },
+  updates: {
+    url: `https://u.expo.dev/${projectId}`,
+    // EAS Build supplies this from eas.json. Local release builds opt in explicitly.
+    ...(process.env.EXPO_UPDATE_CHANNEL
+      ? { requestHeaders: { "expo-channel-name": process.env.EXPO_UPDATE_CHANNEL } }
+      : {}),
+  },
   scheme: "bigtwocrew",
   orientation: "default",
   userInterfaceStyle: "dark",
@@ -20,9 +32,9 @@ const config: ExpoConfig = {
     ...(process.env.GOOGLE_SERVICES_JSON
       ? { googleServicesFile: process.env.GOOGLE_SERVICES_JSON }
       : {}),
-    // Keep the existing Play application ID and increase the latest uploaded versionCode (3).
+    // Keep the existing Play application ID and increase the latest uploaded versionCode (4).
     package: "com.chiubaca.bigtwocrew",
-    versionCode: 4,
+    versionCode: 5,
     intentFilters: [
       {
         action: "VIEW",
@@ -51,9 +63,7 @@ const config: ExpoConfig = {
     ],
   ],
   web: { bundler: "metro", favicon: "./assets/app-icon.png" },
-  ...(process.env.EXPO_PUBLIC_EAS_PROJECT_ID
-    ? { extra: { eas: { projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID } } }
-    : {}),
+  extra: { eas: { projectId } },
 };
 
 export default config;

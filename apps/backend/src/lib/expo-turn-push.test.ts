@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { Miniflare } from "miniflare";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 import { checkExpoTurnReceipts, expoEndpoint } from "./expo-turn-push";
@@ -67,12 +68,55 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it("constructs Expo send and receipt requests in the real Workers runtime", async () => {
+  const runtime = new Miniflare({
+    modules: true,
+    compatibilityDate: "2025-09-02",
+    compatibilityFlags: ["nodejs_compat"],
+    script: `export default {
+      async fetch(request) {
+        const { url, options } = await request.json();
+        try {
+          new Request(url, options);
+          return new Response("Request constructed");
+        } catch (error) {
+          return new Response(error.message, { status: 500 });
+        }
+      }
+    };`,
+  });
+  try {
+    expect(await send()).toBe("sent");
+    sqlite.prepare("UPDATE turnPushReceipt SET check_at = 0").run();
+    fetcher.mockResolvedValue(Response.json({ data: { "receipt-1": { status: "ok" } } }));
+    await checkExpoTurnReceipts(env);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    for (const [url, options] of fetcher.mock.calls) {
+      const response = await runtime.dispatchFetch("http://localhost/validate-request", {
+        method: "POST",
+        body: JSON.stringify({
+          url,
+          options: {
+            method: options.method,
+            headers: options.headers,
+            redirect: options.redirect,
+            body: options.body,
+          },
+        }),
+      });
+      expect(response.status, await response.text()).toBe(200);
+    }
+  } finally {
+    await runtime.dispose();
+  }
+});
+
 it("dispatches native delivery without web encryption keys, with a bounded lifetime and verified return ticket", async () => {
   expect(await send()).toBe("sent");
   const [url, options] = fetcher.mock.calls[0];
   expect(url).toBe("https://exp.host/--/api/v2/push/send");
   expect(options.headers.Authorization).toBe("Bearer backend-access-token");
-  expect(options.redirect).toBe("error");
+  expect(options.redirect).toBe("manual");
   const payload = JSON.parse(options.body);
   expect(payload).toMatchObject({
     to: token,
@@ -125,6 +169,31 @@ it("never sends an expired, no-longer-eligible, or malformed native destination"
 it.each([408, 429, 500, 503])("uses existing bounded Turn retries for HTTP %i", async (status) => {
   fetcher.mockResolvedValue(new Response(null, { status }));
   expect(await send()).toBe("retry");
+});
+
+it.each([301, 302, 303, 307, 308])("never follows an Expo send redirect (%i)", async (status) => {
+  fetcher.mockResolvedValue(
+    new Response(null, { status, headers: { Location: "https://untrusted.example/push" } }),
+  );
+  expect(await send()).toBe("retired");
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(fetcher.mock.calls[0][1].redirect).toBe("manual");
+  expect(sqlite.prepare("SELECT * FROM turnPushReceipt").all()).toEqual([]);
+});
+
+it("never follows receipt redirects and preserves the pending receipt", async () => {
+  expect(await send()).toBe("sent");
+  sqlite.prepare("UPDATE turnPushReceipt SET check_at = 0").run();
+  fetcher.mockClear().mockResolvedValue(
+    new Response(null, {
+      status: 302,
+      headers: { Location: "https://untrusted.example/receipts" },
+    }),
+  );
+  await checkExpoTurnReceipts(env);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(fetcher.mock.calls[0][1].redirect).toBe("manual");
+  expect(sqlite.prepare("SELECT id FROM turnPushReceipt").all()).toEqual([{ id: "receipt-1" }]);
 });
 
 it("handles ticket-level errors, retiring only the captured enrollment", async () => {

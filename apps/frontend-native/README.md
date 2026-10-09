@@ -212,10 +212,12 @@ iOS HTTPS links still open the web app. No placeholder Team ID is configured.
 Native uses `expo-notifications` and Expo's FCM/APNs gateway; web/TWA still uses
 Web Push. **Code setup does not provision platform credentials or deploy changes.**
 
-1. Link this app to your real EAS project (`vp dlx eas-cli init` from this app).
-   Set `EXPO_PUBLIC_EAS_PROJECT_ID` to that project's UUID in `.env` for local
-   builds and in the EAS environment for cloud builds. The app config embeds it
-   as `extra.eas.projectId`. This ID is public, not a signing credential.
+1. This app is linked to `@chiubaca/lets-play-big-two`, project ID
+   `feb26247-9b9f-4d68-b9a3-760409a03453`. The app config embeds this as
+   `extra.eas.projectId` for push notifications and EAS Update. Do not switch to
+   `@chiubaca/big-two-crew`: its credentials/updates are a separate project.
+   `EXPO_PUBLIC_EAS_PROJECT_ID` can override the ID for a separate deployment;
+   this ID is public, not a signing credential.
 2. Android: register `com.chiubaca.bigtwocrew` in Firebase, download its
    `google-services.json`, and set `GOOGLE_SERVICES_JSON` to the file path (for
    example `./google-services.json`, or an EAS **file** environment variable).
@@ -310,7 +312,7 @@ still uses remote D1. This setup has not sent test pushes or changed credentials
 
 `apps/android` remains the Bubblewrap TWA project, including its signing setup
 and store assets. Native Android keeps **`com.chiubaca.bigtwocrew`**, with
-version code **4** above the previous native release's **3** and the TWA's **2**, so a signed native bundle can
+version code **5** above the previous native release's **4** and the TWA's **2**, so a signed native bundle can
 update the existing Play listing. The same ID means the two apps **cannot be
 installed side by side**; preserving the TWA means retaining its source and
 release path, not using a second production application ID.
@@ -321,6 +323,61 @@ cookies or localStorage into native storage: users sign in again and online
 room membership is recovered from the server.
 
 ## Builds and release gates
+
+### Internal OTA updates (Android)
+
+The `preview` profile produces an internal release APK subscribed to the
+**preview** EAS Update channel. Production uses a separate **production** channel.
+The preview EAS environment points to the **production API** for testing on real
+devices; it is not an isolated database. It also contains the public project ID
+and Firebase client configuration as a secret file variable. No service-account
+key or signing key belongs in an OTA bundle.
+
+`expo-updates` requires **one new APK install** before updates work. Existing
+APKs without the module cannot gain OTA support through JavaScript. Choose one
+build route, from `apps/frontend-native`:
+
+```sh
+# EAS Build (cloud or --local); configure the EXISTING signing key first:
+vp dlx -- eas-cli build --profile preview --platform android
+
+# Or keep your existing local Expo/Gradle release-build process:
+export EXPO_UPDATE_CHANNEL=preview
+vp run prebuild -- --platform android
+# Keep EXPO_UPDATE_CHANNEL set while building your signed release APK.
+vp exec expo run:android --variant release --no-bundler
+```
+
+The local prebuild uses `--no-clean --no-install` and preserves generated native
+folders. Never replace the signing identity of an installed app; install the
+new APK in place with the same signing key. Expo's generated Gradle project uses
+the debug key unless your existing release process configures signing. A cloud
+build also needs that existing key configured in EAS; do not let it generate a
+replacement. Development clients/Expo Go are not the release OTA test target.
+
+After installing that APK, publish JavaScript/assets changes:
+
+```sh
+# From apps/frontend-native; Android + preview environment/channel are fixed:
+vp run update:preview -- --message "Fix native turn focus release"
+# Equivalent:
+vp dlx -- eas-cli update --channel preview --environment preview --platform android --message "Fix native turn focus release"
+```
+
+The explicit environment prevents a local dev-tunnel URL from leaking into an
+internal update. Review the working tree before publishing: the current local
+JavaScript/assets are uploaded, not just committed changes. This does not deploy
+backend code. Close/reopen the app online to download the update, wait for the
+download, then close/reopen again to apply it. No forced mid-game reload is used.
+Review updates at <https://expo.dev/accounts/chiubaca/projects/lets-play-big-two/updates>.
+
+Runtime compatibility uses **appVersion**, currently `1.1.2`. Keep that version
+for JS-only fixes to the same native runtime. Whenever native dependencies,
+plugins, Firebase/native configuration or the Expo SDK change, increment
+`version` in `app.config.ts` (and keep `package.json` in sync), then rebuild and
+install before publishing an update for the new runtime. OTA cannot add native
+modules or upgrade an older runtime. Local builds without an explicit
+`EXPO_UPDATE_CHANNEL` are not subscribed to preview by default.
 
 After upgrading SDK/native dependencies, stop Metro, run `vp run prebuild` from
 this app, then rebuild with `vp run native:android` or `vp run native:ios` from

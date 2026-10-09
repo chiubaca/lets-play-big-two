@@ -92,7 +92,8 @@ export async function sendExpoTurnPush(
   const response = await fetch("https://exp.host/--/api/v2/push/send", {
     method: "POST",
     headers: headers(env),
-    redirect: "error",
+    // Workers rejects "error"; manual redirects fail closed below without forwarding credentials.
+    redirect: "manual",
     signal: AbortSignal.timeout(Math.min(5000, Math.max(1, deadline - Date.now()))),
     body: JSON.stringify({
       to: token.data,
@@ -147,7 +148,7 @@ export async function checkExpoTurnReceipts(env: Env): Promise<void> {
   const response = await fetch("https://exp.host/--/api/v2/push/getReceipts", {
     method: "POST",
     headers: headers(env),
-    redirect: "error",
+    redirect: "manual",
     signal: AbortSignal.timeout(5000),
     body: JSON.stringify({ ids: results.map(({ id }) => id) }),
   });

@@ -37,8 +37,10 @@ catalog:
   expo-mcp: ~0.2.4
   expo-network: ~57.0.2
   expo-notifications: ~57.0.22
+  expo-updates: ~57.0.25
   hono: ^4.7.0
   lucide-react-native: ^1.52.0
+  miniflare: 4.20260317.1
   nanoid: ^5.1.6
   next-themes: ^0.4.6
   radix-ui: ^1.4.3

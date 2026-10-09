@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { AppState } from "react-native";
 import { randomUUID } from "expo-crypto";
 import { api } from "./api";
 
@@ -22,9 +23,19 @@ export function useRoomFocus(
       if (!current.current.authenticated || current.current.viewerId !== viewerId) return;
       void api.roomFocus(roomId, { tabId, focused: value, sequence: ++sequence }).catch(() => {});
     };
-    send(focused);
-    const timer = focused ? setInterval(() => send(true), 8_000) : undefined;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const update = (active: boolean) => {
+      clearInterval(timer);
+      send(focused && active);
+      if (focused && active)
+        timer = setInterval(() => send(AppState.currentState === "active"), 8_000);
+    };
+    // Native suspension can precede the render/passive effect from useForeground.
+    // Release the same lease directly in the lifecycle callback, and stop its heartbeat.
+    const subscription = AppState.addEventListener("change", (state) => update(state === "active"));
+    update(AppState.currentState === "active");
     return () => {
+      subscription.remove();
       clearInterval(timer);
       send(false);
     };

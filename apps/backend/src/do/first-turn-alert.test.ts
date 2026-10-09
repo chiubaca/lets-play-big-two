@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { createActor } from "xstate";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 import { bigTwoGameMachine, type BigTwoGameMachineSnapshot } from "@big-two/game-state-machine";
@@ -760,6 +761,46 @@ it("sends encrypted backend-only Web Push at most once after provider acceptance
   expect(r.outbox()).toMatchObject([{ status: "sent" }]);
   await r.reload().alarm();
   expect(push).toHaveBeenCalledTimes(1);
+});
+
+it("sends an Expo alert when a native player backgrounds after playing and the next player returns the turn", async () => {
+  const r = room();
+  r.enroll("ada");
+  r.enroll("ben");
+  r.accounts
+    .prepare(
+      "UPDATE turnNotificationRegistration SET endpoint = 'expo:ExpoPushToken[' || user_id || '-device]', p256dh = '', auth = ''",
+    )
+    .run();
+  r.accounts.exec(
+    readFileSync(
+      new URL("../../drizzle/migrations/0010_turn_push_receipts.sql", import.meta.url),
+      "utf8",
+    ),
+  );
+  r.env.VAPID_PRIVATE_KEY = "ticket-secret";
+  const tabs = { ada: crypto.randomUUID(), ben: crypto.randomUUID() };
+  for (const player of ["ada", "ben"] as const)
+    await r.object.setRoomFocus("ABCDE", player, `${player}-session`, tabs[player], true, 1);
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  const starter = r.firstTurn()!.recipient_id as "ada" | "ben";
+  await r.object.gameAction(
+    { type: "PLAY_FIRST_MOVE", playerId: starter, cards: [{ value: "3", suit: "DIAMOND" }] },
+    starter,
+    "ABCDE",
+  );
+  await r.object.setRoomFocus("ABCDE", starter, `${starter}-session`, tabs[starter], false, 2);
+  const follower = r.firstTurn()!.recipient_id;
+  const push = vi
+    .spyOn(globalThis, "fetch")
+    .mockResolvedValue(Response.json({ data: { status: "ok", id: "native-turn-receipt" } }));
+  await r.object.gameAction({ type: "PASS_TURN", playerId: follower }, follower, "ABCDE");
+  await r.reload().alarm();
+  expect(push).toHaveBeenCalledOnce();
+  expect(push.mock.calls[0][0]).toBe("https://exp.host/--/api/v2/push/send");
+  const payload = JSON.parse(push.mock.calls[0][1]!.body as string);
+  expect(payload.data).toMatchObject({ roomId: "ABCDE", turnId: r.firstTurn()!.id });
+  expect(r.outbox()).toMatchObject([{ status: "sent" }]);
 });
 
 it("tracks two installs independently across provider failure, alarm repair, and reload", async () => {

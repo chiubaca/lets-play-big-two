@@ -24,6 +24,9 @@ vi.mock("better-auth/client/plugins", () => ({
 vi.mock("@better-auth/expo/client", () => ({ expoClient: vi.fn() }));
 vi.mock("expo-secure-store", () => ({}));
 vi.mock("expo-crypto", () => ({ randomUUID: () => `uuid-${++raw.uuid}` }));
+vi.mock("react-native", () => ({
+  AppState: { currentState: "active", addEventListener: () => ({ remove: vi.fn() }) },
+}));
 vi.mock("./use-foreground", () => ({ useForeground: () => true }));
 vi.mock("./api", () => ({
   api: {
