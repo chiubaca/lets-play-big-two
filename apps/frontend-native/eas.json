@@ -13,6 +13,14 @@
       "android": { "buildType": "apk" },
       "ios": { "simulator": true }
     },
+    "internal-testing": {
+      "extends": "production",
+      "credentialsSource": "local",
+      "distribution": "store",
+      "channel": "preview",
+      "environment": "preview",
+      "android": { "buildType": "app-bundle" }
+    },
     "production": {
       "autoIncrement": true,
       "channel": "production",

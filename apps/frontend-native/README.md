@@ -433,6 +433,28 @@ backend code. Close/reopen the app online to download the update, wait for the
 download, then close/reopen again to apply it. No forced mid-game reload is used.
 Review updates at <https://expo.dev/accounts/chiubaca/projects/lets-play-big-two/updates>.
 
+#### Play Store internal testing with preview OTA
+
+Play's testing track and EAS Update's channel are separate. The `internal-testing`
+profile produces a store AAB subscribed to `preview`, using the preview environment
+and production's remote version auto-increment:
+
+```sh
+# From apps/frontend-native; requires the EXISTING Play upload key in credentials.json:
+vp dlx -- eas-cli build --profile internal-testing --platform android --non-interactive --freeze-credentials
+```
+
+Upload the AAB to Play's **internal testing** track, then install the update through
+Play without uninstalling. That installation receives `update:preview` OTA releases
+for its runtime. Production-channel builds do not receive them, regardless of Play
+track. Preserve the existing package ID, upload key and Play App Signing identity;
+do not generate replacement credentials. This profile uses local credentials rather
+than EAS-generated keys. Configure the ignored `credentials.json` with the existing
+upload key's path, alias and passwords following
+[Expo's local credentials guide](https://docs.expo.dev/app-signing/local-credentials/).
+Never commit that file or print its contents. Submission also requires a Google Play
+service account with access to this app, or a manual AAB upload in Play Console.
+
 Runtime compatibility uses **appVersion**, currently `1.1.5`. Keep that version
 for JS-only fixes to the same native runtime. Whenever native dependencies,
 plugins, Firebase/native configuration or the Expo SDK change, increment

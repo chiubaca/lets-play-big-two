@@ -49,3 +49,17 @@ it("separates internal APK updates and their environment from production", () =>
     environment: "production",
   });
 });
+
+it("subscribes Play internal-testing bundles to preview without changing production", () => {
+  expect(profiles.build["internal-testing"]).toMatchObject({
+    extends: "production",
+    credentialsSource: "local",
+    distribution: "store",
+    channel: "preview",
+    environment: "preview",
+    android: { buildType: "app-bundle" },
+  });
+  expect(profiles.build.production.autoIncrement).toBe(true);
+  expect(profiles.build.production.channel).toBe("production");
+  expect(profiles.build.production.environment).toBe("production");
+});
