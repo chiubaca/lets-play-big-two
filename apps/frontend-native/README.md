@@ -442,6 +442,8 @@ and production's remote version auto-increment:
 ```sh
 # From apps/frontend-native; requires the EXISTING Play upload key in credentials.json:
 vp dlx -- eas-cli build --profile internal-testing --platform android --non-interactive --freeze-credentials
+# With a Google Play service account configured in EAS, submit that exact build:
+vp dlx -- eas-cli submit --profile internal-testing --platform android --id <build-id> --non-interactive
 ```
 
 Upload the AAB to Play's **internal testing** track, then install the update through

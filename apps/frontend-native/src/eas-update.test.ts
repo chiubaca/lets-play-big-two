@@ -62,4 +62,5 @@ it("subscribes Play internal-testing bundles to preview without changing product
   expect(profiles.build.production.autoIncrement).toBe(true);
   expect(profiles.build.production.channel).toBe("production");
   expect(profiles.build.production.environment).toBe("production");
+  expect(profiles.submit["internal-testing"].android.track).toBe("internal");
 });
