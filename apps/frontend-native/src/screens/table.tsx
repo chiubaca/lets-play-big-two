@@ -23,6 +23,7 @@ import {
   Share2,
   MessageCircle,
   Eye,
+  Plus,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { getCardKey, getCardRank, SUITS, sortCards, detectHandType } from "@big-two/game-core";
@@ -123,15 +124,19 @@ function Seat({
             { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 },
           ]}
         >
-          <Label
-            style={{
-              fontSize: avatarSize * 0.78,
-              lineHeight: avatarSize,
-              includeFontPadding: false,
-            }}
-          >
-            {player?.isBot ? "🤖" : (player?.emoji ?? (player ? "♠️" : "＋"))}
-          </Label>
+          {player ? (
+            <Label
+              style={{
+                fontSize: avatarSize * 0.78,
+                lineHeight: avatarSize,
+                includeFontPadding: false,
+              }}
+            >
+              {player.isBot ? "🤖" : (player.emoji ?? "♠️")}
+            </Label>
+          ) : (
+            <Plus color={colors.cream} size={avatarSize * 0.85} strokeWidth={1.5} />
+          )}
         </LinearGradient>
         <View style={table.playerDetails}>
           <Label
@@ -194,6 +199,8 @@ export function TableScreen({
   const width = window.width - insets.left - insets.right;
   const height = window.height - insets.top - insets.bottom;
   const compact = width > height && height < 550;
+  const narrowHeader = width < 360;
+  const headerIconStyle = [table.iconButton, narrowHeader && table.narrowIconButton];
   const shortWaiting = height < 650;
   const densePortrait = shortWaiting && !compact;
   const compressedLandscape = compact && height < 380;
@@ -385,7 +392,7 @@ export function TableScreen({
         <View
           style={[
             table.header,
-            mode === "online" && table.onlineHeader,
+            narrowHeader && { gap: 4 },
             compact && { minHeight: mode === "online" ? 72 : 49 },
           ]}
         >
@@ -394,7 +401,7 @@ export function TableScreen({
             icon={<Menu color={colors.gold} size={24} />}
             accessibilityLabel="Table menu"
             onPress={() => setPanel("menu")}
-            style={table.iconButton}
+            style={headerIconStyle}
           />
           {mode === "online" && (
             <Button
@@ -410,29 +417,21 @@ export function TableScreen({
               }
               disabled={loading || !onChat}
               onPress={() => onChat?.()}
-              style={[table.iconButton, table.chatButton]}
+              style={[...headerIconStyle, table.chatButton]}
             />
           )}
-          {mode === "online" && (
-            <View
-              accessible
-              accessibilityLabel={loading ? "Loading spectators" : `${spectatorCount} watching`}
-              style={table.spectators}
-            >
-              <Eye color={colors.muted} size={13} />
-              <Label style={table.spectatorCount}>{loading ? "–" : spectatorCount}</Label>
-            </View>
-          )}
-          {roomId && (
-            <View style={[table.roomCodePosition, mode === "online" && !compact && { top: 49 }]}>
+          <View style={table.roomCodePosition}>
+            {roomId && (
               <Button
                 title={roomId}
                 accessibilityLabel={`Share room ${roomId}`}
                 icon={
                   <View style={table.roomCodeContent}>
-                    <Label mono style={table.roomCodeLabel}>
-                      ROOM
-                    </Label>
+                    {!narrowHeader && (
+                      <Label mono style={table.roomCodeLabel}>
+                        ROOM
+                      </Label>
+                    )}
                     <Label mono style={table.roomCode}>
                       {roomId}
                     </Label>
@@ -444,22 +443,34 @@ export function TableScreen({
                 }
                 style={table.roomCodeButton}
               />
-            </View>
-          )}
-          <View style={{ flex: 1 }} />
+            )}
+            {mode === "online" && (
+              <View
+                accessible
+                pointerEvents="none"
+                accessibilityLabel={loading ? "Loading spectators" : `${spectatorCount} watching`}
+                style={table.spectators}
+              >
+                <Eye color={colors.muted} size={12} />
+                <Label numberOfLines={1} style={table.spectatorCount}>
+                  {loading ? "– watching" : `${spectatorCount} watching`}
+                </Label>
+              </View>
+            )}
+          </View>
           <Button
             title="?"
             icon={<CircleHelp color={colors.gold} size={24} />}
             accessibilityLabel="How to play"
             onPress={() => setPanel("help")}
-            style={table.iconButton}
+            style={headerIconStyle}
           />
           <Button
             title="⚙"
             icon={<Settings color={colors.gold} size={24} />}
             accessibilityLabel="Table settings"
             onPress={() => setPanel("settings")}
-            style={table.iconButton}
+            style={headerIconStyle}
           />
         </View>
         {mode === "online" && !loading && !connected && (
@@ -1054,10 +1065,12 @@ export function TableScreen({
                   }}
                 />
               )}
-              <Button title="Return to lobby" onPress={onHome} />
-              {mode === "online" && (
-                <Label style={{ color: colors.muted }}>You will not leave this table.</Label>
-              )}
+              <View style={table.lobbyReturn}>
+                <Button title="Return to lobby" onPress={onHome} />
+                {mode === "online" && (
+                  <Label style={table.lobbyReturnHint}>You will not leave this table.</Label>
+                )}
+              </View>
               <ErrorMessage message={message ?? error} />
             </>
           ))}
@@ -1086,6 +1099,8 @@ export function TableScreen({
 }
 
 const table = StyleSheet.create({
+  lobbyReturn: { gap: 4 },
+  lobbyReturnHint: { color: colors.muted, fontSize: 11, lineHeight: 16, textAlign: "center" },
   page: { flex: 1, paddingHorizontal: 8, paddingTop: 12, paddingBottom: 4 },
   header: {
     flexDirection: "row",
@@ -1103,22 +1118,20 @@ const table = StyleSheet.create({
     paddingVertical: 0,
     boxShadow: "0 5px 10px rgba(0,0,0,0.55)",
   },
-  onlineHeader: { minHeight: 96 },
+  narrowIconButton: { width: 36 },
   // The unread badge overhangs the circular button face.
   chatButton: { overflow: "visible" },
   spectators: {
+    position: "absolute",
+    top: 48,
+    left: 0,
+    right: 0,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 4,
-    minHeight: 42,
-    paddingHorizontal: 8,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: 20,
-    backgroundColor: "#071b10",
   },
-  spectatorCount: { fontSize: 11, color: colors.muted },
+  spectatorCount: { fontSize: 10, lineHeight: 16, color: colors.muted, flexShrink: 1 },
   chatBadge: {
     position: "absolute",
     top: -6,
@@ -1140,7 +1153,13 @@ const table = StyleSheet.create({
     fontSize: 9,
     zIndex: 30,
   },
-  roomCodePosition: { position: "absolute", left: 54, right: 54, alignItems: "center", top: 3 },
+  roomCodePosition: {
+    flex: 1,
+    minWidth: 0,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   roomCodeContent: { flexDirection: "row", gap: 6, alignItems: "center" },
   roomCodeLabel: { fontSize: 8, letterSpacing: 0.7 },
   roomCode: { color: colors.cream, fontSize: 12, letterSpacing: 1, flexShrink: 1 },

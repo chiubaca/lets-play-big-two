@@ -46,6 +46,7 @@ vi.mock("lucide-react-native", () => ({
   Share2: "Share2",
   MessageCircle: "MessageCircle",
   Eye: "Eye",
+  Plus: "Plus",
 }));
 vi.mock("expo-haptics", () => ({ selectionAsync: vi.fn() }));
 vi.mock("react-native-reanimated", async () => import("../test/reanimated"));
@@ -139,6 +140,62 @@ describe("native room chat notification", () => {
   });
 });
 
+describe("native room header", () => {
+  it.each([
+    [320, 568],
+    [393, 852],
+    [852, 393],
+  ])("balances spectators beneath the room code at %i × %i", async (width, height) => {
+    Object.assign(viewport, { width, height });
+    await mount();
+    const props = renderer.root.findByType(TableScreen).props as ComponentProps<typeof TableScreen>;
+    await act(async () =>
+      renderer.update(
+        createElement(TableScreen, {
+          ...props,
+          snapshot: createRoomFixture("waiting-alone", "host", 2),
+        }),
+      ),
+    );
+    const status = renderer.root.findByProps({ accessibilityLabel: "2 watching" });
+    expect(status.parent).toBe(
+      renderer.root.findByProps({ accessibilityLabel: "Share room ABCDE" }).parent,
+    );
+    expect(status.props.pointerEvents).toBe("none");
+    expect(flatten(status.props.style)).toMatchObject({
+      position: "absolute",
+      top: 48,
+      left: 0,
+      right: 0,
+      justifyContent: "center",
+    });
+    expect(flatten(status.props.style).borderWidth).toBeUndefined();
+    expect(status.findByProps({ children: "2 watching" })).toBeDefined();
+    await act(async () => renderer.update(createElement(TableScreen, { ...props, mode: "solo" })));
+    expect(renderer.root.findAllByProps({ accessibilityLabel: "0 watching" })).toHaveLength(0);
+  });
+
+  it.each([
+    [320, 568],
+    [393, 852],
+    [852, 393],
+  ])("keeps the room-code pill in the top button row at %i × %i", async (width, height) => {
+    Object.assign(viewport, { width, height });
+    await mount();
+    const pill = renderer.root.findByProps({ accessibilityLabel: "Share room ABCDE" });
+    const position = pill.parent!;
+    const style = flatten(position.props.style);
+    expect(style.position).not.toBe("absolute");
+    expect(style.height).toBe(42);
+    expect(style.justifyContent).toBe("center");
+    expect(position.parent).toBe(
+      renderer.root.findByProps({ accessibilityLabel: "Table menu" }).parent,
+    );
+    const roomLabel = pill.props.icon.props.children[0];
+    expect(roomLabel && roomLabel.props.children).toBe(width < 360 ? false : "ROOM");
+  });
+});
+
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   Object.assign(viewport, { width: 393, height: 852 });
@@ -149,6 +206,25 @@ afterEach(async () => {
 });
 
 describe("native waiting table", () => {
+  it.each([
+    [320, 568],
+    [393, 852],
+    [852, 393],
+  ])("centers open-seat plus icons at %i × %i", async (width, height) => {
+    Object.assign(viewport, { width, height });
+    await mount("host", 1);
+    const icons = renderer.root.findAllByType("Plus" as never);
+    expect(icons).toHaveLength(3);
+    for (const icon of icons) {
+      const avatar = flatten(icon.parent!.props.style);
+      expect(avatar.alignItems).toBe("center");
+      expect(avatar.justifyContent).toBe("center");
+      expect(icon.props.size).toBeLessThan(Number(avatar.width));
+      expect(icon.props.color).toBe("cream");
+    }
+    expect(renderer.root.findAllByProps({ children: "＋" })).toHaveLength(0);
+  });
+
   it("does not pull the waiting title above the scroll viewport", async () => {
     await mount();
     const title = renderer.root.findByProps({
@@ -269,6 +345,15 @@ describe("native table results artwork", () => {
       expect(results.findAllByProps({ title: "Leave table" })).toHaveLength(
         viewer === "spectator" ? 0 : 1,
       );
+      const lobbyReturn = results.findByProps({ title: "Return to lobby" });
+      const hint = results.findByProps({ children: "You will not leave this table." });
+      expect(hint.parent).toBe(lobbyReturn.parent);
+      expect(flatten(lobbyReturn.parent!.props.style).gap).toBe(4);
+      expect(flatten(hint.props.style)).toMatchObject({
+        textAlign: "center",
+        fontSize: 11,
+        lineHeight: 16,
+      });
       await act(async () => results.props.onClose());
       expect(results.props.visible).toBe(true);
       await act(async () => results.findByProps({ title: "Return to lobby" }).props.onPress());
