@@ -18,6 +18,7 @@
     "dev:native:android": "node scripts/native-dev.mjs android",
     "native:android": "vp run frontend-native#android",
     "native:ios": "vp run frontend-native#ios",
+    "update:preview": "node scripts/native-update.mjs",
     "storybook:native": "vp run frontend-native#storybook",
     "storybook:native:web": "vp run frontend-native#storybook:web"
   },

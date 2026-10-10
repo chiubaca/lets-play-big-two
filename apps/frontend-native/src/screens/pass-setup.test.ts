@@ -9,29 +9,48 @@ const flatten = (style: unknown): Record<string, unknown> =>
     ? Object.assign({}, ...style.map(flatten))
     : ((style ?? {}) as Record<string, unknown>);
 
-vi.mock("react-native", () => ({
-  ActivityIndicator: "ActivityIndicator",
-  Image: "Image",
-  KeyboardAvoidingView: "KeyboardAvoidingView",
-  Modal: "Modal",
-  Pressable: "Pressable",
-  ScrollView: "ScrollView",
-  Text: "Text",
-  TextInput: "TextInput",
-  View: "View",
-  Platform: { OS: "android" },
-  StyleSheet: {
-    create: (styles: unknown) => styles,
-    flatten: (style: unknown) => flatten(style),
-    absoluteFill: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },
-  },
-  useWindowDimensions: () => device,
-}));
+vi.mock("react-native", () => {
+  class AnimationNode {
+    interpolate() {
+      return new AnimationNode();
+    }
+  }
+  return {
+    ActivityIndicator: "ActivityIndicator",
+    Image: "Image",
+    KeyboardAvoidingView: "KeyboardAvoidingView",
+    Modal: "Modal",
+    Pressable: "Pressable",
+    ScrollView: "ScrollView",
+    Text: "Text",
+    TextInput: "TextInput",
+    View: "View",
+    Platform: { OS: "android" },
+    StyleSheet: {
+      create: (styles: unknown) => styles,
+      flatten: (style: unknown) => flatten(style),
+      absoluteFill: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },
+    },
+    useWindowDimensions: () => device,
+    Animated: {
+      Value: AnimationNode,
+      View: "AnimatedView",
+      ScrollView: "ScrollView",
+      add: () => new AnimationNode(),
+      subtract: () => new AnimationNode(),
+      multiply: () => new AnimationNode(),
+      divide: () => new AnimationNode(),
+      event: (_mapping: unknown, options: unknown) => Object.assign(vi.fn(), { options }),
+    },
+  };
+});
+vi.mock("../ui/brand", () => ({ Brand: "Brand" }));
+vi.mock("../ui/use-reduced-motion", () => ({ useReducedMotion: () => false }));
 vi.mock("expo-linear-gradient", () => ({ LinearGradient: "LinearGradient" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView" }));
 vi.mock("lucide-react-native", () => ({ Bot: "Bot", UserRound: "UserRound" }));
 vi.mock("../ui/theme", () => ({
-  artwork: {},
+  artwork: { pass: "pass-title", portrait: "portrait-background" },
   colors: { panel: "#071b10", gold: "#f4ce78", cream: "#f9e8b9", muted: "#aaa" },
   fonts: { body: "Inter", strong: "InterSemiBold", display: "Fraunces" },
 }));
@@ -68,6 +87,26 @@ afterEach(async () => {
 });
 
 describe("pass-and-play setup transitions", () => {
+  it("keeps Home outside the parallax scroll view with pass-and-play artwork", async () => {
+    await mount();
+    const scroll = hosts("ScrollView")[0]!;
+    expect(scroll.props.onScroll.options).toEqual({ useNativeDriver: true });
+    const nav = renderer.root.findByProps({ testID: "home-nav-overlay" });
+    expect(ancestors(button("‹ Home"))).not.toContain(scroll);
+    expect(nav.findAll((node) => node === button("‹ Home"))).toHaveLength(1);
+    expect(flatten(nav.props.style).zIndex).toBeGreaterThan(1);
+    await act(async () => button("‹ Home").props.onPress());
+    expect(props.onHome).toHaveBeenCalledOnce();
+    expect(renderer.root.findAllByProps({ accessibilityLabel: "Pass and Play" })).toHaveLength(1);
+    const titleLayers = hosts("Image").filter((node) => node.props.source === "pass-title");
+    expect(titleLayers.map((node) => node.props.blurRadius)).toEqual([0, 6, 12]);
+    expect(titleLayers.every((node) => node.props.accessible === false)).toBe(true);
+    expect(titleLayers[0]!.props.style.width).toBe(361);
+    expect(
+      hosts("Image").filter((node) => node.props.source === "portrait-background"),
+    ).toHaveLength(3);
+  });
+
   it("reserves Resume before the saved game arrives without inserting ahead of Start", async () => {
     await mount();
     const start = button("Start game →");

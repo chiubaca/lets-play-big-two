@@ -49,7 +49,7 @@ const OFFLINE_PLAYERS: OfflinePlayer[] = [
   OFFLINE_HUMAN,
   { id: "bot-ada", name: "Eve", isBot: true, botStrategy: "jev" },
   { id: "bot-jev", name: "Bob", isBot: true, botStrategy: "jev" },
-  { id: "bot-alan", name: "Alan", isBot: true, botStrategy: "jev" },
+  { id: "bot-alan", name: "May", isBot: true, botStrategy: "jev" },
 ];
 
 type GameActor = ActorRefFrom<typeof bigTwoGameMachine>;

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Image, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
 import { Bot, UserRound } from "lucide-react-native";
-import { Button, CasinoScreen, Field, Label, Panel, Sheet } from "../ui/primitives";
+import { HomeScrollScene } from "../ui/home-scroll-scene";
+import { Button, Field, Label, Panel, Sheet } from "../ui/primitives";
 import { artwork, colors, fonts } from "../ui/theme";
 
 export interface PassSetupConfig {
@@ -24,17 +25,26 @@ export function PassSetupScreen({
   loading = false,
 }: PassSetupScreenProps) {
   const { width } = useWindowDimensions();
+  const titleWidth = Math.min(width - 32, 620);
   return (
-    <CasinoScreen scroll>
-      <View style={styles.nav}>
-        <Button title="‹ Home" onPress={onHome} />
-      </View>
-      <Image
-        source={artwork.pass}
-        accessibilityLabel="Pass and Play"
-        resizeMode="contain"
-        style={{ width: Math.min(width - 32, 620), height: Math.min(width - 32, 620) * 0.491 }}
-      />
+    <HomeScrollScene
+      fixedNavigation
+      nav={
+        <View style={[styles.nav, { width: Math.min(width - 28, 620) }]}>
+          <Button title="‹ Home" onPress={onHome} />
+        </View>
+      }
+      logoLabel="Pass and Play"
+      renderLogo={(blurRadius) => (
+        <Image
+          source={artwork.pass}
+          accessible={false}
+          blurRadius={blurRadius}
+          resizeMode="contain"
+          style={{ width: titleWidth, height: titleWidth * 0.491 }}
+        />
+      )}
+    >
       {loading ? (
         <Panel style={styles.panel}>
           <Label accessibilityLiveRegion="polite">Loading saved setup…</Label>
@@ -42,7 +52,7 @@ export function PassSetupScreen({
       ) : (
         <PassSetupEditor onStart={onStart} onResume={onResume} initialConfig={initialConfig} />
       )}
-    </CasinoScreen>
+    </HomeScrollScene>
   );
 }
 

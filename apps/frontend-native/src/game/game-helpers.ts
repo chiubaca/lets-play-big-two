@@ -35,7 +35,7 @@ export function getLocalSeats(mode: OfflineMode, config?: OfflineGameConfig): Pl
       mode === "solo"
         ? index === 0
           ? "You"
-          : ["You", "Eve", "Bob", "Alan"][index]
+          : ["You", "Eve", "Bob", "May"][index]
         : configured?.[index].name.trim() || `Player ${index + 1}`,
     hand: [],
     isBot: mode === "solo" ? index > 0 : (configured?.[index].isBot ?? false),

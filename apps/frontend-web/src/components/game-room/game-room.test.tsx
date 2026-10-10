@@ -17,7 +17,7 @@ const players = [
   { id: "solo-player", name: "You", hand: [] },
   { id: "ada", name: "Ada", hand: [] },
   { id: "jev", name: "Jev", hand: [] },
-  { id: "alan", name: "Alan", hand: [] },
+  { id: "alan", name: "May", hand: [] },
 ];
 
 const gameState = {
@@ -35,7 +35,7 @@ function SoloTable() {
   const [bots, setBots] = useState<BotSettings["players"]>([
     { id: "ada", name: "Ada", botStrategy: "basic" },
     { id: "jev", name: "Jev", botStrategy: "jev" },
-    { id: "alan", name: "Alan", botStrategy: "basic" },
+    { id: "alan", name: "May", botStrategy: "basic" },
   ]);
 
   return (

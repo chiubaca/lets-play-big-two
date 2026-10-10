@@ -163,7 +163,7 @@ describe("native pass-and-play sessions", () => {
         { name: "Alex", isBot: false },
         { name: "Blair", isBot: false },
         { name: "Ada", isBot: true },
-        { name: "Alan", isBot: true },
+        { name: "May", isBot: true },
       ],
     };
     const session = createSession("pass-and-play", undefined, true, config);

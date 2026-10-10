@@ -420,11 +420,19 @@ replacement. Development clients/Expo Go are not the release OTA test target.
 After installing that APK, publish JavaScript/assets changes:
 
 ```sh
-# From apps/frontend-native; Android + preview environment/channel are fixed:
+# From the repository root; prompts for the update message:
+vp run update:preview
+# Or supply the message directly:
+vp run update:preview -- --message "Fix native turn focus release"
+
+# Also works from apps/frontend-native; Android + preview environment/channel are fixed:
 vp run update:preview -- --message "Fix native turn focus release"
 # Equivalent:
 vp dlx -- eas-cli update --channel preview --environment preview --platform android --message "Fix native turn focus release"
 ```
+
+The launcher uses the global Vite+ CLI (`VITE_PLUS_HOME/bin/vp`, defaulting to
+`~/.vite-plus/bin/vp`) because the local CLI on package scripts' PATH lacks `dlx`.
 
 The explicit environment prevents a local dev-tunnel URL from leaking into an
 internal update. Review the working tree before publishing: the current local

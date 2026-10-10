@@ -24,11 +24,17 @@ export function HomeScrollScene({
   children,
   footer,
   overlays,
+  logoLabel = "Big Two Crew",
+  renderLogo,
+  fixedNavigation = false,
 }: {
   nav: ReactNode;
   children: ReactNode;
-  footer: ReactNode;
-  overlays: ReactNode;
+  footer?: ReactNode;
+  overlays?: ReactNode;
+  logoLabel?: string;
+  renderLogo?: (blurRadius: number) => ReactNode;
+  fixedNavigation?: boolean;
 }) {
   const { width, height } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
@@ -37,6 +43,11 @@ export function HomeScrollScene({
   const [stage, setStage] = useState<LayoutRectangle>(emptyLayout);
   const [foreground, setForeground] = useState<LayoutRectangle>(emptyLayout);
   const logoWidth = homeLogoWidth(width, height);
+  const logo =
+    renderLogo ??
+    ((blurRadius: number) => (
+      <Brand width={logoWidth} blurRadius={blurRadius} accessible={false} />
+    ));
   const motion = homeScrollMotion({
     stageY: copy.y + stage.y,
     stageHeight: stage.height,
@@ -54,6 +65,15 @@ export function HomeScrollScene({
     outputRange: [0, motion.maxOverlap],
     extrapolate: "clamp",
   });
+  const navigation = (
+    <View
+      testID="home-nav-overlay"
+      pointerEvents="box-none"
+      style={fixedNavigation ? [styles.nav, styles.fixedNav] : styles.nav}
+    >
+      {nav}
+    </View>
+  );
 
   return (
     <CasinoScreen
@@ -70,9 +90,12 @@ export function HomeScrollScene({
       }
     >
       <View style={styles.viewport}>
+        {fixedNavigation && navigation}
         <Animated.ScrollView
-          contentContainerStyle={styles.scroll}
-          stickyHeaderIndices={[0]}
+          contentContainerStyle={
+            fixedNavigation ? [styles.scroll, { paddingTop: 0 }] : styles.scroll
+          }
+          stickyHeaderIndices={fixedNavigation ? undefined : [0]}
           keyboardShouldPersistTaps="handled"
           scrollEventThrottle={16}
           removeClippedSubviews={false}
@@ -80,9 +103,7 @@ export function HomeScrollScene({
             useNativeDriver: true,
           })}
         >
-          <View testID="home-nav-overlay" pointerEvents="box-none" style={styles.nav}>
-            {nav}
-          </View>
+          {!fixedNavigation && navigation}
           <View
             testID="home-copy"
             style={styles.copy}
@@ -102,7 +123,7 @@ export function HomeScrollScene({
                   testID="home-logo"
                   accessible
                   accessibilityRole="header"
-                  accessibilityLabel="Big Two Crew"
+                  accessibilityLabel={logoLabel}
                   style={
                     reducedMotion
                       ? undefined
@@ -119,13 +140,9 @@ export function HomeScrollScene({
                   }
                 >
                   {reducedMotion ? (
-                    <Brand width={logoWidth} accessible={false} />
+                    logo(0)
                   ) : (
-                    <HomeBlurLayers overlap={overlap}>
-                      {(blurRadius) => (
-                        <Brand width={logoWidth} blurRadius={blurRadius} accessible={false} />
-                      )}
-                    </HomeBlurLayers>
+                    <HomeBlurLayers overlap={overlap}>{logo}</HomeBlurLayers>
                   )}
                 </Animated.View>
               </Animated.View>
@@ -138,7 +155,7 @@ export function HomeScrollScene({
               {children}
             </View>
           </View>
-          <View style={styles.footer}>{footer}</View>
+          {footer && <View style={styles.footer}>{footer}</View>}
         </Animated.ScrollView>
       </View>
       {overlays}
@@ -150,6 +167,7 @@ const styles = StyleSheet.create({
   viewport: { flex: 1 },
   scroll: { flexGrow: 1, padding: 14, alignItems: "center" },
   nav: { width: "100%", alignItems: "center", zIndex: 5 },
+  fixedNav: { paddingTop: 14, paddingHorizontal: 14 },
   copy: { width: "100%", alignItems: "center", marginTop: 16 },
   stage: { alignItems: "center", marginTop: 17, marginBottom: 4, zIndex: 0 },
   foreground: { width: "100%", alignItems: "center", marginTop: 16, zIndex: 1 },

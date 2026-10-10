@@ -261,6 +261,36 @@ describe("native home scroll scene", () => {
     expect(hosts("Brand")).toHaveLength(3);
   });
 
+  it("applies the same scroll effects and reduced-motion fallback to custom title artwork", async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(HomeScrollScene, {
+          nav: "Home",
+          children: "Setup form",
+          logoLabel: "Pass and Play",
+          renderLogo: (blurRadius) => createElement("PassTitle", { blurRadius, accessible: false }),
+        }),
+      );
+    });
+    expect(hosts("Brand")).toHaveLength(0);
+    expect(hosts("PassTitle").map((title) => title.props.blurRadius)).toEqual([0, 6, 12]);
+    expect(renderer.root.findAllByProps({ accessibilityLabel: "Pass and Play" })).toHaveLength(1);
+    await act(async () => {
+      layout("home-copy", 78, 1022);
+      layout("home-logo-stage", 27, 424);
+      layout("home-mode-foreground", 471, 551);
+    });
+    host("AnimatedScrollView").props.onScroll({ nativeEvent: { contentOffset: { y: 257.2 } } });
+    const title = renderer.root.findByProps({ testID: "home-logo" });
+    expect(title.props.style.transform[0].scale.evaluate()).toBeCloseTo(0.97);
+    expect(layerOpacity(hosts("PassTitle")[1]!)).toBeCloseTo(0.75);
+    await act(async () => changeMotion(true));
+    expect(hosts("PassTitle")).toHaveLength(1);
+    expect(host("PassTitle").props.blurRadius).toBe(0);
+    expect(title.props.style).toBeUndefined();
+    expect(host("AnimatedScrollView").props.stickyHeaderIndices).toEqual([0]);
+  });
+
   it("stays motion-free if the accessibility query fails and cleans up its listener", async () => {
     accessibility.enabled.mockRejectedValue(new Error("unavailable"));
     await mount();

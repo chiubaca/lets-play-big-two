@@ -15,7 +15,7 @@
     "check": "tsc --noEmit",
     "test": "vp test --run",
     "prebuild": "expo prebuild --no-clean --no-install",
-    "update:preview": "vp dlx -- eas-cli update --channel preview --environment preview --platform android"
+    "update:preview": "node ../../scripts/native-update.mjs"
   },
   "dependencies": {
     "@better-auth/expo": "1.5.5",
