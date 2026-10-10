@@ -1,11 +1,22 @@
-import { useId } from "react";
+import { useEffect, useId } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import Animated, {
+  interpolate,
+  interpolateColor,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import Svg, { Circle, Defs, Pattern, Rect, Path } from "react-native-svg";
 import { getCardKey, type Card } from "@big-two/game-core";
 import { colors, fonts } from "./theme";
 import { handLayout } from "./hand-layout";
+import { useReducedMotion } from "./use-reduced-motion";
 
 const cardBorderWidth = 2;
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export function CardSuit({
   suit,
@@ -56,15 +67,30 @@ export function PlayingCard({
   const color = card.suit === "DIAMOND" || card.suit === "HEART" ? "#d50918" : "#111";
   const names: Record<string, string> = { J: "jack", Q: "queen", K: "king", A: "ace" };
   const faceWidth = width - cardBorderWidth * 2;
+  const selection = useSharedValue(selected ? 1 : 0);
+  useEffect(() => {
+    selection.value = withTiming(selected ? 1 : 0, { duration: 80 });
+  }, [selected, selection]);
+  const selectionStyle = useAnimatedStyle(() => ({
+    borderColor: interpolateColor(selection.value, [0, 1], ["#111111", colors.gold]),
+    boxShadow: [
+      {
+        offsetX: 0,
+        offsetY: interpolate(selection.value, [0, 1], [3, 0]),
+        blurRadius: interpolate(selection.value, [0, 1], [5, 9]),
+        color: interpolateColor(selection.value, [0, 1], ["rgba(0,0,0,0.4)", "#f1c96a"]),
+      },
+    ],
+  }));
   return (
-    <Pressable
+    <AnimatedPressable
       testID={`playing-card-${getCardKey(card)}`}
       disabled={!onPress}
       onPress={onPress}
       accessibilityRole={onPress ? "button" : undefined}
       accessibilityLabel={`${names[card.value] ?? card.value} of ${card.suit.toLowerCase()}s`}
       accessibilityState={onPress ? { selected } : undefined}
-      style={[cardStyles.card, { width, height: width * 1.48 }, selected && cardStyles.selected]}
+      style={[cardStyles.card, { width, height: width * 1.48 }, selectionStyle]}
     >
       <View style={cardStyles.face}>
         {[false, true].map((bottom) => (
@@ -84,7 +110,7 @@ export function PlayingCard({
           <CardSuit suit={card.suit} size={faceWidth * 0.46} color={color} />
         </View>
       </View>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -104,34 +130,79 @@ export function Hand({
   compact?: boolean;
 }) {
   const layout = handLayout(width, cards.length, compact);
+  const reducedMotion = useReducedMotion();
   return (
     <View style={{ width, height: layout.height, alignSelf: "center" }}>
       {cards.map((card, index) => {
         const isSelected = selected.includes(getCardKey(card));
         const position = layout.card(index, isSelected);
         return (
-          <View
+          <FanCard
             key={getCardKey(card)}
-            pointerEvents="box-none"
-            style={{
-              position: "absolute",
-              zIndex: index,
-              left: position.left,
-              top: position.top,
-              transformOrigin: "bottom center",
-              transform: [{ rotate: `${position.angle}deg` }],
-            }}
-          >
-            <PlayingCard
-              card={card}
-              width={layout.cardWidth}
-              selected={isSelected}
-              onPress={disabled ? undefined : () => onToggle(card)}
-            />
-          </View>
+            card={card}
+            width={layout.cardWidth}
+            position={position}
+            index={index}
+            selected={isSelected}
+            reducedMotion={reducedMotion}
+            onPress={disabled ? undefined : () => onToggle(card)}
+          />
         );
       })}
     </View>
+  );
+}
+
+function FanCard({
+  card,
+  width,
+  position,
+  index,
+  selected,
+  reducedMotion,
+  onPress,
+}: {
+  card: Card;
+  width: number;
+  position: ReturnType<ReturnType<typeof handLayout>["card"]>;
+  index: number;
+  selected: boolean;
+  reducedMotion: boolean;
+  onPress?: () => void;
+}) {
+  const left = useSharedValue(position.left);
+  const top = useSharedValue(position.top);
+  const angle = useSharedValue(position.angle);
+  useEffect(() => {
+    const spring = {
+      mass: 0.35,
+      damping: 30,
+      stiffness: 900,
+      overshootClamping: true,
+      reduceMotion: reducedMotion ? ReduceMotion.Always : ReduceMotion.Never,
+    };
+    left.value = withSpring(position.left, spring);
+    top.value = withSpring(position.top, spring);
+    angle.value = withSpring(position.angle, spring);
+  }, [position.left, position.top, position.angle, reducedMotion, left, top, angle]);
+  const motionStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: left.value },
+      { translateY: top.value },
+      { rotate: `${angle.value}deg` },
+    ],
+  }));
+  return (
+    <Animated.View
+      testID={`hand-card-${getCardKey(card)}`}
+      pointerEvents="box-none"
+      style={[
+        { position: "absolute", left: 0, top: 0, zIndex: index, transformOrigin: "bottom center" },
+        motionStyle,
+      ]}
+    >
+      <PlayingCard card={card} width={width} selected={selected} onPress={onPress} />
+    </Animated.View>
   );
 }
 
@@ -196,11 +267,6 @@ const cardStyles = StyleSheet.create({
     borderRadius: 6,
     overflow: "hidden",
     boxShadow: "0 3px 5px rgba(0,0,0,0.4)",
-  },
-  selected: {
-    borderColor: colors.gold,
-    borderWidth: cardBorderWidth,
-    boxShadow: "0 0 9px #f1c96a",
   },
   face: { flex: 1, backgroundColor: "#fff", justifyContent: "center", alignItems: "center" },
   corner: { position: "absolute", top: "5%", left: "7%", alignItems: "center" },

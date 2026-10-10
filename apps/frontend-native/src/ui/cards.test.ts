@@ -3,6 +3,12 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { getCardKey, type Card } from "@big-two/game-core";
 import { CardBacks, CardSuit, Hand, PlayingCard } from "./cards";
+import { withSpring, withTiming } from "../test/reanimated";
+import { handLayout } from "./hand-layout";
+
+const motion = vi.hoisted(() => ({ reduced: false }));
+vi.mock("react-native-reanimated", async () => import("../test/reanimated"));
+vi.mock("./use-reduced-motion", () => ({ useReducedMotion: () => motion.reduced }));
 
 vi.mock("react-native", () => ({
   Pressable: "Pressable",
@@ -26,6 +32,8 @@ const hosts = (type: string) => renderer.root.findAll((node) => node.type === ty
 
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  motion.reduced = false;
+  vi.clearAllMocks();
 });
 afterEach(async () => {
   if (renderer) await act(async () => renderer.unmount());
@@ -51,6 +59,10 @@ describe("native table cards", () => {
     expect(pressable.props.accessibilityState).toEqual({ selected: true });
     expect(pressable.props.accessibilityRole).toBe("button");
     expect(pressable.props.disabled).toBe(false);
+    expect(pressable.props.style.at(-1)).toMatchObject({
+      borderColor: "#f4ce78",
+      boxShadow: [{ offsetX: 0, offsetY: 0, blurRadius: 9, color: "#f1c96a" }],
+    });
     pressable.props.onPress();
     expect(onPress).toHaveBeenCalledOnce();
   });
@@ -97,6 +109,48 @@ describe("native table cards", () => {
     expect(pressable.props.disabled).toBe(true);
     expect(pressable.props.onPress).toBeUndefined();
     expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it("snaps selection and deselection to the fan's lift without overshoot", async () => {
+    const props = { cards: [card], selected: [] as string[], onToggle: vi.fn(), width: 390 };
+    await act(async () => {
+      renderer = create(createElement(Hand, props));
+    });
+    vi.clearAllMocks();
+    await act(async () =>
+      renderer.update(createElement(Hand, { ...props, selected: [getCardKey(card)] })),
+    );
+    expect(withSpring).toHaveBeenCalledWith(
+      0,
+      expect.objectContaining({
+        mass: 0.35,
+        damping: 30,
+        stiffness: 900,
+        overshootClamping: true,
+        reduceMotion: "never",
+      }),
+    );
+    expect(withTiming).toHaveBeenCalledWith(1, { duration: 80 });
+    vi.clearAllMocks();
+    await act(async () => renderer.update(createElement(Hand, props)));
+    expect(withSpring).toHaveBeenCalledWith(handLayout(390, 1).card(0).top, expect.anything());
+    expect(withTiming).toHaveBeenCalledWith(0, { duration: 80 });
+  });
+
+  it("reflows remaining cards with springs and disables movement for reduced motion", async () => {
+    const other: Card = { value: "K", suit: "CLUB" };
+    const props = { cards: [card, other], selected: [], onToggle: vi.fn(), width: 390 };
+    await act(async () => {
+      renderer = create(createElement(Hand, props));
+    });
+    motion.reduced = true;
+    vi.clearAllMocks();
+    await act(async () => renderer.update(createElement(Hand, { ...props, cards: [other] })));
+    expect(withSpring).toHaveBeenCalledWith(
+      handLayout(390, 1).card(0).left,
+      expect.objectContaining({ reduceMotion: "always" }),
+    );
+    expect(hosts("Pressable")).toHaveLength(1);
   });
 
   it("caps opponent backs at ten and gives every checker pattern a unique ID", async () => {

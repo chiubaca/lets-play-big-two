@@ -194,7 +194,12 @@ iOS HTTPS links still open the web app. No placeholder Team ID is configured.
 - Sticky home navigation and logo overlap, scroll-driven fade/scale/blur, and
   live reduced-motion support. See [motion parity and QA](../../docs/native-home-motion.md).
 - Solo play with three deterministic bots, legal hints, rank/suit sorting,
-  selected-card lift, results and a full-target accessible card picker.
+  spring-animated card selection/reflow, staggered flights into the center pile,
+  results and a full-target accessible card picker. Card motion uses Reanimated
+  on the UI thread and respects the device's reduced-motion setting. Flights
+  start only after a confirmed play; hydration/reconnects and rejected moves
+  don't replay them. Opponent flights use public counts and card-back positions,
+  never private hands.
 - Pass & Play for 2–4 seats, editable human names and optional bots. Private
   hands are omitted until the next human presses Ready; backgrounding hides
   them again. Bots pause in the background.
@@ -312,7 +317,7 @@ still uses remote D1. This setup has not sent test pushes or changed credentials
 
 `apps/android` remains the Bubblewrap TWA project, including its signing setup
 and store assets. Native Android keeps **`com.chiubaca.bigtwocrew`**, with
-version code **5** above the previous native release's **4** and the TWA's **2**, so a signed native bundle can
+version code **6** above the previous native release's **5** and the TWA's **2**, so a signed native bundle can
 update the existing Play listing. The same ID means the two apps **cannot be
 installed side by side**; preserving the TWA means retaining its source and
 release path, not using a second production application ID.
@@ -371,13 +376,20 @@ backend code. Close/reopen the app online to download the update, wait for the
 download, then close/reopen again to apply it. No forced mid-game reload is used.
 Review updates at <https://expo.dev/accounts/chiubaca/projects/lets-play-big-two/updates>.
 
-Runtime compatibility uses **appVersion**, currently `1.1.2`. Keep that version
+Runtime compatibility uses **appVersion**, currently `1.1.3`. Keep that version
 for JS-only fixes to the same native runtime. Whenever native dependencies,
 plugins, Firebase/native configuration or the Expo SDK change, increment
 `version` in `app.config.ts` (and keep `package.json` in sync), then rebuild and
 install before publishing an update for the new runtime. OTA cannot add native
 modules or upgrade an older runtime. Local builds without an explicit
 `EXPO_UPDATE_CHANNEL` are not subscribed to preview by default.
+
+Version `1.1.3` adds `react-native-reanimated` and `react-native-worklets`.
+Rebuild/install the native app before using or publishing this runtime; it
+cannot be delivered to a `1.1.2` binary as an OTA-only update. Expo's Babel
+preset configures the Worklets plugin automatically. Restart Metro after
+installing these dependencies (use `vp exec expo start --dev-client --clear`
+from this app if a cached bundle reports missing Worklets `__initData`).
 
 After upgrading SDK/native dependencies, stop Metro, run `vp run prebuild` from
 this app, then rebuild with `vp run native:android` or `vp run native:ios` from

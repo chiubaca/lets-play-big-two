@@ -52,6 +52,7 @@ vi.mock("../ui/cards", () => ({
   CardSuit: "CardSuit",
 }));
 vi.mock("../ui/table-surface", () => ({ TableSurface: "TableSurface" }));
+vi.mock("../ui/card-pile", () => ({ CardPile: "CardPile" }));
 vi.mock("../ui/theme", () => ({
   artwork: {},
   colors: { gold: "gold", cream: "cream", muted: "muted" },

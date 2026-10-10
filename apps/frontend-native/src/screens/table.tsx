@@ -11,6 +11,7 @@ import {
   Switch,
   View,
   useWindowDimensions,
+  type LayoutRectangle,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -36,6 +37,7 @@ import type {
 import { bigTwoGameMachine } from "@big-two/game-state-machine";
 import { CasinoScreen, Label, Button, ErrorMessage, Sheet, styles as ui } from "../ui/primitives";
 import { Hand, PlayingCard, CardBack, CardBacks, CardSuit } from "../ui/cards";
+import { CardPile } from "../ui/card-pile";
 import { TableSurface } from "../ui/table-surface";
 import { artwork, colors, fonts } from "../ui/theme";
 import { RulesSheet } from "./rules";
@@ -197,7 +199,22 @@ export function TableScreen({
   const Controls = compact ? ScrollView : View;
   const requestedBoardWidth = Math.min(width - 16, compact ? width * 0.69 : 760);
   const [boardSize, setBoardSize] = useState({ width: 0, height: 0 });
+  const [handFrame, setHandFrame] = useState<LayoutRectangle>();
+  const [centerFrame, setCenterFrame] = useState<LayoutRectangle>();
+  const [seatFrames, setSeatFrames] = useState<Record<string, LayoutRectangle>>({});
   const boardWidth = boardSize.width || requestedBoardWidth;
+  const handWidth = compressedLandscape
+    ? boardWidth * 0.75
+    : compact
+      ? boardWidth
+      : boardWidth * 0.92;
+  const pileCardWidth = compressedLandscape
+    ? 22
+    : densePortrait
+      ? 32
+      : compact
+        ? 44
+        : Math.min(64, boardWidth * 0.12);
   const context = snapshot.context;
   const current = context.players[context.currentPlayerIndex];
   const you = context.players.find((player) => player.id === userId);
@@ -334,6 +351,9 @@ export function TableScreen({
       cards: selectedCards,
     });
   const count = (player?: Player) => (player ? (counts[player.id] ?? 0) : 0);
+  const measureSeat = (player: Player | undefined, frame: LayoutRectangle) => {
+    if (player) setSeatFrames((previous) => ({ ...previous, [player.id]: frame }));
+  };
   const seat = (player?: Player, self = false) => (
     <Seat
       player={player}
@@ -576,10 +596,14 @@ export function TableScreen({
               </ScrollView>
             ) : (
               <>
-                <View style={[table.topSeat, compact && { top: compressedLandscape ? 0 : 10 }]}>
+                <View
+                  onLayout={({ nativeEvent }) => measureSeat(seats.top, nativeEvent.layout)}
+                  style={[table.topSeat, compact && { top: compressedLandscape ? 0 : 10 }]}
+                >
                   {seat(seats.top)}
                 </View>
                 <View
+                  onLayout={({ nativeEvent }) => measureSeat(seats.left, nativeEvent.layout)}
                   style={[
                     table.leftSeat,
                     compact && { top: "16%" },
@@ -589,6 +613,7 @@ export function TableScreen({
                   {seat(seats.left)}
                 </View>
                 <View
+                  onLayout={({ nativeEvent }) => measureSeat(seats.right, nativeEvent.layout)}
                   style={[
                     table.rightSeat,
                     compact && { top: "16%" },
@@ -597,36 +622,36 @@ export function TableScreen({
                 >
                   {seat(seats.right)}
                 </View>
-                <View style={[table.center, { top: compact || densePortrait ? "28%" : "34%" }]}>
-                  {!compact && !densePortrait && pile.length > 0 && (
-                    <Label mono style={{ fontSize: 8 }}>
+                <View
+                  onLayout={({ nativeEvent }) => setCenterFrame(nativeEvent.layout)}
+                  style={[table.center, { top: compact || densePortrait ? "28%" : "34%" }]}
+                >
+                  {!compact && !densePortrait && (
+                    <Label
+                      mono
+                      style={{ fontSize: 8, lineHeight: 21, opacity: pile.length ? 1 : 0 }}
+                    >
                       CARDS TO BEAT
                     </Label>
                   )}
-                  <View style={[ui.row, { gap: 0, justifyContent: "center", marginTop: 5 }]}>
-                    {pile.map((card, index) => (
-                      <View
-                        key={getCardKey(card)}
-                        style={{
-                          marginLeft: index ? -8 : 0,
-                          transform: [{ rotate: `${(index - (pile.length - 1) / 2) * 4}deg` }],
-                        }}
-                      >
-                        <PlayingCard
-                          card={card}
-                          width={
-                            compressedLandscape
-                              ? 22
-                              : densePortrait
-                                ? 32
-                                : compact
-                                  ? 44
-                                  : Math.min(64, boardWidth * 0.12)
-                          }
-                        />
-                      </View>
-                    ))}
-                  </View>
+                  <CardPile
+                    cards={pile}
+                    width={pileCardWidth}
+                    centerFrame={centerFrame}
+                    topInset={!compact && !densePortrait ? 5 + 21 * (window.fontScale ?? 1) : 5}
+                    motion={{
+                      userId,
+                      hidden,
+                      connected,
+                      hand,
+                      selected,
+                      counts,
+                      handFrame,
+                      handWidth,
+                      compact: compact || densePortrait,
+                      seatFrames,
+                    }}
+                  />
                   {compact && !compressedLandscape && pile.length > 0 && (
                     <Label mono style={{ fontSize: 8, lineHeight: 12, marginTop: 4 }}>
                       CARDS TO BEAT
@@ -661,16 +686,13 @@ export function TableScreen({
                   </View>
                 )}
                 {!waiting && !spectator && (
-                  <View style={[table.hand, compact && { bottom: 38 }]}>
+                  <View
+                    onLayout={({ nativeEvent }) => setHandFrame(nativeEvent.layout)}
+                    style={[table.hand, compact && { bottom: 38 }]}
+                  >
                     <Hand
                       cards={hand}
-                      width={
-                        compressedLandscape
-                          ? boardWidth * 0.75
-                          : compact
-                            ? boardWidth
-                            : boardWidth * 0.92
-                      }
+                      width={handWidth}
                       compact={compact || densePortrait}
                       selected={selected}
                       disabled={!yourTurn || busy}
@@ -1167,7 +1189,13 @@ const table = StyleSheet.create({
   leftSeat: { position: "absolute", left: 18, top: "29%", zIndex: 3 },
   rightSeat: { position: "absolute", right: 18, top: "29%", zIndex: 3 },
   bottomSeat: { position: "absolute", alignSelf: "center", bottom: 14, zIndex: 20 },
-  center: { position: "absolute", alignItems: "center", alignSelf: "center", width: "65%" },
+  center: {
+    position: "absolute",
+    alignItems: "center",
+    alignSelf: "center",
+    width: "65%",
+    zIndex: 25,
+  },
   waitingScroll: { flex: 1 },
   loading: { flexGrow: 1, justifyContent: "center", alignItems: "center", padding: 24, gap: 16 },
   waiting: { flexGrow: 1, paddingHorizontal: 12, paddingVertical: 14, gap: 12 },
