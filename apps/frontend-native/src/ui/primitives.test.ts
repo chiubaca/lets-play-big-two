@@ -63,6 +63,20 @@ afterEach(async () => {
 });
 
 describe("native busy button", () => {
+  it("uses a red tint, light text, and matching spinner for destructive actions", async () => {
+    const props = { title: "Leave table and reset game", destructive: true, onPress: vi.fn() };
+    await render(createElement(Button, props));
+    expect(flatten(hosts("Pressable")[0]!.props.style({ pressed: false }))).toMatchObject({
+      backgroundColor: "#572c2a",
+      borderColor: "#c78175",
+      borderBottomColor: "#3b191a",
+    });
+    expect(hosts("LinearGradient")[0]!.props.colors).toEqual(["#713732", "#572c2a", "#3b191a"]);
+    expect(flatten(hosts("Text")[0]!.props.style).color).toBe("#ffe2d6");
+    await update(createElement(Button, { ...props, busy: true }));
+    expect(hosts("Pressable")[0]!.props.disabled).toBe(true);
+    expect(hosts("ActivityIndicator")[0]!.props.color).toBe("#ffe2d6");
+  });
   it.each(["label", "icon"])("retains the %s's intrinsic geometry while loading", async (kind) => {
     const props = {
       title: "Create a multiplayer room",
@@ -119,6 +133,56 @@ describe("native busy button", () => {
 });
 
 describe("native menu sheet", () => {
+  it("hides close controls and ignores system back for non-dismissible results", async () => {
+    const onClose = vi.fn();
+    await render(
+      createElement(Sheet, {
+        visible: true,
+        centerContent: true,
+        dismissible: false,
+        onClose,
+        children: createElement(Button, { title: "Return to lobby", onPress: vi.fn() }),
+      }),
+    );
+    expect(hosts("Pressable").map((node) => node.props.accessibilityLabel)).toEqual([
+      "Return to lobby",
+    ]);
+    hosts("Modal")[0]!.props.onRequestClose();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(flatten(hosts("ScrollView")[0]!.props.style)).toMatchObject({ flex: 1, minHeight: 0 });
+  });
+  it("centers untitled results without including the close button in the content flow", async () => {
+    const onClose = vi.fn();
+    await render(
+      createElement(Sheet, {
+        visible: true,
+        centerContent: true,
+        onClose,
+        children: createElement(Label, { children: "Mei wins!" }),
+      }),
+    );
+    expect(hosts("Text").map((node) => node.props.children)).toEqual(["×", "Mei wins!"]);
+    const scroll = hosts("ScrollView")[0]!;
+    expect(flatten(scroll.props.contentContainerStyle)).toMatchObject({
+      flexGrow: 1,
+      justifyContent: "center",
+      paddingTop: 58,
+      paddingBottom: 58,
+    });
+    const close = hosts("Pressable")[0]!;
+    expect(close.props.accessibilityLabel).toBe("Close dialog");
+    const header = ancestors(close).find((node) => String(node.type) === "View")!;
+    expect(flatten(header.props.style)).toMatchObject({
+      position: "absolute",
+      top: 20,
+      right: 20,
+      zIndex: 1,
+    });
+    expect(ancestors(header)).not.toContain(scroll);
+    close.props.onPress();
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
   it.each(["android", "ios"])("uses only one keyboard avoidance mechanism on %s", async (OS) => {
     device.OS = OS;
     await render(

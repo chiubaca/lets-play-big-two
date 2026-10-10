@@ -183,10 +183,8 @@ export const GameRoom = ({
   const [motion, setMotion] = useState<boolean>(DEFAULT_DEV_LAYOUT.motion);
   const { playSound, muted, toggleMuted } = useTableAudio();
   const [localDevTools, setLocalDevTools] = useState(false);
-  const [showResult, setShowResult] = useState(false);
   const [restartError, setRestartError] = useState<string>();
-  const previousValue = useRef(gameState?.value);
-  const resultsButton = useRef<HTMLButtonElement>(null);
+  const [restartPending, setRestartPending] = useState(false);
   const currentId = gameState?.context.players[gameState.context.currentPlayerIndex]?.id;
   const currentValue = gameState?.value;
   const isMyTurn = !hideHand && currentId === user.id && isGameTurnState(currentValue);
@@ -226,20 +224,15 @@ export const GameRoom = ({
     if (gameState?.context.guardMessage) playSound("notice");
   }, [gameState?.context.guardMessage, playSound]);
   useEffect(() => {
-    if (
-      roomCode &&
-      previousValue.current &&
-      previousValue.current !== "GAME_END" &&
-      currentValue === "GAME_END"
-    ) {
-      setShowResult(true);
-    }
+    setConfirmLeave(false);
     if (currentValue !== "GAME_END") {
-      setShowResult(false);
       setRestartError(undefined);
     }
-    if (currentValue) previousValue.current = currentValue;
-  }, [currentValue, roomCode]);
+    if (currentValue === "GAME_END") {
+      setPanel(null);
+      setRemoveBot(undefined);
+    }
+  }, [currentValue]);
   useEffect(() => {
     if (!copied) return;
     const timer = setTimeout(() => setCopied(false), 2000);
@@ -302,6 +295,8 @@ export const GameRoom = ({
     }
   };
   const restart = async () => {
+    if (restartPending) return;
+    setRestartPending(true);
     try {
       await send({ type: "RESET_GAME" });
       setRestartError(undefined);
@@ -310,6 +305,8 @@ export const GameRoom = ({
         error instanceof Error ? error.message : "Could not start a new game. Please try again.",
       );
       playSound("notice");
+    } finally {
+      setRestartPending(false);
     }
   };
   const leave = async () => {
@@ -387,7 +384,7 @@ export const GameRoom = ({
             <RoomChat
               key={roomCode}
               roomId={roomCode}
-              blocked={panel !== null || (finished && showResult)}
+              blocked={panel !== null || finished}
               send={sendChat}
               playSound={playSound}
             />
@@ -456,40 +453,6 @@ export const GameRoom = ({
         <p className="room-departure-notice" role="status">
           {roomNotice}
         </p>
-      )}
-      {roomCode && finished && (
-        <section className="finished-room-strip" aria-label="Finished room">
-          <div className="finished-room-summary">
-            <span className="finished-room-eyebrow">Table complete</span>
-            <strong>{winner ? winner.name : "An opponent"} wins!</strong>
-            {spectator && <small>Waiting for the host to start another game…</small>}
-          </div>
-          <div className="finished-room-actions">
-            <button
-              ref={resultsButton}
-              className="table-small-button"
-              onClick={() => setShowResult(true)}
-            >
-              Results
-            </button>
-            {host && (
-              <button
-                className="table-small-button finished-room-restart"
-                onClick={() => void restart()}
-              >
-                Play again
-              </button>
-            )}
-            <a className="table-small-button" href="/">
-              Return to lobby
-            </a>
-          </div>
-          {restartError && (
-            <p role="alert" className="finished-room-error">
-              {restartError}
-            </p>
-          )}
-        </section>
       )}
       <section className="table-shell" aria-label="Big Two game table">
         <div className="table-felt">
@@ -589,8 +552,8 @@ export const GameRoom = ({
               <>
                 <small className={isMyTurn ? "your-turn-text" : ""}>{status}</small>
                 <span>
-                  {finished && roomCode
-                    ? "Results are available above."
+                  {finished
+                    ? "Table complete."
                     : spectator
                       ? "Watching live · cards in hand are private"
                       : (isMyTurn && guardMessage === "It is not your turn"
@@ -740,7 +703,7 @@ export const GameRoom = ({
         </Suspense>
       ) : null}
       <Dialog
-        open={panel !== null}
+        open={panel !== null && !finished}
         onOpenChange={(open) => {
           if (!open) setPanel(null);
         }}
@@ -904,7 +867,7 @@ export const GameRoom = ({
       </Dialog>
       {roomCode && (
         <Dialog
-          open={Boolean(removeBot)}
+          open={Boolean(removeBot) && !finished}
           onOpenChange={(open) => {
             if (!open && !botPending) setRemoveBot(undefined);
           }}
@@ -949,10 +912,7 @@ export const GameRoom = ({
             showCloseButton={!leavePending}
           >
             <DialogTitle>Leave this table?</DialogTitle>
-            <DialogDescription>
-              You’ll give up your seat and reset the game for everyone. You’ll stay here as a
-              Spectator and can take an open seat again later.
-            </DialogDescription>
+            {finished && <ReturnToLobby />}
             <div className="leave-table-actions">
               <button
                 type="button"
@@ -971,6 +931,10 @@ export const GameRoom = ({
                 {leavePending ? "Leaving…" : "Leave table and reset game"}
               </button>
             </div>
+            <DialogDescription>
+              You’ll give up your seat and reset the game for everyone. You’ll stay here as a
+              Spectator and can take an open seat again later.
+            </DialogDescription>
             {leaveError && (
               <p role="alert" className="leave-table-error">
                 {leaveError}
@@ -979,21 +943,12 @@ export const GameRoom = ({
           </DialogContent>
         </Dialog>
       )}
-      <Dialog
-        open={finished && (!roomCode || showResult)}
-        onOpenChange={(open) => {
-          if (roomCode && !open) setShowResult(false);
-        }}
-      >
+      <Dialog open={finished && !confirmLeave}>
         <DialogContent
-          showCloseButton={Boolean(roomCode)}
+          showCloseButton={false}
           className="table-dialog winner-dialog"
-          onCloseAutoFocus={(event) => {
-            if (roomCode && resultsButton.current) {
-              event.preventDefault();
-              resultsButton.current.focus();
-            }
-          }}
+          onEscapeKeyDown={(event) => event.preventDefault()}
+          onInteractOutside={(event) => event.preventDefault()}
         >
           {(sharedDevice || winner?.id === user.id) && <Confetti />}
           <p className="winner-eyebrow">Table complete</p>
@@ -1014,20 +969,32 @@ export const GameRoom = ({
             <button
               className="table-small-button"
               aria-label="Start a new game"
-              onClick={() => (roomCode ? restart() : act({ type: "RESET_GAME" }))}
+              disabled={restartPending}
+              onClick={() => void restart()}
             >
-              Play again
+              {restartPending ? "Starting…" : "Play again"}
             </button>
-          ) : spectator ? (
+          ) : (
             <p>Waiting for the host to start another game…</p>
-          ) : null}
+          )}
+          {roomCode && !spectator && (
+            <button
+              className="table-small-button table-leave-button"
+              onClick={() => {
+                setLeaveError(undefined);
+                setConfirmLeave(true);
+              }}
+            >
+              Leave table
+            </button>
+          )}
           {roomCode && <ReturnToLobby />}
-          {!roomCode && !host && (
+          {!roomCode && (
             <a className="table-small-button" href="/">
               Return home
             </a>
           )}
-          {roomCode && restartError && <p role="alert">{restartError}</p>}
+          {restartError && <p role="alert">{restartError}</p>}
         </DialogContent>
       </Dialog>
     </main>

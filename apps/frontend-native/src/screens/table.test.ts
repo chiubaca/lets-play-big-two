@@ -48,6 +48,8 @@ vi.mock("lucide-react-native", () => ({
   Eye: "Eye",
 }));
 vi.mock("expo-haptics", () => ({ selectionAsync: vi.fn() }));
+vi.mock("react-native-reanimated", async () => import("../test/reanimated"));
+vi.mock("../ui/use-reduced-motion", () => ({ useReducedMotion: () => true }));
 vi.mock("../ui/primitives", () => ({
   CasinoScreen: "CasinoScreen",
   Label: "Label",
@@ -66,7 +68,7 @@ vi.mock("../ui/cards", () => ({
 vi.mock("../ui/table-surface", () => ({ TableSurface: "TableSurface" }));
 vi.mock("../ui/card-pile", () => ({ CardPile: "CardPile" }));
 vi.mock("../ui/theme", () => ({
-  artwork: {},
+  artwork: { spade: "spade", winner: "winner", loser: "loser" },
   colors: { gold: "gold", cream: "cream", muted: "muted" },
   fonts: { body: "Inter", strong: "InterSemiBold", display: "Fraunces", mono: "IBMPlexMono" },
 }));
@@ -217,6 +219,211 @@ describe("native waiting table", () => {
   });
 });
 
+describe("native table results artwork", () => {
+  it("labels the menu departure as a red reset action with its disclaimer", async () => {
+    await mount();
+    await act(async () =>
+      renderer.root.findByProps({ accessibilityLabel: "Table menu" }).props.onPress(),
+    );
+    await act(async () => renderer.root.findByProps({ title: "Leave table" }).props.onPress());
+    const confirmation = renderer.root.findByType("Sheet" as never);
+    expect(confirmation.findAllByType("Button" as never).map((node) => node.props.title)).toEqual([
+      "Cancel",
+      "Leave table and reset game",
+    ]);
+    const leaveAction = confirmation.findByProps({ title: "Leave table and reset game" });
+    const siblings = leaveAction.parent!.children;
+    const disclaimer = siblings[siblings.indexOf(leaveAction) + 1] as ReactTestInstance;
+    expect(String(disclaimer.props.children)).toContain("resets the game for everyone");
+    expect(
+      confirmation.findByProps({ title: "Leave table and reset game" }).props.destructive,
+    ).toBe(true);
+    expect(
+      confirmation
+        .findAllByType("Label" as never)
+        .some((node) => String(node.props.children).includes("resets the game for everyone")),
+    ).toBe(true);
+    expect(send).not.toHaveBeenCalled();
+  });
+  it.each(["host", "guest", "spectator"] as const)(
+    "keeps results and a lobby exit for %s after reload",
+    async (viewer) => {
+      const onHome = vi.fn();
+      await act(async () => {
+        renderer = create(
+          createElement(TableScreen, {
+            snapshot: createRoomFixture("host-wins", viewer),
+            userId: viewer,
+            mode: "online",
+            send,
+            onHome,
+          }),
+        );
+      });
+      const results = renderer.root.findByType("Sheet" as never);
+      expect(results.props.visible).toBe(true);
+      expect(results.props.dismissible).toBe(false);
+      expect(results.findAllByProps({ title: "Play again" })).toHaveLength(
+        viewer === "host" ? 1 : 0,
+      );
+      expect(results.findAllByProps({ title: "Leave table" })).toHaveLength(
+        viewer === "spectator" ? 0 : 1,
+      );
+      await act(async () => results.props.onClose());
+      expect(results.props.visible).toBe(true);
+      await act(async () => results.findByProps({ title: "Return to lobby" }).props.onPress());
+      expect(onHome).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("keeps restart failures visible and closes results only after the next state arrives", async () => {
+    send.mockRejectedValueOnce(new Error("Could not restart"));
+    const props: ComponentProps<typeof TableScreen> = {
+      snapshot: createRoomFixture("host-wins"),
+      userId: "host",
+      mode: "online",
+      send,
+      onHome: vi.fn(),
+    };
+    await act(async () => {
+      renderer = create(createElement(TableScreen, props));
+    });
+    await act(async () => renderer.root.findByProps({ title: "Play again" }).props.onPress());
+    const results = renderer.root.findByType("Sheet" as never);
+    expect(results.props.visible).toBe(true);
+    expect(results.findByProps({ message: "Could not restart" })).toBeDefined();
+    await act(async () => renderer.root.findByProps({ title: "Play again" }).props.onPress());
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(results.props.visible).toBe(true);
+    await act(async () =>
+      renderer.update(
+        createElement(TableScreen, { ...props, snapshot: createRoomFixture("waiting-full") }),
+      ),
+    );
+    expect(results.props.visible).toBe(false);
+    await act(async () =>
+      renderer.update(
+        createElement(TableScreen, { ...props, snapshot: createRoomFixture("guest-wins") }),
+      ),
+    );
+    expect(results.props.visible).toBe(true);
+  });
+
+  it("keeps the lobby exit while disconnected or busy and reports reconnection inside results", async () => {
+    const props: ComponentProps<typeof TableScreen> = {
+      snapshot: createRoomFixture("host-wins"),
+      userId: "host",
+      mode: "online",
+      connected: false,
+      acting: true,
+      send,
+      onHome: vi.fn(),
+    };
+    await act(async () => {
+      renderer = create(createElement(TableScreen, props));
+    });
+    const results = renderer.root.findByType("Sheet" as never);
+    expect(results.findByProps({ title: "Play again" }).props.disabled).toBe(true);
+    expect(results.findByProps({ title: "Play again" }).props.busy).toBe(true);
+    expect(results.findByProps({ children: "Reconnecting…" })).toBeDefined();
+    expect(results.findByProps({ title: "Return to lobby" }).props.disabled).not.toBe(true);
+  });
+
+  it("confirms leaving from results and preserves retry and cancel after a failure", async () => {
+    send.mockRejectedValueOnce(new Error("Could not leave"));
+    const props: ComponentProps<typeof TableScreen> = {
+      snapshot: createRoomFixture("guest-wins", "guest"),
+      userId: "guest",
+      mode: "online",
+      send,
+      onHome: vi.fn(),
+    };
+    await act(async () => {
+      renderer = create(createElement(TableScreen, props));
+    });
+    const results = renderer.root.findByType("Sheet" as never);
+    await act(async () => results.findByProps({ title: "Leave table" }).props.onPress());
+    expect(results.props.title).toBe("Leave table?");
+    expect(results.findAllByType("Button" as never).map((node) => node.props.title)).toEqual([
+      "Cancel",
+      "Return to lobby",
+      "Leave table and reset game",
+    ]);
+    expect(
+      flatten(results.findByProps({ title: "Return to lobby" }).props.style).marginBottom,
+    ).toBe(8);
+    expect(results.findByProps({ title: "Leave table and reset game" }).props.destructive).toBe(
+      true,
+    );
+    await act(async () => results.findByProps({ title: "Cancel" }).props.onPress());
+    expect(results.findAllByProps({ testID: "winner-celebration" })).toHaveLength(1);
+    expect(send).not.toHaveBeenCalled();
+    await act(async () => results.findByProps({ title: "Leave table" }).props.onPress());
+    await act(async () =>
+      results.findByProps({ title: "Leave table and reset game" }).props.onPress(),
+    );
+    expect(results.props.visible).toBe(true);
+    expect(results.findByProps({ message: "Could not leave" })).toBeDefined();
+    expect(results.findByProps({ title: "Return to lobby" })).toBeDefined();
+    await act(async () =>
+      results.findByProps({ title: "Leave table and reset game" }).props.onPress(),
+    );
+    expect(send).toHaveBeenCalledWith({ type: "LEAVE_GAME", playerId: "guest" });
+    const waiting = createRoomFixture("waiting-open", "spectator");
+    await act(async () =>
+      renderer.update(
+        createElement(TableScreen, {
+          ...props,
+          snapshot: {
+            ...waiting,
+            context: {
+              ...waiting.context,
+              players: waiting.context.players.filter((player) => player.id !== "guest"),
+            },
+          },
+        }),
+      ),
+    );
+    expect(results.props.visible).toBe(false);
+    expect(renderer.root.findByProps({ title: "Join Table" })).toBeDefined();
+  });
+
+  it.each([
+    ["online", "host-wins", true],
+    ["online", "guest-wins", false],
+    ["solo", "host-wins", true],
+    ["solo", "guest-wins", false],
+    ["pass-and-play", "guest-wins", true],
+  ] as const)("shows winner-only branding for %s / %s", async (mode, scenario, winner) => {
+    await act(async () => {
+      renderer = create(
+        createElement(TableScreen, {
+          snapshot: createRoomFixture(scenario),
+          userId: "host",
+          mode,
+          send,
+          onHome: vi.fn(),
+        }),
+      );
+    });
+    expect(renderer.root.findAllByProps({ title: "Results" })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ title: "Play again" })).toHaveLength(1);
+    const results = renderer.root.findByType("Sheet" as never);
+    expect(results.props.visible).toBe(true);
+    expect(results.props.title).toBeUndefined();
+    expect(results.props.centerContent).toBe(true);
+    expect(results.props.dismissible).toBe(false);
+    await act(async () => results.props.onClose());
+    expect(results.props.visible).toBe(true);
+    expect(results.findAllByProps({ testID: "winner-celebration" })).toHaveLength(winner ? 1 : 0);
+    expect(results.findAllByProps({ testID: "loss-result" })).toHaveLength(winner ? 0 : 1);
+    expect(results.findAllByProps({ testID: "winner-sparkle" })).toHaveLength(winner ? 8 : 0);
+    expect(results.findAllByProps({ source: "spade" })).toHaveLength(winner ? 1 : 0);
+    expect(results.findAllByProps({ source: winner ? "winner" : "loser" })).toHaveLength(1);
+    expect(results.findAllByProps({ source: winner ? "loser" : "winner" })).toHaveLength(0);
+  });
+});
+
 describe("native table transition geometry", () => {
   it.each([
     [320, 568],
@@ -236,17 +443,13 @@ describe("native table transition geometry", () => {
           }),
         );
       });
-      const finish = renderer.root.findByProps({ title: "Results" }).parent!;
+      const results = renderer.root.findByType("Sheet" as never);
+      expect(results.props.visible).toBe(true);
+      expect(results.props.dismissible).toBe(false);
+      expect(results.findAllByProps({ title: "Play again" })).toHaveLength(1);
       const board = renderer.root.findByProps({ testID: "table-board" });
-      expect(finish.parent).toBe(board);
-      const pileLayer = renderer.root.findByType("CardPile" as never).parent!;
-      const handLayer = renderer.root.findByType("Hand" as never).parent!;
-      for (const layer of [pileLayer, handLayer, ...board.children]) {
-        if (typeof layer === "string" || layer === finish) continue;
-        expect(Number(flatten(finish.props.style).zIndex ?? 0)).toBeGreaterThan(
-          Number(flatten(layer.props.style).zIndex ?? 0),
-        );
-      }
+      expect(board.findAllByProps({ title: "Results" })).toHaveLength(0);
+      expect(board.findAllByProps({ title: "Play again" })).toHaveLength(0);
       await act(async () => renderer.unmount());
     }
   });
@@ -350,7 +553,7 @@ describe("native table transition geometry", () => {
           (node) => flatten(node.props.style).position === "absolute",
         ),
       ).toBe(true);
-      const notice = renderer.root.findByProps({ message: "Connection interrupted" });
+      const notice = renderer.root.findAllByProps({ message: "Connection interrupted" })[0]!;
       expect(
         ancestors(notice).some((node) => flatten(node.props.style).position === "absolute"),
       ).toBe(true);

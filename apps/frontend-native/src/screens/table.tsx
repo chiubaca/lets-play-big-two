@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AppState,
   ActivityIndicator,
-  Image,
   Modal,
   ScrollView,
   Platform,
@@ -39,7 +38,9 @@ import { CasinoScreen, Label, Button, ErrorMessage, Sheet, styles as ui } from "
 import { Hand, PlayingCard, CardBack, CardBacks, CardSuit } from "../ui/cards";
 import { CardPile } from "../ui/card-pile";
 import { TableSurface } from "../ui/table-surface";
-import { artwork, colors, fonts } from "../ui/theme";
+import { WinnerCelebration } from "../ui/winner-celebration";
+import { LossResult } from "../ui/loss-result";
+import { colors, fonts } from "../ui/theme";
 import { RulesSheet } from "./rules";
 import { tableSeats } from "../table-seats";
 
@@ -236,7 +237,6 @@ export function TableScreen({
   const [message, setMessage] = useState<string | null>(null);
   const [autoPass, setAutoPass] = useState(false);
   const lastAutoTurn = useRef<string | null>(null);
-  const previousFinished = useRef(finished);
   const hand = hidden
     ? []
     : sortSuit
@@ -284,9 +284,12 @@ export function TableScreen({
     setPanel((previous) => (previous === "cards" ? null : previous));
   }, [turnKey, userId, hidden]);
   useEffect(() => {
-    if (finished && (!previousFinished.current || mode !== "online")) setPanel("results");
+    setConfirmLeave(false);
+    setRemoveBot(null);
+    if (finished) {
+      setPanel("results");
+    }
     if (!finished) setPanel((previous) => (previous === "results" ? null : previous));
-    previousFinished.current = finished;
   }, [finished, mode]);
   useEffect(() => {
     let mounted = true;
@@ -376,8 +379,8 @@ export function TableScreen({
     <CasinoScreen>
       <View
         style={table.page}
-        accessibilityElementsHidden={handoff}
-        importantForAccessibility={handoff ? "no-hide-descendants" : "auto"}
+        accessibilityElementsHidden={handoff || finished}
+        importantForAccessibility={handoff || finished ? "no-hide-descendants" : "auto"}
       >
         <View
           style={[
@@ -710,22 +713,6 @@ export function TableScreen({
                   </View>
                 )}
                 <View style={table.bottomSeat}>{seat(seats.bottom, !spectator)}</View>
-                {finished && (
-                  <View style={table.finish}>
-                    <Label heading>{context.winner?.name} wins!</Label>
-                    <Button title="Results" onPress={() => setPanel("results")} />
-                    {(mode !== "online" || isHost) && (
-                      <Button
-                        title="Play again"
-                        gold
-                        onPress={() => {
-                          if (onRedeal) onRedeal();
-                          else void act({ type: "RESET_GAME" });
-                        }}
-                      />
-                    )}
-                  </View>
-                )}
               </>
             )}
           </View>
@@ -853,7 +840,9 @@ export function TableScreen({
             : panel === "cards"
               ? "Choose cards"
               : panel === "results"
-                ? "Game over"
+                ? confirmLeave
+                  ? "Leave table?"
+                  : undefined
                 : confirmLeave
                   ? "Leave table?"
                   : removeBot
@@ -861,8 +850,10 @@ export function TableScreen({
                     : "Table menu"
         }
         visible={!!panel && panel !== "help" && !handoff}
+        centerContent={panel === "results"}
+        dismissible={!finished}
         onClose={() => {
-          if (!busy) {
+          if (!busy && !finished) {
             setPanel(null);
             setConfirmLeave(false);
             setRemoveBot(null);
@@ -873,13 +864,12 @@ export function TableScreen({
           <>
             {confirmLeave ? (
               <>
-                <Label>
-                  This gives up your seat and ends the current game for everyone. You will stay in
-                  the room as a spectator.
-                </Label>
+                <Button title="Cancel" disabled={busy} onPress={() => setConfirmLeave(false)} />
                 <Button
-                  title="Leave table"
+                  title="Leave table and reset game"
+                  destructive
                   busy={busy}
+                  disabled={!connected}
                   onPress={() => {
                     void act({ type: "LEAVE_GAME", playerId: userId }).then((ok) => {
                       if (ok) {
@@ -889,7 +879,10 @@ export function TableScreen({
                     });
                   }}
                 />
-                <Button title="Cancel" disabled={busy} onPress={() => setConfirmLeave(false)} />
+                <Label style={{ color: colors.muted }}>
+                  This gives up your seat and resets the game for everyone. You will stay in the
+                  room as a spectator.
+                </Label>
               </>
             ) : removeBot ? (
               <>
@@ -1005,39 +998,69 @@ export function TableScreen({
             <Button title="Done" gold onPress={() => setPanel(null)} />
           </>
         )}
-        {panel === "results" && (
-          <>
-            <Image
-              source={artwork.spade}
-              style={{ width: "100%", height: 130, marginBottom: -35 }}
-              resizeMode="contain"
-            />
-            <Image
-              source={
-                mode === "pass-and-play" || context.winner?.id === userId
-                  ? artwork.winner
-                  : artwork.loser
-              }
-              style={{ width: "100%", height: 150 }}
-              resizeMode="contain"
-            />
-            <Label heading style={{ textAlign: "center" }}>
-              {context.winner?.name} wins!
-            </Label>
-            {(mode !== "online" || isHost) && (
+        {panel === "results" &&
+          (confirmLeave ? (
+            <>
+              <Button title="Cancel" disabled={busy} onPress={() => setConfirmLeave(false)} />
+              <Button title="Return to lobby" onPress={onHome} style={{ marginBottom: 8 }} />
+              <ErrorMessage message={message ?? error} />
               <Button
-                title="Play again"
-                gold
+                title="Leave table and reset game"
+                destructive
+                busy={busy}
+                disabled={!connected}
                 onPress={() => {
-                  setPanel(null);
-                  if (onRedeal) onRedeal();
-                  else void act({ type: "RESET_GAME" });
+                  void act({ type: "LEAVE_GAME", playerId: userId }).then((ok) => {
+                    if (ok) setConfirmLeave(false);
+                  });
                 }}
               />
-            )}
-            <Button title="Return to lobby" onPress={onHome} />
-          </>
-        )}
+              <Label style={{ color: colors.muted }}>
+                This gives up your seat and resets the game for everyone. You will stay in the room
+                as a spectator.
+              </Label>
+            </>
+          ) : (
+            <>
+              {mode === "pass-and-play" || context.winner?.id === userId ? (
+                <WinnerCelebration />
+              ) : (
+                <LossResult winnerName={context.winner?.name} />
+              )}
+              {(mode !== "online" || isHost) && (
+                <Button
+                  title="Play again"
+                  gold
+                  busy={busy}
+                  disabled={!connected}
+                  onPress={() => {
+                    if (onRedeal) onRedeal();
+                    else void act({ type: "RESET_GAME" });
+                  }}
+                />
+              )}
+              {mode === "online" && !isHost && (
+                <Label>Waiting for the host to start another game…</Label>
+              )}
+              {mode === "online" && !connected && (
+                <Label accessibilityLiveRegion="polite">Reconnecting…</Label>
+              )}
+              {mode === "online" && !spectator && (
+                <Button
+                  title="Leave table"
+                  onPress={() => {
+                    setMessage(null);
+                    setConfirmLeave(true);
+                  }}
+                />
+              )}
+              <Button title="Return to lobby" onPress={onHome} />
+              {mode === "online" && (
+                <Label style={{ color: colors.muted }}>You will not leave this table.</Label>
+              )}
+              <ErrorMessage message={message ?? error} />
+            </>
+          ))}
       </Sheet>
       <Modal visible={handoff} transparent animationType="fade" onRequestClose={() => undefined}>
         <SafeAreaView
@@ -1285,18 +1308,5 @@ const table = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 20,
-  },
-  finish: {
-    position: "absolute",
-    zIndex: 30,
-    alignSelf: "center",
-    top: "28%",
-    gap: 12,
-    alignItems: "center",
-    backgroundColor: "#071b10",
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: colors.gold,
   },
 });

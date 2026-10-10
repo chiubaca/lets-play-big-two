@@ -111,6 +111,7 @@ export function Button({
   title,
   onPress,
   gold = false,
+  destructive = false,
   disabled = false,
   busy = false,
   style,
@@ -123,6 +124,7 @@ export function Button({
   title: string;
   onPress: () => void;
   gold?: boolean;
+  destructive?: boolean;
   disabled?: boolean;
   busy?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -144,6 +146,7 @@ export function Button({
       style={({ pressed }) => [
         styles.button,
         gold && styles.goldButton,
+        destructive && styles.destructiveButton,
         ghost && styles.ghostButton,
         (disabled || busy) && disabledAppearance === "fade" && styles.disabled,
         muted && gold && { borderColor: "#c5b88e", borderBottomColor: "#9e7e49" },
@@ -155,13 +158,15 @@ export function Button({
         <LinearGradient
           pointerEvents="none"
           colors={
-            gold
-              ? muted
-                ? ["#c5b88e", "#baa16a", "#9e7e49"]
-                : ["#ffdc87", "#f5b943", "#d68a1c"]
-              : ["#192014", "#000703"]
+            destructive
+              ? ["#713732", "#572c2a", "#3b191a"]
+              : gold
+                ? muted
+                  ? ["#c5b88e", "#baa16a", "#9e7e49"]
+                  : ["#ffdc87", "#f5b943", "#d68a1c"]
+                : ["#192014", "#000703"]
           }
-          locations={gold ? [0, 0.55, 1] : [0, 0.75]}
+          locations={gold || destructive ? [0, 0.55, 1] : [0, 0.75]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0.2, y: 1 }}
           style={[
@@ -183,6 +188,7 @@ export function Button({
               styles.buttonText,
               gold && { color: "#111510" },
               muted && !gold && { color: "#b5a978" },
+              destructive && { color: "#ffe2d6" },
               labelStyle,
             ]}
           >
@@ -198,7 +204,7 @@ export function Button({
           importantForAccessibility="no-hide-descendants"
           style={[StyleSheet.absoluteFill, styles.buttonSpinner]}
         >
-          <ActivityIndicator color={gold ? colors.panel : colors.gold} />
+          <ActivityIndicator color={destructive ? "#ffe2d6" : gold ? colors.panel : colors.gold} />
         </View>
       )}
     </Pressable>
@@ -229,14 +235,25 @@ export function Sheet({
   visible,
   onClose,
   children,
+  centerContent = false,
+  dismissible = true,
 }: {
-  title: string;
+  title?: string;
   visible: boolean;
   onClose: () => void;
   children: ReactNode;
+  centerContent?: boolean;
+  dismissible?: boolean;
 }) {
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={() => {
+        if (dismissible) onClose();
+      }}
+    >
       <KeyboardAvoidingView
         // Android's modal already resizes for the keyboard; avoid subtracting it twice.
         enabled={Platform.OS === "ios"}
@@ -245,22 +262,38 @@ export function Sheet({
       >
         <SafeAreaView style={styles.sheetSafe}>
           <Panel style={styles.sheet}>
-            <View style={[styles.row, styles.sheetHeader]}>
-              <Label heading style={{ flex: 1, minWidth: 0 }}>
-                {title}
-              </Label>
-              <Button
-                title="×"
-                accessibilityLabel={`Close ${title}`}
-                onPress={onClose}
-                style={styles.close}
-              />
-            </View>
+            {(title || dismissible) && (
+              <View
+                style={[
+                  styles.row,
+                  styles.sheetHeader,
+                  !title && { justifyContent: "flex-end" },
+                  centerContent && styles.centeredSheetHeader,
+                ]}
+              >
+                {title && (
+                  <Label heading style={{ flex: 1, minWidth: 0 }}>
+                    {title}
+                  </Label>
+                )}
+                {dismissible && (
+                  <Button
+                    title="×"
+                    accessibilityLabel={title ? `Close ${title}` : "Close dialog"}
+                    onPress={onClose}
+                    style={styles.close}
+                  />
+                )}
+              </View>
+            )}
             <ScrollView
               style={styles.sheetBody}
               automaticallyAdjustKeyboardInsets={false}
               keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ gap: 14, paddingBottom: 4 }}
+              contentContainerStyle={[
+                { gap: 14, paddingBottom: 4 },
+                centerContent && styles.centeredSheetContent,
+              ]}
             >
               {children}
             </ScrollView>
@@ -301,6 +334,11 @@ export const styles = StyleSheet.create({
     borderBottomColor: colors.goldDark,
   },
   goldButton: { backgroundColor: colors.gold, borderColor: "#ffe6a0" },
+  destructiveButton: {
+    backgroundColor: "#572c2a",
+    borderColor: "#c78175",
+    borderBottomColor: "#3b191a",
+  },
   ghostButton: { borderWidth: 0, borderBottomWidth: 0, backgroundColor: "transparent" },
   buttonText: { color: colors.gold, fontFamily: fonts.display, fontSize: 18 },
   buttonContent: { zIndex: 1, maxWidth: "100%" },
@@ -325,6 +363,13 @@ export const styles = StyleSheet.create({
   sheetSafe: { width: "100%", maxWidth: 520, alignSelf: "center", height: "92%", maxHeight: 720 },
   sheet: { flex: 1, minHeight: 0, padding: 20, borderRadius: 22 },
   sheetHeader: { flexShrink: 0 },
+  centeredSheetHeader: { position: "absolute", top: 20, right: 20, left: 20, zIndex: 1 },
+  centeredSheetContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingTop: 58,
+    paddingBottom: 58,
+  },
   sheetBody: { flex: 1, minHeight: 0 },
   row: { flexDirection: "row", gap: 10, alignItems: "center" },
   close: { width: 46, flexShrink: 0, paddingHorizontal: 0, borderRadius: 23 },
