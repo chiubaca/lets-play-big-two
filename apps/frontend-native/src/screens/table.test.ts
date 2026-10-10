@@ -7,6 +7,8 @@ import { TableScreen } from "./table";
 const viewport = vi.hoisted(() => ({ width: 393, height: 852 }));
 vi.mock("react-native", () => ({
   View: "View",
+  Text: "Text",
+  Pressable: "Pressable",
   ActivityIndicator: "ActivityIndicator",
   ScrollView: "ScrollView",
   Image: "Image",
@@ -14,7 +16,16 @@ vi.mock("react-native", () => ({
   Switch: "Switch",
   Platform: { OS: "android" },
   Share: { share: vi.fn() },
-  StyleSheet: { create: (styles: unknown) => styles },
+  StyleSheet: {
+    create: (styles: unknown) => styles,
+    flatten: (style: unknown): Record<string, unknown> =>
+      Array.isArray(style)
+        ? Object.assign(
+            {},
+            ...style.map((entry) => (entry && typeof entry === "object" ? entry : {})),
+          )
+        : ((style ?? {}) as Record<string, unknown>),
+  },
   useWindowDimensions: () => viewport,
   AppState: { addEventListener: () => ({ remove: vi.fn() }) },
 }));
@@ -101,6 +112,29 @@ const mount = async (viewer = "host", playerCount = 3) => {
     );
   });
 };
+
+describe("native room chat notification", () => {
+  it.each([1, 9, 10, 99])("does not clip the unread badge for %i messages", async (chatUnread) => {
+    await mount();
+    const props = renderer.root.findByType(TableScreen).props as ComponentProps<typeof TableScreen>;
+    const onChat = vi.fn();
+    await act(async () =>
+      renderer.update(createElement(TableScreen, { ...props, chatUnread, onChat })),
+    );
+    const chat = renderer.root.findByProps({ title: "Room chat" });
+    expect(chat.props.accessibilityLabel).toBe(`Room chat, ${chatUnread} unread`);
+    const badge = chat.props.icon.props.children[1];
+    expect(badge.props.children).toBe(chatUnread > 9 ? "9+" : chatUnread);
+    // Exercise the real Button style composition, not the mocked Button's defaults.
+    const { Button } = await vi.importActual<typeof import("../ui/primitives")>("../ui/primitives");
+    const button = Button(chat.props as ComponentProps<typeof Button>);
+    const style = flatten(button.props.style({ pressed: false }));
+    // The badge overhangs the circular face, so rectangular containment is not enough.
+    expect(style.overflow).toBe("visible");
+    await act(async () => chat.props.onPress());
+    expect(onChat).toHaveBeenCalledOnce();
+  });
+});
 
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });

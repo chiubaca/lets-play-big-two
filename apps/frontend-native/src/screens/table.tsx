@@ -407,7 +407,7 @@ export function TableScreen({
               }
               disabled={loading || !onChat}
               onPress={() => onChat?.()}
-              style={table.iconButton}
+              style={[table.iconButton, table.chatButton]}
             />
           )}
           {mode === "online" && (
@@ -1081,6 +1081,8 @@ const table = StyleSheet.create({
     boxShadow: "0 5px 10px rgba(0,0,0,0.55)",
   },
   onlineHeader: { minHeight: 96 },
+  // The unread badge overhangs the circular button face.
+  chatButton: { overflow: "visible" },
   spectators: {
     flexDirection: "row",
     alignItems: "center",
