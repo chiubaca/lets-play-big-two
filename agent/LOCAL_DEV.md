@@ -106,6 +106,12 @@ The local API is public while the tunnel runs and still uses the configured remo
 D1/AI bindings. See [the native README](../apps/frontend-native/README.md#local-authentication-and-online-play)
 for credentials, platform builds, security notes, and troubleshooting.
 
+For isolated native game-room UI iteration (no API/tunnel/sign-in), run
+`vp run storybook:native:web` for the browser or `vp run storybook:native` for a
+development client. Storybook uses port `8082`; see the
+[native Storybook guide](../apps/frontend-native/README.md#game-room-storybook)
+for scenarios, controls, and the one-time native rebuild.
+
 ## Troubleshooting
 
 - If Vite reports that port `5173` is busy and switches to another port, stop

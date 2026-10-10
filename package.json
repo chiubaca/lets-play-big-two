@@ -17,7 +17,9 @@
     "dev:native": "node scripts/native-dev.mjs start",
     "dev:native:android": "node scripts/native-dev.mjs android",
     "native:android": "vp run frontend-native#android",
-    "native:ios": "vp run frontend-native#ios"
+    "native:ios": "vp run frontend-native#ios",
+    "storybook:native": "vp run frontend-native#storybook",
+    "storybook:native:web": "vp run frontend-native#storybook:web"
   },
   "devDependencies": {
     "concurrently": "catalog:",

@@ -54,6 +54,63 @@ WebSocket headers; online flows are supported in the development client, not
 the browser preview. Use the existing web app for browser online play. Expo Go
 is not the recommended target because Google sign-in requires this app's URL scheme.
 
+### Game-room Storybook
+
+Preview the **actual native table and room-chat screens** in fixed states, without
+authentication, a backend, the development tunnel, or notification registration:
+
+```sh
+# From the repository root; fastest UI iteration in a browser:
+vp run storybook:native:web
+# Or use an Android/iOS development client:
+vp run storybook:native
+```
+
+Storybook runs on **port 8082**, independently of the regular app's Metro on 8081.
+The browser preview is at <http://localhost:8082>. For native, open the development
+client from this Metro session (press `a` or `i`). If this client was built before
+Storybook was added, rebuild it once: the controls UI needs Gesture Handler,
+Slider, and DateTimePicker native modules. Stop Metro, run `vp run prebuild` from
+`apps/frontend-native`, then `vp run native:android` or `vp run native:ios` from the
+root, preserving the existing installation/signing identity. No tunnel is needed
+for Storybook itself.
+
+Under **Game room → Table**, choose among 33 stories:
+
+- Loading, sign-in required, connection failure, reconnecting, sending, rejected moves.
+- Host alone, open/full waiting tables, guest waiting, and Spectator joining/watching.
+- First move (3♦), singles, pairs, five-card combinations, a new lead, Bot turns,
+  last cards, pass-only hands, long names, and room-reset notices.
+- Wins/losses, Solo hints, private Pass & Play handoff, and live/empty/loading/
+  reconnecting/failed Room chat.
+
+**Controls** change the scenario, Player/Spectator perspective, mode, connection,
+busy state, notice text, spectator count, unread badge, and chat state. Card
+selection, sorting, menu/help/settings sheets, handoff reveal, and local chat
+drafts work. **Actions** logs game events, retry, sign-in, and navigation; these
+do **not** advance the fixture or contact any server. Choose another story/scenario
+to inspect the next state. Share room still invokes the platform's normal share UI
+with a fictional room code.
+
+Close the Controls panel and collapse the sidebar for a full-size canvas. Resize
+the browser to check small phones, landscape, and tablets; verify final spacing,
+safe areas, gestures, keyboard behavior, and accessibility on Android/iOS too.
+Fixture hands are deliberately private: only the selected Player sees a hand;
+Spectators and opponents expose counts only.
+
+Storybook substitutes in-memory storage, so settings experiments cannot overwrite
+saved games or real app preferences. Restarting Metro/reloading clears those
+preview preferences. The normal app entry point is unchanged: Metro swaps it only
+when `STORYBOOK_ENABLED=true`, and normal development/build/update commands do not
+include Storybook. Never set that flag for release builds or EAS updates.
+
+Stories live in `src/storybook/game-room.stories.tsx`; deterministic, tested room
+fixtures live in `src/storybook/room-fixtures.ts`. Add more `*.stories.tsx` files
+under `src/` as needed. Metro regenerates `.rnstorybook/storybook.requires.ts` when
+starting Storybook; if adding a file while Metro runs, restart it or run
+`vp run frontend-native#storybook:generate` from the root. The React Native
+renderer/UI are pinned to 10.4 to retain this Expo SDK's Safe Area Context version.
+
 ### Expo MCP visual verification
 
 The `expo-mcp` development dependency enables simulator screenshots and app
@@ -317,7 +374,7 @@ still uses remote D1. This setup has not sent test pushes or changed credentials
 
 `apps/android` remains the Bubblewrap TWA project, including its signing setup
 and store assets. Native Android keeps **`com.chiubaca.bigtwocrew`**, with
-version code **7** above the previous native release's **6** and the TWA's **2**, so a signed native bundle can
+version code **8** above the previous native version's **7** and the TWA's **2**, so a signed native bundle can
 update the existing Play listing. The same ID means the two apps **cannot be
 installed side by side**; preserving the TWA means retaining its source and
 release path, not using a second production application ID.
@@ -376,7 +433,7 @@ backend code. Close/reopen the app online to download the update, wait for the
 download, then close/reopen again to apply it. No forced mid-game reload is used.
 Review updates at <https://expo.dev/accounts/chiubaca/projects/lets-play-big-two/updates>.
 
-Runtime compatibility uses **appVersion**, currently `1.1.4`. Keep that version
+Runtime compatibility uses **appVersion**, currently `1.1.5`. Keep that version
 for JS-only fixes to the same native runtime. Whenever native dependencies,
 plugins, Firebase/native configuration or the Expo SDK change, increment
 `version` in `app.config.ts` (and keep `package.json` in sync), then rebuild and
@@ -384,7 +441,12 @@ install before publishing an update for the new runtime. OTA cannot add native
 modules or upgrade an older runtime. Local builds without an explicit
 `EXPO_UPDATE_CHANNEL` are not subscribed to preview by default.
 
-Version `1.1.3` adds `react-native-reanimated` and `react-native-worklets`.
+Version `1.1.5` adds Gesture Handler, Slider, and DateTimePicker for native Storybook.
+Rebuild the development client before opening Storybook on a device. Normal app
+bundles still exclude the Storybook UI and fixtures. This native-runtime change
+must not be sent to a `1.1.4` binary as an OTA-only update.
+
+Version `1.1.3` added `react-native-reanimated` and `react-native-worklets`.
 Rebuild/install the native app before using or publishing this runtime; it
 cannot be delivered to a `1.1.2` binary as an OTA-only update. Expo's Babel
 preset configures the Worklets plugin automatically. Restart Metro after

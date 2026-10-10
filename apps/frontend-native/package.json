@@ -1,6 +1,6 @@
 {
   "name": "frontend-native",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "private": true,
   "main": "index.ts",
   "scripts": {
@@ -8,6 +8,9 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "storybook": "STORYBOOK_ENABLED=true STORYBOOK_SERVER=false expo start --dev-client --port 8082",
+    "storybook:web": "STORYBOOK_ENABLED=true STORYBOOK_SERVER=false expo start --web --port 8082",
+    "storybook:generate": "sb-rn-get-stories --config-path .rnstorybook",
     "build": "expo export --platform all",
     "check": "tsc --noEmit",
     "test": "vp test --run",
@@ -21,6 +24,8 @@
     "@big-two/game-state-machine": "workspace:*",
     "@expo/dom-webview": "catalog:",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/datetimepicker": "catalog:",
+    "@react-native-community/slider": "catalog:",
     "@tanstack/react-query": "catalog:",
     "better-auth": "catalog:",
     "expo": "catalog:",
@@ -43,6 +48,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
+    "react-native-gesture-handler": "catalog:",
     "react-native-reanimated": "catalog:",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-svg": "catalog:",
@@ -51,10 +57,17 @@
     "xstate": "catalog:"
   },
   "devDependencies": {
+    "@gorhom/bottom-sheet": "catalog:",
+    "@storybook/addon-ondevice-actions": "catalog:",
+    "@storybook/addon-ondevice-controls": "catalog:",
+    "@storybook/react": "catalog:",
+    "@storybook/react-native": "catalog:",
+    "@storybook/react-native-ui": "catalog:",
     "@types/react": "^19.2.0",
     "@types/react-test-renderer": "catalog:",
     "expo-mcp": "catalog:",
     "react-test-renderer": "catalog:",
+    "storybook": "catalog:",
     "typescript": "~6.0.3",
     "vite-plus": "0.1.14"
   }

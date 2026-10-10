@@ -6,7 +6,7 @@ const config: ExpoConfig = {
   name: "Big Two Crew",
   owner: "chiubaca",
   slug: "lets-play-big-two",
-  version: "1.1.4",
+  version: "1.1.5",
   // Bump the app version and rebuild whenever native dependencies/configuration change.
   runtimeVersion: { policy: "appVersion" },
   updates: {
@@ -32,9 +32,9 @@ const config: ExpoConfig = {
     ...(process.env.GOOGLE_SERVICES_JSON
       ? { googleServicesFile: process.env.GOOGLE_SERVICES_JSON }
       : {}),
-    // Keep the existing Play application ID and increase the latest uploaded versionCode (6).
+    // Keep the existing Play application ID and increase the previous versionCode (7).
     package: "com.chiubaca.bigtwocrew",
-    versionCode: 7,
+    versionCode: 8,
     intentFilters: [
       {
         action: "VIEW",
