@@ -46,7 +46,7 @@ const state = {
             text: args[5] as string,
           });
         }
-        if (sql.includes("SELECT order_id, client_send_id, author")) {
+        if (sql.includes("SELECT order_id, user_id, client_send_id, author")) {
           const after = sql.includes("order_id >");
           const rows = stored.filter((row) =>
             after ? row.order_id > (args[0] as number) : row.order_id < (args[0] as number),
@@ -137,6 +137,32 @@ it("fans out ordered accepted messages to every eligible tab with matching ackno
     one.message,
     two.message,
   ]);
+});
+
+it("marks ownership for each viewer in acknowledgements, history and socket delivery", async () => {
+  const ownTab = connect();
+  const otherTab = connect("grace");
+  const chat = new RoomChatObject(state, env);
+  const accepted = await chat.send(visitor, input);
+  expect(accepted.message).toMatchObject({ isOwn: true });
+  expect(JSON.parse(ownTab.send.mock.calls[0][0])).toMatchObject({ isOwn: true });
+  expect(JSON.parse(otherTab.send.mock.calls[0][0])).toMatchObject({ isOwn: false });
+  const otherVisitor = { ...visitor, userId: "grace" };
+  // Both accounts have the same display name; ownership must still follow identity.
+  expect((await chat.history(otherVisitor))?.messages[0]).toMatchObject({
+    author: "Ada account",
+    isOwn: false,
+  });
+  await chat.send(otherVisitor, { ...input, clientSendId: "send-2" });
+  expect((await chat.history(visitor))?.messages.map((message) => message.isOwn)).toEqual([
+    false,
+    true,
+  ]);
+  expect((await chat.history(otherVisitor))?.messages.map((message) => message.isOwn)).toEqual([
+    true,
+    false,
+  ]);
+  expect((await chat.send(visitor, input)).message).toMatchObject({ isOwn: true });
 });
 
 it("snapshots the current role and lets Spectators send without taking a seat", async () => {
@@ -284,9 +310,13 @@ it("redacts stored and connected messages without removing their positions", asy
   socket.send.mockClear();
   await chat.redactAuthor(visitor.userId);
   expect((await chat.history(visitor))?.messages).toMatchObject([
-    { order: 1, author: "Deleted participant", text: "Message removed", role: null },
+    { order: 1, author: "Deleted participant", text: "Message removed", role: null, isOwn: false },
   ]);
-  expect(JSON.parse(socket.send.mock.calls[0][0])).toMatchObject({ type: "redaction", order: 1 });
+  expect(JSON.parse(socket.send.mock.calls[0][0])).toMatchObject({
+    type: "redaction",
+    order: 1,
+    isOwn: false,
+  });
   expect(stored[0].user_id).toBeNull();
 });
 

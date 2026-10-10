@@ -11,6 +11,7 @@ export function isChatFrame(value: unknown): value is ChatFrame {
     frame.order > 0 &&
     typeof frame.clientSendId === "string" &&
     typeof frame.author === "string" &&
+    (frame.isOwn === undefined || typeof frame.isOwn === "boolean") &&
     (frame.role === null || frame.role === "Player" || frame.role === "Spectator") &&
     typeof frame.text === "string"
   );
@@ -27,7 +28,13 @@ export function mergeChat(
   return [...merged.values()]
     .map((message) =>
       redacted.has(message.id)
-        ? { ...message, author: "Deleted participant", role: null, text: "Message removed" }
+        ? {
+            ...message,
+            author: "Deleted participant",
+            role: null,
+            text: "Message removed",
+            isOwn: false,
+          }
         : message,
     )
     .sort((a, b) => a.order - b.order);

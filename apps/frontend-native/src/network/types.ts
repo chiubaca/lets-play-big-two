@@ -18,6 +18,8 @@ export interface ChatMessage {
   order: number;
   clientSendId: string;
   author: string;
+  // Older deployed backends omit this viewer-specific flag.
+  isOwn?: boolean;
   role: "Player" | "Spectator" | null;
   text: string;
 }

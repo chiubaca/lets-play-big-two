@@ -7,6 +7,7 @@ export type ChatMessage = {
   order: number;
   clientSendId: string;
   author: string;
+  isOwn: boolean;
   role: "Player" | "Spectator" | null;
   text: string;
 };
@@ -65,12 +66,13 @@ export class RoomChatObject extends DurableObject<Env> {
     const rows = this.ctx.storage.sql
       .exec<{
         order_id: number;
+        user_id: string | null;
         client_send_id: string;
         author: string;
         role: "Player" | "Spectator" | null;
         text: string;
       }>(
-        `SELECT order_id, client_send_id, author, role, text FROM chat_messages
+        `SELECT order_id, user_id, client_send_id, author, role, text FROM chat_messages
          WHERE order_id ${after !== undefined ? ">" : "<"} ?
          ORDER BY order_id ${after !== undefined ? "ASC" : "DESC"} LIMIT 51`,
         after ?? before ?? Number.MAX_SAFE_INTEGER,
@@ -83,6 +85,7 @@ export class RoomChatObject extends DurableObject<Env> {
         order: row.order_id,
         clientSendId: row.client_send_id,
         author: row.author,
+        isOwn: row.user_id === visitor.userId,
         role: row.role,
         text: row.text,
       })),
@@ -125,6 +128,7 @@ export class RoomChatObject extends DurableObject<Env> {
               id: `${visitor.roomId}:${row.order_id}`,
               order: row.order_id,
               author: "Deleted participant",
+              isOwn: false,
               role: null,
               text: "Message removed",
               clientSendId: row.client_send_id,
@@ -211,6 +215,7 @@ export class RoomChatObject extends DurableObject<Env> {
           order: existing.order_id,
           clientSendId: input.clientSendId,
           author: existing.author,
+          isOwn: true,
           role: existing.role,
           text: existing.text,
         },
@@ -228,6 +233,7 @@ export class RoomChatObject extends DurableObject<Env> {
       order: row.value,
       clientSendId: input.clientSendId,
       author: sender.name,
+      isOwn: true,
       role: sender.seatName ? "Player" : "Spectator",
       text: input.text,
     };
@@ -241,11 +247,11 @@ export class RoomChatObject extends DurableObject<Env> {
       message.text,
     );
     await this.ctx.storage.sync();
-    const payload = JSON.stringify(message);
     for (const socket of this.ctx.getWebSockets()) {
       try {
         const viewer = socket.deserializeAttachment() as Visitor | null;
-        if (viewer && (await this.eligible(viewer))) socket.send(payload);
+        if (viewer && (await this.eligible(viewer)))
+          socket.send(JSON.stringify({ ...message, isOwn: viewer.userId === visitor.userId }));
         else socket.close(1008, "Room chat access ended");
       } catch {
         // A failed delivery must not turn an already accepted message into a failed HTTP send.

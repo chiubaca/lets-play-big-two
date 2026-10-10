@@ -134,16 +134,91 @@ it.each([1, 2])(
   },
 );
 
-it.each(["android", "ios"])("uses only one keyboard resizing mechanism on %s", async (OS) => {
+it.each(["android", "ios"])("avoids keyboard overlap in the chat modal on %s", async (OS) => {
   device.OS = OS;
   await render();
   const keyboard = renderer.root.findAll(
     (node) => String(node.type) === "KeyboardAvoidingView",
   )[0]!;
-  expect(keyboard.props.enabled).toBe(OS === "ios");
-  expect(keyboard.props.behavior).toBe(OS === "ios" ? "padding" : undefined);
+  expect(keyboard.props.enabled).not.toBe(false);
+  expect(keyboard.props.behavior).toBe("padding");
+  // Full-window avoidance stays in screen coordinates; safe-area padding belongs inside it.
+  expect(keyboard.parent!.props.statusBarTranslucent).toBe(true);
+  expect(keyboard.parent!.props.navigationBarTranslucent).toBe(true);
   const history = renderer.root.findAll((node) => String(node.type) === "ScrollView")[0]!;
   expect(history.props.automaticallyAdjustKeyboardInsets).toBe(false);
+});
+
+it.each(["android", "ios"])(
+  "compacts the keyboard-constrained viewport without losing the draft or touch targets on %s",
+  async (OS) => {
+    device.OS = OS;
+    await render();
+    const field = host("TextInput", "Chat message");
+    await act(async () => field.props.onChangeText("Hello\ncrew"));
+    const viewport = renderer.root.findByProps({ testID: "chat-viewport" });
+    await act(async () => viewport.props.onLayout({ nativeEvent: { layout: { height: 320 } } }));
+    expect(field.props.value).toBe("Hello\ncrew");
+    expect(field.props.multiline).toBe(true);
+    expect(field.props.disableFullscreenUI).toBe(true);
+    expect(flatten(field.props.style)).toMatchObject({ maxHeight: 72, paddingVertical: 8 });
+    expect(renderer.root.findAllByProps({ testID: "chat-status" })).toHaveLength(0);
+    const composer = field.parent!.parent!.parent!;
+    expect(flatten(composer.props.style)).toMatchObject({ padding: 8, flexShrink: 0 });
+    for (const label of ["Send", "Close room chat"]) {
+      const button = host("Pressable", label);
+      expect(flatten(button.props.style({ pressed: false })).minHeight).toBeGreaterThanOrEqual(44);
+    }
+    const history = renderer.root.findAll((node) => String(node.type) === "ScrollView")[0]!;
+    expect(flatten(history.props.style)).toMatchObject({ flex: 1, minHeight: 0 });
+    expect(flatten(history.props.contentContainerStyle)).toMatchObject({ padding: 8, gap: 8 });
+    await act(async () => viewport.props.onLayout({ nativeEvent: { layout: { height: 568 } } }));
+    expect(field.props.value).toBe("Hello\ncrew");
+    expect(flatten(field.props.style).maxHeight).toBe(110);
+    expect(renderer.root.findAllByProps({ testID: "chat-status" })).not.toHaveLength(0);
+  },
+);
+
+it("bounds the multiline composer and preserves touch targets in a very short viewport", async () => {
+  await render();
+  const viewport = renderer.root.findByProps({ testID: "chat-viewport" });
+  await act(async () => viewport.props.onLayout({ nativeEvent: { layout: { height: 120 } } }));
+  expect(flatten(host("TextInput", "Chat message").props.style)).toMatchObject({
+    minHeight: 44,
+    maxHeight: 48,
+  });
+  expect(flatten(renderer.root.findByProps({ testID: "chat-composer" }).props.style).padding).toBe(
+    4,
+  );
+  for (const label of ["Send", "Close room chat"]) {
+    expect(flatten(host("Pressable", label).props.style({ pressed: false })).minHeight).toBe(44);
+  }
+  chat = { ...chat, error: new Error("Connection lost. Try again.") };
+  await render();
+  const composer = renderer.root.findByProps({ testID: "chat-composer" });
+  expect(composer.findAllByProps({ testID: "chat-status" })).toHaveLength(0);
+  const history = renderer.root.findAll((node) => String(node.type) === "ScrollView")[0]!;
+  expect(history.findAllByProps({ testID: "chat-status" })).not.toHaveLength(0);
+  expect(host("Pressable", "Retry connection").props.disabled).toBe(false);
+});
+
+it("keeps errors readable and retry reachable in a short, narrow viewport with large text", async () => {
+  Object.assign(device, { width: 280, height: 320, fontScale: 2 });
+  chat = { ...chat, error: new Error("Connection lost. Try again. ".repeat(30)) };
+  await render();
+  expect(flatten(host("TextInput", "Chat message").props.style).maxHeight).toBe(72);
+  const alert = renderer.root.findByProps({ accessibilityRole: "alert" });
+  expect(alert.props.children).toBe(chat.error!.message);
+  expect(alert.props.numberOfLines).toBeUndefined();
+  const slot = renderer.root.findAll(
+    (node) => String(node.type) === "View" && node.props.testID === "chat-status",
+  )[0]!;
+  expect(flatten(slot.props.style)).toMatchObject({ height: 80, flexShrink: 0 });
+  expect(
+    slot.findAll((node) => String(node.type) === "ScrollView")[0]!.props.nestedScrollEnabled,
+  ).toBe(true);
+  await act(async () => host("Pressable", "Retry connection").props.onPress());
+  expect(chat.refresh).toHaveBeenCalledOnce();
 });
 
 it("keeps the draft, send control and history allocated while a failed message is retried", async () => {
@@ -205,4 +280,47 @@ it("reserves the longer connection label so reconnecting cannot rewrap the heade
   expect(visible.props.children).toEqual(["ABCDE", " · ", "RECONNECTING"]);
   expect(reservation.props.children).toEqual(["ABCDE", " · RECONNECTING"]);
   expect(flatten(region.props.style)).toEqual(frame);
+});
+
+it("aligns incoming bubbles left and own bubbles right without matching author names", async () => {
+  const incoming = { ...chat.messages[0]!, isOwn: false };
+  const own = { ...incoming, id: "message-2", order: 2, isOwn: true };
+  const removed = { ...own, id: "message-3", order: 3, role: null, author: "", text: "" };
+  chat = { ...chat, messages: [incoming, own, removed] };
+  await render();
+  const bubble = (id: string) => renderer.root.findByProps({ testID: `chat-message-${id}` });
+  expect(flatten(bubble(incoming.id).props.style)).toMatchObject({
+    alignSelf: "flex-start",
+    maxWidth: "86%",
+  });
+  expect(flatten(bubble(own.id).props.style)).toMatchObject({
+    alignSelf: "flex-end",
+    maxWidth: "86%",
+  });
+  expect(flatten(bubble(removed.id).props.style).alignSelf).toBe("flex-start");
+  expect(flatten(bubble(own.id).props.style).backgroundColor).not.toBe(
+    flatten(bubble(incoming.id).props.style).backgroundColor,
+  );
+  const body = bubble(own.id).findAll(
+    (node) => String(node.type) === "Text" && node.props.selectable,
+  )[0]!;
+  expect(flatten(body.props.style).textAlign).toBe("left");
+});
+
+it("right-aligns a confirmed send from an older backend and clears ownership on redaction", async () => {
+  const accepted = { ...chat.messages[0]!, id: "sent-message", order: 2 };
+  chat.send = vi.fn().mockResolvedValue(accepted);
+  await render();
+  await act(async () => host("TextInput", "Chat message").props.onChangeText("Hello crew"));
+  await act(async () => host("Pressable", "Send").props.onPress());
+  chat = { ...chat, messages: [accepted] };
+  await render();
+  const bubble = renderer.root.findByProps({ testID: "chat-message-sent-message" });
+  expect(flatten(bubble.props.style).alignSelf).toBe("flex-end");
+  chat = {
+    ...chat,
+    messages: [{ ...accepted, role: null, text: "Message removed", isOwn: false }],
+  };
+  await render();
+  expect(flatten(bubble.props.style).alignSelf).toBe("flex-start");
 });

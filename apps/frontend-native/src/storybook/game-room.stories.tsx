@@ -53,6 +53,7 @@ function GameRoomPreview({ scenario, viewer, status, showChat, chatState, ...arg
             order: 1,
             clientSendId: "demo-1",
             author: "Mei",
+            isOwn: viewer === "guest",
             role: "Player",
             text: "One more game? 🐼",
           },
@@ -62,6 +63,7 @@ function GameRoomPreview({ scenario, viewer, status, showChat, chatState, ...arg
             order: 2,
             clientSendId: "demo-2",
             author: "River",
+            isOwn: viewer === "spectator",
             role: "Spectator",
             text: "That last straight was incredible. I'm watching this round!",
           },
@@ -71,8 +73,19 @@ function GameRoomPreview({ scenario, viewer, status, showChat, chatState, ...arg
             order: 3,
             clientSendId: "demo-3",
             author: "",
+            isOwn: false,
             role: null,
             text: "",
+          },
+          {
+            type: "message",
+            id: "chat-4",
+            order: 4,
+            clientSendId: "demo-4",
+            author: "Alex",
+            isOwn: viewer === "host",
+            role: "Player",
+            text: "I'm in! Let’s deal 🦊",
           },
         ];
   const snapshot =
@@ -130,6 +143,7 @@ function GameRoomPreview({ scenario, viewer, status, showChat, chatState, ...arg
               clientSendId: `draft-${order}`,
               order,
               author: "You",
+              isOwn: true,
               role: viewer === "spectator" ? "Spectator" : "Player",
               text,
             };

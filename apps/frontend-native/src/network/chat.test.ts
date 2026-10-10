@@ -8,6 +8,7 @@ const message = (order: number): ChatMessage => ({
   order,
   clientSendId: `uuid-${order}`,
   author: "Player",
+  isOwn: true,
   role: "Player",
   text: "hello",
 });
@@ -37,7 +38,13 @@ describe("chat reconciliation", () => {
       redacted,
     );
     expect(mergeChat(next, [message(1)], redacted)).toEqual([
-      { ...message(1), author: "Deleted participant", role: null, text: "Message removed" },
+      {
+        ...message(1),
+        author: "Deleted participant",
+        role: null,
+        text: "Message removed",
+        isOwn: false,
+      },
     ]);
   });
 
@@ -46,6 +53,8 @@ describe("chat reconciliation", () => {
     expect(isChatFrame({ ...message(1), type: "redaction" })).toBe(true);
     expect(isChatFrame({ ...message(1), order: 1.5 })).toBe(false);
     expect(isChatFrame({ ...message(1), role: "admin" })).toBe(false);
+    expect(isChatFrame({ ...message(1), isOwn: "true" })).toBe(false);
+    expect(isChatFrame({ ...message(1), isOwn: undefined })).toBe(true);
     expect(isChatFrame(null)).toBe(false);
   });
 });
