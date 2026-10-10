@@ -6,7 +6,7 @@ const config: ExpoConfig = {
   name: "Big Two Crew",
   owner: "chiubaca",
   slug: "lets-play-big-two",
-  version: "1.1.3",
+  version: "1.1.4",
   // Bump the app version and rebuild whenever native dependencies/configuration change.
   runtimeVersion: { policy: "appVersion" },
   updates: {
@@ -32,9 +32,9 @@ const config: ExpoConfig = {
     ...(process.env.GOOGLE_SERVICES_JSON
       ? { googleServicesFile: process.env.GOOGLE_SERVICES_JSON }
       : {}),
-    // Keep the existing Play application ID and increase the latest uploaded versionCode (5).
+    // Keep the existing Play application ID and increase the latest uploaded versionCode (6).
     package: "com.chiubaca.bigtwocrew",
-    versionCode: 6,
+    versionCode: 7,
     intentFilters: [
       {
         action: "VIEW",
@@ -58,6 +58,8 @@ const config: ExpoConfig = {
       {
         image: "./assets/title-logo.png",
         imageWidth: 240,
+        // Android masks its 288dp splash canvas to a 192dp-diameter circle.
+        android: { imageWidth: 180 },
         backgroundColor: "#030e09",
       },
     ],

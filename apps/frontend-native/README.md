@@ -317,7 +317,7 @@ still uses remote D1. This setup has not sent test pushes or changed credentials
 
 `apps/android` remains the Bubblewrap TWA project, including its signing setup
 and store assets. Native Android keeps **`com.chiubaca.bigtwocrew`**, with
-version code **6** above the previous native release's **5** and the TWA's **2**, so a signed native bundle can
+version code **7** above the previous native release's **6** and the TWA's **2**, so a signed native bundle can
 update the existing Play listing. The same ID means the two apps **cannot be
 installed side by side**; preserving the TWA means retaining its source and
 release path, not using a second production application ID.
@@ -376,7 +376,7 @@ backend code. Close/reopen the app online to download the update, wait for the
 download, then close/reopen again to apply it. No forced mid-game reload is used.
 Review updates at <https://expo.dev/accounts/chiubaca/projects/lets-play-big-two/updates>.
 
-Runtime compatibility uses **appVersion**, currently `1.1.3`. Keep that version
+Runtime compatibility uses **appVersion**, currently `1.1.4`. Keep that version
 for JS-only fixes to the same native runtime. Whenever native dependencies,
 plugins, Firebase/native configuration or the Expo SDK change, increment
 `version` in `app.config.ts` (and keep `package.json` in sync), then rebuild and
@@ -390,6 +390,10 @@ cannot be delivered to a `1.1.2` binary as an OTA-only update. Expo's Babel
 preset configures the Worklets plugin automatically. Restart Metro after
 installing these dependencies (use `vp exec expo start --dev-client --clear`
 from this app if a cached bundle reports missing Worklets `__initData`).
+
+Version `1.1.4` reduces the Android boot logo to fit the system splash screen's
+circular mask. This native launch-screen change requires a new build/install;
+an OTA update cannot change the splash screen of an existing binary.
 
 After upgrading SDK/native dependencies, stop Metro, run `vp run prebuild` from
 this app, then rebuild with `vp run native:android` or `vp run native:ios` from
