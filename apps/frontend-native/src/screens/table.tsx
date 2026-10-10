@@ -1288,6 +1288,7 @@ const table = StyleSheet.create({
   },
   finish: {
     position: "absolute",
+    zIndex: 30,
     alignSelf: "center",
     top: "28%",
     gap: 12,

@@ -3,6 +3,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from "rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { bigTwoGameMachine } from "@big-two/game-state-machine";
 import { TableScreen } from "./table";
+import { createRoomFixture } from "../storybook/room-fixtures";
 
 const viewport = vi.hoisted(() => ({ width: 393, height: 852 }));
 vi.mock("react-native", () => ({
@@ -217,6 +218,39 @@ describe("native waiting table", () => {
 });
 
 describe("native table transition geometry", () => {
+  it.each([
+    [320, 568],
+    [393, 852],
+    [852, 393],
+  ])("keeps win and loss results above the cards at %i × %i", async (width, height) => {
+    Object.assign(viewport, { width, height });
+    for (const scenario of ["host-wins", "guest-wins"] as const) {
+      await act(async () => {
+        renderer = create(
+          createElement(TableScreen, {
+            snapshot: createRoomFixture(scenario),
+            userId: "host",
+            mode: "online",
+            send,
+            onHome: vi.fn(),
+          }),
+        );
+      });
+      const finish = renderer.root.findByProps({ title: "Results" }).parent!;
+      const board = renderer.root.findByProps({ testID: "table-board" });
+      expect(finish.parent).toBe(board);
+      const pileLayer = renderer.root.findByType("CardPile" as never).parent!;
+      const handLayer = renderer.root.findByType("Hand" as never).parent!;
+      for (const layer of [pileLayer, handLayer, ...board.children]) {
+        if (typeof layer === "string" || layer === finish) continue;
+        expect(Number(flatten(finish.props.style).zIndex ?? 0)).toBeGreaterThan(
+          Number(flatten(layer.props.style).zIndex ?? 0),
+        );
+      }
+      await act(async () => renderer.unmount());
+    }
+  });
+
   it("bounds short-landscape scrolling controls without stealing board width", async () => {
     Object.assign(viewport, { width: 568, height: 320 });
     await mount();
