@@ -2,8 +2,15 @@ import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 import { ProfileScreen } from "./profile";
+import { NativeQueryProvider, createNativeQueryClient } from "../network/query-client";
+import { notifyManager, onlineManager, type QueryClient } from "@tanstack/react-query";
 
 const network = vi.hoisted(() => ({ updateUser: vi.fn(), deleteUser: vi.fn() }));
+const auth = vi.hoisted(() => ({
+  isPending: false,
+  data: { user: { id: "alex", name: "Alex", email: "alex@example.com" } },
+}));
+vi.mock("../network/auth-client", () => ({ useSession: () => auth }));
 const device = vi.hoisted(() => ({ width: 320, height: 568, fontScale: 1 }));
 const flatten = (style: unknown): Record<string, unknown> =>
   Array.isArray(style)
@@ -28,7 +35,10 @@ vi.mock("react-native", () => ({
   useWindowDimensions: () => device,
 }));
 vi.mock("../network", () => ({ authClient: network }));
-vi.mock("../network/config", () => ({ NATIVE_ORIGIN: "bigtwo://" }));
+vi.mock("../network/config", () => ({
+  NATIVE_ORIGIN: "bigtwo://",
+  BACKEND_URL: "https://api.example.com",
+}));
 vi.mock("expo-linear-gradient", () => ({ LinearGradient: "LinearGradient" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView" }));
 vi.mock("lucide-react-native", () => ({
@@ -42,6 +52,13 @@ vi.mock("react-native-svg", () => ({ default: "Svg", Path: "Path" }));
 vi.mock("../ui/theme", () => ({ colors: {}, fonts: {}, artwork: {} }));
 
 let renderer: ReactTestRenderer;
+let client: QueryClient;
+function profile(onHome = vi.fn()) {
+  return createElement(NativeQueryProvider, {
+    client,
+    children: createElement(ProfileScreen, { session: auth.data, onHome }),
+  });
+}
 const host = (type: string, label: string) =>
   renderer.root.findAll(
     (node) => node.type === type && node.props.accessibilityLabel === label,
@@ -53,9 +70,15 @@ const status = () =>
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   vi.clearAllMocks();
+  auth.isPending = false;
+  client = createNativeQueryClient();
+  notifyManager.setScheduler(queueMicrotask);
 });
 afterEach(async () => {
   if (renderer) await act(async () => renderer.unmount());
+  client.clear();
+  onlineManager.setOnline(true);
+  notifyManager.setScheduler((callback) => setTimeout(callback, 0));
 });
 
 it.each([
@@ -71,12 +94,7 @@ it.each([
     device.fontScale = fontScale;
     const onHome = vi.fn();
     await act(async () => {
-      renderer = create(
-        createElement(ProfileScreen, {
-          session: { user: { id: "alex", name: "Alex", email: "alex@example.com" } },
-          onHome,
-        }),
-      );
+      renderer = create(profile(onHome));
     });
     const open =
       editor === "name"
@@ -140,12 +158,7 @@ it.each([
 it("does not move account controls when a profile save succeeds or a new editor clears the notice", async () => {
   device.fontScale = 2;
   await act(async () => {
-    renderer = create(
-      createElement(ProfileScreen, {
-        session: { user: { id: "alex", name: "Alex", email: "alex@example.com" } },
-        onHome: vi.fn(),
-      }),
-    );
+    renderer = create(profile());
   });
   const notice = renderer.root.findAll(
     (node) => String(node.type) === "View" && node.props.testID === "profile-notice",
@@ -167,4 +180,65 @@ it("does not move account controls when a profile save succeeds or a new editor 
   await act(async () => host("Pressable", "Edit profile emoji").props.onPress());
   expect(notice.findAll((node) => String(node.type) === "Text")).toHaveLength(0);
   expect(content.children).toEqual(order);
+});
+
+it("keeps profile edits unsaved and does not replay them when submitted offline", async () => {
+  await act(async () => {
+    renderer = create(profile());
+  });
+  await act(async () => host("Pressable", "Edit profile emoji").props.onPress());
+  await act(async () => host("Pressable", "Choose 🏆").props.onPress());
+  onlineManager.setOnline(false);
+  await act(async () => host("Pressable", "Save changes").props.onPress());
+  expect(renderer.root.findByProps({ accessibilityRole: "alert" }).props.children).toContain(
+    "offline",
+  );
+  await act(async () => {
+    onlineManager.setOnline(true);
+  });
+  expect(network.updateUser).not.toHaveBeenCalled();
+  expect(host("Pressable", "Save changes").props.disabled).toBe(false);
+});
+
+it("blocks account deletion during session confirmation even with DELETE entered", async () => {
+  const onHome = vi.fn();
+  await act(async () => {
+    renderer = create(profile(onHome));
+  });
+  await act(async () => host("Pressable", "Account & data deletion").props.onPress());
+  await act(async () =>
+    host("TextInput", "Type DELETE to confirm account deletion").props.onChangeText("DELETE"),
+  );
+  auth.isPending = true;
+  await act(async () => {
+    renderer.update(profile(onHome));
+  });
+  await act(async () => host("Pressable", "Delete account").props.onPress());
+  expect(network.deleteUser).not.toHaveBeenCalled();
+  expect(onHome).not.toHaveBeenCalled();
+  expect(renderer.root.findByProps({ accessibilityRole: "alert" }).props.children).toContain(
+    "confirmed",
+  );
+});
+
+it("does not navigate a later screen when account deletion completes after leaving the profile", async () => {
+  const onHome = vi.fn();
+  let confirm!: (result: unknown) => void;
+  network.deleteUser.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        confirm = resolve;
+      }),
+  );
+  await act(async () => {
+    renderer = create(profile(onHome));
+  });
+  await act(async () => host("Pressable", "Account & data deletion").props.onPress());
+  await act(async () =>
+    host("TextInput", "Type DELETE to confirm account deletion").props.onChangeText("DELETE"),
+  );
+  await act(async () => host("Pressable", "Delete account").props.onPress());
+  await act(async () => renderer.unmount());
+  await act(async () => confirm({}));
+  expect(onHome).not.toHaveBeenCalled();
 });

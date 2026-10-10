@@ -3,6 +3,15 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 import { TurnNotificationSettings } from "./turn-settings";
 import type { TurnDevice } from "./turn-device";
+import { NativeQueryProvider, createNativeQueryClient } from "../network/query-client";
+import { notifyManager, onlineManager, type QueryClient } from "@tanstack/react-query";
+
+vi.mock("../network/auth-client", () => ({
+  useSession: () => ({
+    data: { user: { id: "alex" }, session: { id: "session-a" } },
+    isPending: false,
+  }),
+}));
 
 vi.mock("react-native", () => ({
   View: "View",
@@ -18,6 +27,7 @@ vi.mock("../ui/primitives", () => ({
 }));
 vi.mock("../ui/theme", () => ({ colors: {} }));
 let renderer: ReactTestRenderer;
+let client: QueryClient;
 const makeDevice = () => ({
   preference: vi.fn(async () => ({ enabled: true })),
   setPreference: vi.fn(async (enabled: boolean) => ({ enabled })),
@@ -30,15 +40,25 @@ let device: ReturnType<typeof makeDevice>;
 const button = (title: string) => renderer.root.findByProps({ title });
 const mount = async () => {
   await act(async () => {
-    renderer = create(createElement(TurnNotificationSettings, { device }));
+    renderer = create(
+      createElement(NativeQueryProvider, {
+        client,
+        children: createElement(TurnNotificationSettings, { device }),
+      }),
+    );
   });
 };
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   device = makeDevice();
+  client = createNativeQueryClient();
+  notifyManager.setScheduler(queueMicrotask);
 });
 afterEach(async () => {
   if (renderer) await act(async () => renderer.unmount());
+  client.clear();
+  onlineManager.setOnline(true);
+  notifyManager.setScheduler((callback) => setTimeout(callback, 0));
 });
 
 it("does not enroll on mount or account-on and explicitly enables with the inspected generation", async () => {
@@ -74,4 +94,40 @@ it("keeps blocked registrations removable and offers system permission recovery"
   expect(button("Open system settings")).toBeDefined();
   await act(async () => button("Turn off notifications on this device").props.onPress());
   expect(device.remove).toHaveBeenCalledOnce();
+});
+
+it("shares preference and device inspection reads across concurrent settings views", async () => {
+  await act(async () => {
+    renderer = create(
+      createElement(NativeQueryProvider, {
+        client,
+        children: [
+          createElement(TurnNotificationSettings, { device, key: "first" }),
+          createElement(TurnNotificationSettings, { device, key: "second" }),
+        ],
+      }),
+    );
+  });
+  expect(
+    renderer.root.findAllByProps({ title: "Enable notifications on this device" }),
+  ).toHaveLength(2);
+  expect(device.preference).toHaveBeenCalledOnce();
+  expect(device.inspect).toHaveBeenCalledOnce();
+});
+
+it("does not queue an offline account-consent change for reconnection", async () => {
+  await mount();
+  onlineManager.setOnline(false);
+  await act(async () =>
+    renderer.root
+      .findByProps({ accessibilityLabel: "Turn notifications for my account" })
+      .props.onValueChange(false),
+  );
+  expect(
+    renderer.root.findAll((node) => String(node.type) === "ErrorMessage")[0]!.props.message,
+  ).toContain("offline");
+  await act(async () => {
+    onlineManager.setOnline(true);
+  });
+  expect(device.setPreference).not.toHaveBeenCalled();
 });

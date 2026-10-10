@@ -3,6 +3,9 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 import type { NativeSession } from "../network/auth-client";
 import { useTurnNotifications } from "./use-turn-notifications";
+import { TurnNotificationSettings } from "./turn-settings";
+import { NativeQueryProvider, createNativeQueryClient } from "../network/query-client";
+import { notifyManager, type QueryClient } from "@tanstack/react-query";
 
 const mocks = vi.hoisted(() => ({
   initial: vi.fn(),
@@ -13,12 +16,34 @@ const mocks = vi.hoisted(() => ({
   handler: null as null | { handleNotification: (notification: unknown) => Promise<unknown> },
   response: null as null | ((response: unknown) => void),
   foreground: true,
+  preference: vi.fn(),
+  inspect: vi.fn(),
+  token: null as null | (() => void),
 }));
-vi.mock("react-native", () => ({ Platform: { OS: "android" } }));
+vi.mock("react-native", () => ({
+  Platform: { OS: "android" },
+  View: "View",
+  Switch: "Switch",
+  Linking: { openSettings: vi.fn() },
+}));
+vi.mock("../ui/primitives", () => ({
+  Label: "Label",
+  Button: "Button",
+  ErrorMessage: "ErrorMessage",
+  styles: { row: {} },
+}));
+vi.mock("../ui/theme", () => ({ colors: {} }));
 vi.mock("../network/use-foreground", () => ({ useForeground: () => mocks.foreground }));
-vi.mock("../network/auth-client", () => ({ authClient: { getCookie: () => "bound-cookie" } }));
+vi.mock("../network/auth-client", () => ({
+  authClient: { getCookie: () => "bound-cookie" },
+  useSession: () => ({ data: session, isPending: pending }),
+}));
 vi.mock("./native-push", () => ({
-  nativeTurnDevice: () => ({ refreshToken: mocks.refresh }),
+  nativeTurnDevice: () => ({
+    refreshToken: mocks.refresh,
+    preference: mocks.preference,
+    inspect: mocks.inspect,
+  }),
   notificationRequest: () => mocks.request,
   pushPlatform: { dismiss: mocks.dismiss },
 }));
@@ -30,7 +55,10 @@ vi.mock("expo-notifications", () => ({
     mocks.response = receive;
     return { remove: vi.fn() };
   },
-  addPushTokenListener: () => ({ remove: vi.fn() }),
+  addPushTokenListener: (listener: () => void) => {
+    mocks.token = listener;
+    return { remove: vi.fn() };
+  },
   setNotificationHandler: (handler: typeof mocks.handler) => {
     mocks.handler = handler;
   },
@@ -51,17 +79,24 @@ let pending: boolean;
 let room: string | undefined;
 let renderer: ReactTestRenderer;
 let state: ReturnType<typeof useTurnNotifications>;
+let client: QueryClient;
 function Harness() {
   state = useTurnNotifications(session, pending, room, onRoom);
   return null;
 }
 const mount = async () => {
   await act(async () => {
-    renderer = create(createElement(Harness));
+    renderer = create(
+      createElement(NativeQueryProvider, { client, children: createElement(Harness) }),
+    );
   });
 };
 const update = async () => {
-  await act(async () => renderer.update(createElement(Harness)));
+  await act(async () =>
+    renderer.update(
+      createElement(NativeQueryProvider, { client, children: createElement(Harness) }),
+    ),
+  );
 };
 const signIn = (id = "session-1") => {
   session = { user: { id: "ada" }, session: { id } } as NativeSession;
@@ -79,9 +114,15 @@ beforeEach(() => {
   mocks.refresh.mockReset().mockResolvedValue(undefined);
   mocks.request.mockReset().mockResolvedValue({ allowed: true, target: "/room/ABCDE" });
   onRoom.mockReset();
+  mocks.preference.mockReset().mockResolvedValue({ enabled: true });
+  mocks.inspect.mockReset().mockResolvedValue({ state: "ready", generation: 4, removable: true });
+  client = createNativeQueryClient();
+  notifyManager.setScheduler(queueMicrotask);
 });
 afterEach(async () => {
   if (renderer) await act(async () => renderer.unmount());
+  client.clear();
+  notifyManager.setScheduler((callback) => setTimeout(callback, 0));
 });
 
 it("retains a cold-start tap across session hydration and signed-out sign-in", async () => {
@@ -205,4 +246,28 @@ it("fails closed during foreground verification when the session or open room ch
   await update();
   resolve({ eligible: true });
   expect(await handled).toMatchObject({ shouldShowBanner: false });
+});
+
+it("reinspects mounted device settings after push-token refresh retires an enrollment", async () => {
+  signIn();
+  function SettingsHarness() {
+    state = useTurnNotifications(session, pending, room, onRoom);
+    return state.device ? createElement(TurnNotificationSettings, { device: state.device }) : null;
+  }
+  await act(async () => {
+    renderer = create(
+      createElement(NativeQueryProvider, { client, children: createElement(SettingsHarness) }),
+    );
+  });
+  expect(
+    renderer.root.findAllByProps({ title: "Turn off notifications on this device" }),
+  ).toHaveLength(1);
+  mocks.inspect.mockResolvedValue({ state: "not-enabled", generation: 5, removable: false });
+  await act(async () => {
+    mocks.token!();
+  });
+  expect(
+    renderer.root.findAllByProps({ title: "Turn off notifications on this device" }),
+  ).toHaveLength(0);
+  expect(renderer.root.findByProps({ title: "Enable notifications on this device" })).toBeDefined();
 });

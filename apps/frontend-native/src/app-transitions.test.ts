@@ -4,6 +4,9 @@ import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 import { bigTwoGameMachine } from "@big-two/game-state-machine";
 import { GameApp } from "../App";
 
+vi.mock("./network/query-lifecycle", () => ({ useQueryLifecycle: vi.fn() }));
+vi.mock("./network/query-client", () => ({ NativeQueryProvider: "NativeQueryProvider" }));
+
 const state = vi.hoisted(() => ({
   offline: {} as Record<string, unknown>,
   online: {} as Record<string, unknown>,
@@ -188,6 +191,10 @@ it("preserves profile editor identity during a pending session recheck", async (
   state.session = null;
   await act(async () => renderer.update(createElement(GameApp)));
   expect(renderer.root.findAllByType("ProfileScreen" as never)).toHaveLength(0);
+  state.session = session;
+  await act(async () => renderer.update(createElement(GameApp)));
+  expect(renderer.root.findAllByType("ProfileScreen" as never)).toHaveLength(0);
+  expect(host("HomeScreen")).toBeDefined();
 });
 
 it("retains an open chat and its draft identity while checking the same session", async () => {

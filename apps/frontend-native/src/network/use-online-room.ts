@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { GameEvent, RoomGameState } from "@big-two/game-state-machine";
 import { api } from "./api";
-import { useSession } from "./auth-client";
 import { parseSocketJSON } from "./socket";
 import type { ConnectionStatus } from "./types";
 import { useForeground } from "./use-foreground";
 import { useRoomChat, type RoomChatResult } from "./use-room-chat";
 import { useRoomFocus } from "./use-room-focus";
 import { useRoomSocket } from "./use-room-socket";
-import { asError } from "./request";
+import { useRoomMembership } from "./use-room-membership";
+import { queryKeys, useQueryAccess } from "./query-client";
 
 export interface OnlineRoomOptions {
   roomId: string;
@@ -20,6 +21,7 @@ export interface OnlineRoomResult {
   gameState: RoomGameState | undefined;
   role: "player" | "spectator" | null;
   loading: boolean;
+  acting: boolean;
   error: Error | null;
   connection: ConnectionStatus;
   refresh: () => Promise<void>;
@@ -42,82 +44,99 @@ function isRoomState(value: unknown): value is RoomGameState {
 }
 
 export function useOnlineRoom({ roomId, focused = true }: OnlineRoomOptions): OnlineRoomResult {
-  const { data: session, isPending } = useSession();
-  const user = session?.user;
+  const queryAccess = useQueryAccess();
+  const user = queryAccess.user;
   const viewerId = user?.id;
   const foreground = useForeground();
-  const enabled = foreground && focused && !isPending;
-  const key = `${roomId}:${viewerId ?? ""}`;
-  const access = useRef({ key, enabled, authenticated: !isPending });
-  access.current = { key, enabled, authenticated: !isPending };
-  const [state, setState] = useState<{
-    key: string;
-    gameState?: RoomGameState;
-    loading: boolean;
-    error: Error | null;
-  }>({ key, loading: false, error: null });
-  // Clear rather than merely hide a previous account's private snapshot. A
-  // later sign-in to the same ID still requires a fresh authenticated response.
-  if (state.key !== key) setState({ key, loading: false, error: null });
-  const generation = useRef(0);
-  const controller = useRef<AbortController | null>(null);
-  const refresh = useCallback(async () => {
-    if (!viewerId || !enabled || !access.current.enabled || access.current.key !== key) return;
-    const current = ++generation.current;
-    controller.current?.abort();
-    const abort = new AbortController();
-    controller.current = abort;
-    setState((previous) => ({
-      key,
-      gameState: previous.key === key ? previous.gameState : undefined,
-      loading: true,
-      error: null,
-    }));
-    try {
-      const gameState = await api.getRoom(roomId, abort.signal);
-      if (!isRoomState(gameState)) throw new Error("The server returned an invalid room state");
-      if (current === generation.current) setState({ key, gameState, loading: false, error: null });
-    } catch (cause) {
-      if (current === generation.current && !abort.signal.aborted)
-        setState((previous) => ({ ...previous, loading: false, error: asError(cause) }));
-    }
-  }, [roomId, viewerId, enabled, key]);
-
+  const membership = useRoomMembership();
+  const enabled = foreground && focused && queryAccess.authenticated;
+  const key = `${roomId}:${viewerId ?? ""}:${queryAccess.scope[4]}`;
+  const access = useRef({ key, enabled, authenticated: queryAccess.authenticated });
+  access.current = { key, enabled, authenticated: queryAccess.authenticated };
+  const client = useQueryClient();
+  const queryKey = useMemo(
+    () => queryKeys.room(queryAccess.scope, roomId),
+    [queryAccess.scope, roomId],
+  );
+  const query = useQuery({
+    queryKey,
+    queryFn: async ({ signal }) => {
+      queryAccess.assertCurrent();
+      if (!access.current.enabled || access.current.key !== key)
+        throw new Error("Open the room to refresh it.");
+      const snapshot = await api.getRoom(roomId, signal);
+      if (!isRoomState(snapshot)) throw new Error("The server returned an invalid room state");
+      return snapshot;
+    },
+    enabled,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: false,
+  });
   useEffect(() => {
-    if (viewerId && enabled) void refresh();
-    else setState((previous) => ({ ...previous, loading: false }));
-    return () => {
-      ++generation.current;
-      controller.current?.abort();
-    };
-  }, [viewerId, enabled, refresh]);
+    if (!enabled) void client.cancelQueries({ queryKey });
+  }, [client, queryKey, enabled]);
+  const refresh = useCallback(async () => {
+    if (!queryAccess.isCurrent() || !access.current.enabled || access.current.key !== key) return;
+    await query.refetch({ cancelRefetch: false });
+  }, [queryAccess.isCurrent, key, query.refetch]);
   const connection = useRoomSocket({
     path: `/api/room/ws/${encodeURIComponent(roomId)}`,
     viewerId,
     enabled,
     onOpen: () => void refresh(),
     onMessage: (data) => {
-      if (!access.current.enabled) return;
+      if (!queryAccess.isCurrent() || !access.current.enabled) return;
       const gameState = parseSocketJSON(data);
       if (!isRoomState(gameState)) return;
       // A slower HTTP response must never overwrite a newer socket snapshot.
-      ++generation.current;
-      controller.current?.abort();
-      setState({ key, gameState, loading: false, error: null });
+      void client.cancelQueries({ queryKey });
+      client.setQueryData(queryKey, gameState);
     },
   });
-  useRoomFocus(roomId, viewerId, foreground && focused, !isPending);
+  useRoomFocus(roomId, viewerId, foreground && focused, queryAccess.authenticated);
   const chat = useRoomChat({ roomId, viewerId, enabled });
+  const actionKey = useMemo(() => [...queryKey, "action"] as const, [queryKey]);
+  const action = useMutation({
+    mutationKey: actionKey,
+    mutationFn: (event: GameEvent) => {
+      queryAccess.assertCurrent();
+      if (!access.current.enabled || access.current.key !== key)
+        throw new Error("Open the room to act at the table.");
+      return api.action(roomId, event);
+    },
+    onSettled: async () => {
+      if (!queryAccess.isCurrent()) return;
+      await Promise.all([
+        client.invalidateQueries({ queryKey }),
+        client.invalidateQueries({ queryKey: queryKeys.rooms(queryAccess.scope) }),
+      ]);
+    },
+  });
+  const actionCount = useIsMutating({ mutationKey: actionKey, exact: true });
   const send = useCallback(
     async (event: GameEvent) => {
       if (!viewerId || access.current.key !== key) throw new Error("Sign in to act at the table");
       if (!access.current.authenticated) throw new Error("Wait for your session to be confirmed");
-      await api.action(roomId, event);
-      await refresh();
+      queryAccess.assertCurrent();
+      if (event.type === "JOIN_GAME") await membership.joinRoom(roomId);
+      else if (event.type === "LEAVE_GAME") await membership.leaveRoom(roomId);
+      else await action.mutateAsync(event);
+      if (!queryAccess.isCurrent()) throw new Error("Your session changed. Reopen the table.");
     },
-    [roomId, viewerId, key, refresh],
+    [
+      roomId,
+      viewerId,
+      key,
+      membership.joinRoom,
+      membership.leaveRoom,
+      queryAccess.assertCurrent,
+      queryAccess.isCurrent,
+      action.mutateAsync,
+    ],
   );
-  const gameState = viewerId && state.key === key ? state.gameState : undefined;
+  const gameState = viewerId ? query.data : undefined;
   return {
     gameState,
     role:
@@ -126,24 +145,15 @@ export function useOnlineRoom({ roomId, focused = true }: OnlineRoomOptions): On
         : gameState.context.players.some((player) => player.id === viewerId)
           ? "player"
           : "spectator",
-    loading: Boolean(viewerId && enabled && (state.key !== key || state.loading)),
-    error: state.key === key ? state.error : null,
+    loading: enabled && query.isFetching,
+    acting: actionCount > 0 || membership.joining || membership.leaving,
+    error: viewerId ? query.error : null,
     connection,
     refresh,
     send,
-    join: async () => {
-      if (!user || access.current.key !== key) throw new Error("Sign in to join a room");
-      if (!access.current.authenticated) throw new Error("Wait for your session to be confirmed");
-      await api.joinRoom(roomId, user);
-      await refresh();
-    },
+    join: () => membership.joinRoom(roomId),
     // Explicit only: unmounting/returning to the lobby never sends LEAVE_GAME.
-    leave: async () => {
-      if (!user || access.current.key !== key) throw new Error("Sign in to leave a room");
-      if (!access.current.authenticated) throw new Error("Wait for your session to be confirmed");
-      await api.leaveRoom(roomId, user.id);
-      await refresh();
-    },
+    leave: () => membership.leaveRoom(roomId),
     chat,
   };
 }

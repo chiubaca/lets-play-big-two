@@ -1,11 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import {
+  useInfiniteQuery,
+  useIsMutating,
+  useMutation,
+  useQueryClient,
+  type InfiniteData,
+} from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import { api } from "./api";
 import { isChatFrame, mergeChat } from "./chat";
 import { parseSocketJSON } from "./socket";
 import type { ChatFrame, ChatInput, ChatMessage, ConnectionStatus } from "./types";
 import { useRoomSocket } from "./use-room-socket";
-import { asError } from "./request";
+import { queryKeys, useQueryAccess } from "./query-client";
 
 export interface RoomChatResult {
   messages: ChatMessage[];
@@ -17,9 +24,46 @@ export interface RoomChatResult {
   error: Error | null;
   refresh: () => Promise<void>;
   loadOlder: () => Promise<void>;
-  // String sends reuse the UUID for a failed retry of the same text. Callers can
-  // also supply a stable ChatInput for retrying a draft across screen mounts.
+  // String retries retain their UUID; callers can also supply a stable draft ID.
   send: (input: string | ChatInput) => Promise<ChatMessage>;
+}
+
+type HistoryPage = { messages: ChatMessage[]; hasMore: boolean; syncId: number; before?: number };
+type History = InfiniteData<HistoryPage, number | undefined> & { live?: ChatFrame[] };
+let syncId = 0;
+const historyMessages = (data: Pick<History, "pages"> | undefined) =>
+  mergeChat(
+    [],
+    [...(data?.pages ?? [])].reverse().flatMap((page) => page.messages),
+    new Set(),
+  );
+
+// Query's pagination result contains the pages captured before its request.
+// Reconcile against the cache at commit time so live updates/redactions win.
+function reconcileHistory(previous: History | undefined, incoming: History): History {
+  const redacted = new Set(
+    [...historyMessages(previous), ...historyMessages(incoming)]
+      .filter((message) => message.role === null)
+      .map((message) => message.id),
+  );
+  const sameSync =
+    incoming.live === undefined && previous?.pages[0]?.syncId === incoming.pages[0]?.syncId;
+  const pages = incoming.pages.map((page, index) => ({
+    ...page,
+    messages: mergeChat(
+      page.messages,
+      sameSync ? (previous?.pages[index]?.messages ?? []) : [],
+      redacted,
+    ),
+  }));
+  const buffered = incoming.live === undefined ? (previous?.live ?? []) : [];
+  if (pages[0])
+    pages[0] = { ...pages[0], messages: mergeChat(pages[0].messages, buffered, redacted) };
+  return {
+    ...incoming,
+    pages: pages.map((page) => ({ ...page, messages: mergeChat(page.messages, [], redacted) })),
+    live: incoming.live ?? [],
+  };
 }
 
 export function useRoomChat({
@@ -31,184 +75,175 @@ export function useRoomChat({
   viewerId?: string;
   enabled: boolean;
 }): RoomChatResult {
-  const key = `${roomId}:${viewerId ?? ""}`;
-  const [state, setState] = useState<{
-    key: string;
-    messages: ChatMessage[];
-    loading: boolean;
-    loadingOlder: boolean;
-    sending: boolean;
-    hasOlder: boolean;
-    error: Error | null;
-  }>({
-    key,
-    messages: [],
-    loading: false,
-    loadingOlder: false,
-    sending: false,
-    hasOlder: false,
-    error: null,
-  });
-  const messages = useRef<ChatMessage[]>([]);
-  const redacted = useRef(new Set<string>());
-  const buffered = useRef<ChatFrame[]>([]);
-  const syncing = useRef(false);
-  const generation = useRef(0);
-  const controller = useRef<AbortController | null>(null);
-  const olderPending = useRef(false);
-  const sendPending = useRef(false);
-  const retrySend = useRef<ChatInput | null>(null);
+  const access = useQueryAccess();
+  const client = useQueryClient();
+  const queryKey = useMemo(() => queryKeys.chat(access.scope, roomId), [access.scope, roomId]);
+  const key = JSON.stringify(queryKey);
   const identity = useRef(key);
-  // A sign-out and return to the same key is a new private visit. Key equality
-  // alone must not let an earlier send publish or clear this visit's retry.
-  const sendEpoch = useRef(0);
-  if (identity.current !== key) ++sendEpoch.current;
-  identity.current = key;
-  const epoch = sendEpoch.current;
   const active = useRef(enabled);
   active.current = enabled;
-
-  const publish = useCallback(
-    (next: ChatMessage[]) => {
-      messages.current = next;
-      setState((previous) => ({ ...previous, key, messages: next }));
-    },
-    [key],
-  );
-
+  const mounted = useRef(true);
   useEffect(() => {
-    messages.current = [];
-    redacted.current = new Set();
-    buffered.current = [];
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const retrySend = useRef<ChatInput | null>(null);
+  const sendEpoch = useRef(0);
+  const sentVisit = useRef<string | undefined>(undefined);
+  if (identity.current !== key) {
+    ++sendEpoch.current;
     retrySend.current = null;
-    sendPending.current = false;
-    setState({
-      key,
-      messages: [],
-      loading: false,
-      loadingOlder: false,
-      sending: false,
-      hasOlder: false,
-      error: null,
-    });
-  }, [key]);
-
-  const refresh = useCallback(async () => {
-    if (!viewerId || !enabled || !active.current || identity.current !== key) return;
-    const current = ++generation.current;
-    controller.current?.abort();
-    const abort = new AbortController();
-    controller.current = abort;
-    const previousHighest = messages.current.at(-1)?.order;
-    buffered.current = [];
-    syncing.current = true;
-    olderPending.current = false;
-    setState((previous) => ({ ...previous, key, loading: true, loadingOlder: false, error: null }));
-    try {
-      const latest = await api.chatHistory(roomId, undefined, abort.signal);
+    sentVisit.current = undefined;
+    identity.current = key;
+  }
+  const epoch = sendEpoch.current;
+  const canRead = () =>
+    !!viewerId && active.current && identity.current === key && access.isCurrent();
+  const query = useInfiniteQuery({
+    queryKey,
+    enabled: enabled && access.authenticated,
+    initialPageParam: undefined as number | undefined,
+    queryFn: async ({ pageParam, signal }): Promise<HistoryPage> => {
+      access.assertCurrent();
+      if (!canRead()) throw new Error("Open the room while signed in to read chat.");
+      if (pageParam !== undefined) {
+        const page = await api.chatHistory(roomId, { before: pageParam }, signal);
+        const messages = mergeChat([], page.messages, new Set());
+        return {
+          ...page,
+          messages,
+          before: messages[0]?.order,
+          syncId: client.getQueryData<History>(queryKey)?.pages[0]?.syncId ?? 0,
+        };
+      }
+      const highest = historyMessages(client.getQueryData<History>(queryKey)).at(-1)?.order;
+      client.setQueryData<History>(queryKey, (data) => (data ? { ...data, live: [] } : data));
+      const latest = await api.chatHistory(roomId, undefined, signal);
       let fresh = latest.messages;
-      if (previousHighest !== undefined) {
-        let after = previousHighest;
+      if (highest !== undefined) {
+        let after = highest;
         let more = true;
         while (more) {
-          const page = await api.chatHistory(roomId, { after }, abort.signal);
-          if (abort.signal.aborted || current !== generation.current) return;
+          const page = await api.chatHistory(roomId, { after }, signal);
+          if (signal.aborted || !canRead()) throw new Error("Chat synchronization was cancelled.");
           fresh = [...fresh, ...page.messages];
           const next = Math.max(after, ...page.messages.map((message) => message.order));
           more = page.hasMore && next > after;
           after = next;
         }
       }
-      if (abort.signal.aborted || current !== generation.current || identity.current !== key)
-        return;
-      // Replace old cached history: reconnect must not resurrect identities that
-      // were deleted while offline. New live frames are merged after history.
-      const next = mergeChat([], [...fresh, ...buffered.current], redacted.current);
-      publish(next);
-      setState((previous) => ({
-        ...previous,
-        loading: false,
-        hasOlder: latest.hasMore || (next[0]?.order ?? 1) > 1,
-      }));
-    } catch (cause) {
-      if (!abort.signal.aborted && current === generation.current && identity.current === key)
-        setState((previous) => ({ ...previous, loading: false, error: asError(cause) }));
-    } finally {
-      if (current === generation.current) {
-        syncing.current = false;
-        buffered.current = [];
-      }
-    }
-  }, [roomId, viewerId, enabled, key, publish]);
-
+      if (signal.aborted || !canRead()) throw new Error("Chat synchronization was cancelled.");
+      const messages = mergeChat([], fresh, new Set());
+      return {
+        messages,
+        before: messages[0]?.order,
+        hasMore: latest.hasMore || (messages[0]?.order ?? 1) > 1,
+        syncId: ++syncId,
+      };
+    },
+    getNextPageParam: (page) => (page.hasMore ? page.before : undefined),
+    structuralSharing: (previous, incoming) =>
+      reconcileHistory(previous as History | undefined, incoming as History),
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+  const publish = useCallback(
+    (frame: ChatFrame) => {
+      if (identity.current !== key) return;
+      const fetching = client.getQueryState(queryKey)?.fetchStatus === "fetching";
+      client.setQueryData<History>(queryKey, (previous) => {
+        const data = previous ?? {
+          pages: [{ messages: [], hasMore: false, syncId: 0 }],
+          pageParams: [undefined],
+        };
+        const redacted = new Set<string>();
+        // Apply redaction tombstones across every page, not only the latest page.
+        if (frame.type === "redaction") redacted.add(frame.id);
+        return {
+          ...data,
+          pages: data.pages.map((page, index) => ({
+            ...page,
+            messages: mergeChat(page.messages, index === 0 ? [frame] : [], redacted),
+          })),
+          live: fetching ? [...(data.live ?? []), frame] : [],
+        };
+      });
+    },
+    [client, queryKey, key],
+  );
+  const refresh = useCallback(async () => {
+    if (!viewerId || !active.current || identity.current !== key || !access.isCurrent()) return;
+    if (client.getQueryState(queryKey)?.fetchMeta?.fetchMore)
+      await client.cancelQueries({ queryKey });
+    // Reconnect rebuilds history, rather than preserving possibly deleted authors.
+    client.setQueryData<History>(queryKey, (data) =>
+      data
+        ? { ...data, pages: data.pages.slice(0, 1), pageParams: data.pageParams.slice(0, 1) }
+        : data,
+    );
+    await query.refetch({ cancelRefetch: false });
+  }, [viewerId, key, access.isCurrent, client, queryKey, query.refetch]);
+  const previouslyEnabled = useRef(enabled);
   useEffect(() => {
-    if (enabled && viewerId) void refresh();
-    else setState((previous) => ({ ...previous, loading: false, loadingOlder: false }));
-    return () => {
-      ++generation.current;
-      controller.current?.abort();
-      syncing.current = false;
-      olderPending.current = false;
-    };
-  }, [enabled, viewerId, refresh]);
-
+    if (!enabled) void client.cancelQueries({ queryKey });
+    else if (!previouslyEnabled.current) void refresh();
+    previouslyEnabled.current = enabled;
+  }, [enabled, client, queryKey, refresh]);
   const connection = useRoomSocket({
     path: `/api/room/chat/ws/${encodeURIComponent(roomId)}`,
     viewerId,
     enabled,
     onOpen: () => void refresh(),
     onMessage: (data) => {
-      if (!active.current) return;
+      if (!active.current || !access.isCurrent()) return;
       const frame = parseSocketJSON(data);
-      if (!isChatFrame(frame)) return;
-      if (syncing.current) buffered.current.push(frame);
-      publish(mergeChat(messages.current, [frame], redacted.current));
+      if (isChatFrame(frame)) publish(frame);
     },
   });
-
   const loadOlder = useCallback(async () => {
-    const before = messages.current[0]?.order;
     if (
       !viewerId ||
-      !enabled ||
       !active.current ||
       identity.current !== key ||
-      !before ||
-      syncing.current ||
-      olderPending.current
+      !access.isCurrent() ||
+      !query.hasNextPage ||
+      client.getQueryState(queryKey)?.fetchStatus !== "idle"
     )
       return;
-    const current = generation.current;
-    olderPending.current = true;
-    setState((previous) => ({ ...previous, loadingOlder: true, error: null }));
-    try {
-      const page = await api.chatHistory(roomId, { before }, controller.current?.signal);
-      if (current !== generation.current || identity.current !== key) return;
-      // Live/redacted frames already present must win a history response race.
-      publish(mergeChat(page.messages, messages.current, redacted.current));
-      setState((previous) => ({ ...previous, hasOlder: page.hasMore }));
-    } catch (cause) {
-      if (current === generation.current && identity.current === key)
-        setState((previous) => ({ ...previous, error: asError(cause) }));
-    } finally {
-      if (current === generation.current && identity.current === key) {
-        olderPending.current = false;
-        setState((previous) => ({ ...previous, loadingOlder: false }));
-      }
-    }
-  }, [roomId, viewerId, enabled, key, publish]);
-
+    await query.fetchNextPage({ cancelRefetch: false });
+  }, [viewerId, key, access.isCurrent, query.hasNextPage, client, queryKey, query.fetchNextPage]);
+  const mutationKey = useMemo(() => [...queryKey, "send"] as const, [queryKey]);
+  const mutation = useMutation({
+    mutationKey,
+    mutationFn: async (message: ChatInput) => {
+      access.assertCurrent();
+      if (!active.current || identity.current !== key)
+        throw new Error("Open the room while signed in to send chat");
+      const accepted = await api.sendChat(roomId, message);
+      if (!isChatFrame(accepted) || accepted.type !== "message")
+        throw new Error("Could not confirm the message. Keep your draft and retry.");
+      return accepted;
+    },
+  });
+  const sending = useIsMutating({ mutationKey, exact: true }) > 0;
   const send = useCallback(
     async (input: string | ChatInput) => {
       if (
+        !mounted.current ||
         !viewerId ||
-        !enabled ||
         !active.current ||
         identity.current !== key ||
-        sendEpoch.current !== epoch
+        sendEpoch.current !== epoch ||
+        !access.isCurrent()
       )
         throw new Error("Open the room while signed in to send chat");
-      if (sendPending.current) throw new Error("A message is already being sent");
+      if (client.isMutating({ mutationKey, exact: true }))
+        throw new Error("A message is already being sent");
       const message =
         typeof input === "string"
           ? retrySend.current?.text === input
@@ -216,40 +251,29 @@ export function useRoomChat({
             : { text: input, clientSendId: randomUUID() }
           : input;
       retrySend.current = message;
-      sendPending.current = true;
-      setState((previous) => ({ ...previous, sending: true, error: null }));
-      try {
-        const accepted = await api.sendChat(roomId, message);
-        if (!isChatFrame(accepted) || accepted.type !== "message")
-          throw new Error("Could not confirm the message. Keep your draft and retry.");
-        if (identity.current === key && sendEpoch.current === epoch) {
-          retrySend.current = null;
-          if (syncing.current) buffered.current.push(accepted);
-          publish(mergeChat(messages.current, [accepted], redacted.current));
-        }
-        return accepted;
-      } catch (cause) {
-        if (identity.current === key && sendEpoch.current === epoch)
-          setState((previous) => ({ ...previous, error: asError(cause) }));
-        throw asError(cause);
-      } finally {
-        if (identity.current === key && sendEpoch.current === epoch) {
-          sendPending.current = false;
-          setState((previous) => ({ ...previous, sending: false }));
-        }
+      sentVisit.current = key;
+      const accepted = await mutation.mutateAsync(message);
+      if (
+        mounted.current &&
+        identity.current === key &&
+        sendEpoch.current === epoch &&
+        access.isCurrent()
+      ) {
+        retrySend.current = null;
+        publish(accepted);
       }
+      return accepted;
     },
-    [roomId, viewerId, enabled, key, publish, epoch],
+    [viewerId, key, epoch, access.isCurrent, client, mutationKey, mutation.mutateAsync, publish],
   );
-
   return {
-    messages: state.key === key && viewerId ? state.messages : [],
+    messages: viewerId ? historyMessages(query.data) : [],
     connection,
-    loading: state.key === key && state.loading,
-    loadingOlder: state.key === key && state.loadingOlder,
-    sending: state.key === key && state.sending,
-    hasOlder: state.key === key && state.hasOlder,
-    error: state.key === key ? state.error : null,
+    loading: enabled && query.isFetching && !query.isFetchingNextPage,
+    loadingOlder: enabled && query.isFetchingNextPage,
+    sending,
+    hasOlder: !!viewerId && query.hasNextPage,
+    error: sentVisit.current === key ? (mutation.error ?? query.error) : query.error,
     refresh,
     loadOlder,
     send,

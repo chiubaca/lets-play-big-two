@@ -89,6 +89,7 @@ beforeEach(() => {
     rooms: [{ roomId: "ABCDE", status: "waiting", playerCount: 2 }],
     loading: false,
     error: null,
+    creating: false,
     refresh: vi.fn().mockResolvedValue(undefined),
     createRoom: vi.fn(),
     joinRoom: vi.fn(),

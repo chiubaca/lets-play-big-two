@@ -1,44 +1,88 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Linking, Switch, View } from "react-native";
 import { useForeground } from "../network/use-foreground";
 import { Button, ErrorMessage, Label, styles } from "../ui/primitives";
 import { colors } from "../ui/theme";
-import type { DeviceState, TurnDevice } from "./turn-device";
+import type { TurnDevice } from "./turn-device";
+import { queryKeys, useQueryAccess } from "../network/query-client";
+
+type SettingsAction =
+  | { type: "preference"; enabled: boolean }
+  | { type: "enable"; generation: number }
+  | { type: "remove" };
 
 export function TurnNotificationSettings({ device }: { device: TurnDevice }) {
   const foreground = useForeground();
-  const [settings, setSettings] = useState<{ enabled: boolean; device: DeviceState } | null>(null);
-  const [busy, setBusy] = useState(false);
+  const access = useQueryAccess();
+  const client = useQueryClient();
+  const enabled = foreground && access.authenticated;
+  const active = useRef(enabled);
+  active.current = enabled;
+  const preferenceKey = queryKeys.turnPreference(access.scope);
+  const deviceKey = queryKeys.turnDevice(access.scope, access.sessionId);
+  const preference = useQuery({
+    queryKey: preferenceKey,
+    enabled,
+    queryFn: ({ signal }) => {
+      access.assertCurrent();
+      return device.preference(signal);
+    },
+  });
+  const inspection = useQuery({
+    queryKey: deviceKey,
+    enabled,
+    gcTime: 0,
+    queryFn: ({ signal }) => {
+      access.assertCurrent();
+      return device.inspect(signal);
+    },
+  });
   const [error, setError] = useState<string | null>(null);
-  const [revision, setRevision] = useState(0);
+  const loadError = preference.error || inspection.error;
   useEffect(() => {
-    if (!foreground) return;
-    let current = true;
-    setSettings(null);
-    void Promise.all([device.preference(), device.inspect()])
-      .then(([preference, inspected]) => {
-        if (current) setSettings({ enabled: preference.enabled, device: inspected });
-      })
-      .catch(() => {
-        if (current) setError("Could not load notification settings. Try again.");
-      });
-    return () => {
-      current = false;
-    };
-  }, [device, foreground, revision]);
+    if (!enabled) {
+      void client.cancelQueries({ queryKey: queryKeys.turnPreference(access.scope) });
+      void client.cancelQueries({ queryKey: queryKeys.turnDevice(access.scope, access.sessionId) });
+    }
+  }, [client, enabled, access.scope, access.sessionId]);
+  const refresh = async () => {
+    if (!active.current || !access.isCurrent()) return;
+    await Promise.all([
+      client.invalidateQueries({ queryKey: preferenceKey }),
+      client.invalidateQueries({ queryKey: deviceKey }),
+    ]);
+  };
 
-  async function change(action: () => Promise<unknown>) {
-    setBusy(true);
+  const mutationKey = [...access.scope, "turn-notifications", "change", access.sessionId];
+  const changeMutation = useMutation({
+    mutationKey,
+    mutationFn: async (action: SettingsAction) => {
+      access.assertCurrent();
+      if (!active.current) throw new Error("Open the app to change notification settings.");
+      if (action.type === "preference") await device.setPreference(action.enabled);
+      else if (action.type === "enable") await device.enable(action.generation);
+      else await device.remove();
+    },
+    // Reinspect even after an uncertain failure. Never optimistically show Ready.
+    onSettled: refresh,
+  });
+  const busy = useIsMutating({ mutationKey, exact: true }) > 0;
+  const checking = preference.fetchStatus !== "idle" || inspection.fetchStatus !== "idle";
+  const settings =
+    !busy && !checking && !loadError && preference.data && inspection.data
+      ? { enabled: preference.data.enabled, device: inspection.data }
+      : null;
+  const message =
+    error ??
+    changeMutation.error?.message ??
+    (loadError ? "Could not load notification settings. Try again." : null);
+  async function change(action: SettingsAction) {
     setError(null);
     try {
-      await action();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not save notification settings.");
-    } finally {
-      // Never optimistically report Ready after an uncertain mutation.
-      setSettings(null);
-      setBusy(false);
-      setRevision((value) => value + 1);
+      await changeMutation.mutateAsync(action);
+    } catch {
+      /* The mutation retains its error after authoritative reinspection. */
     }
   }
 
@@ -54,8 +98,8 @@ export function TurnNotificationSettings({ device }: { device: TurnDevice }) {
         <Switch
           accessibilityLabel="Turn notifications for my account"
           value={settings?.enabled ?? false}
-          disabled={!settings || busy || !foreground}
-          onValueChange={(enabled) => void change(() => device.setPreference(enabled))}
+          disabled={!settings || busy || !enabled}
+          onValueChange={(enabled) => void change({ type: "preference", enabled })}
           trackColor={{ true: colors.goldDark }}
         />
       </View>
@@ -77,8 +121,10 @@ export function TurnNotificationSettings({ device }: { device: TurnDevice }) {
           {settings.device.state !== "ready" && settings.device.state !== "blocked" && (
             <Button
               title="Enable notifications on this device"
-              disabled={busy || !foreground}
-              onPress={() => void change(() => device.enable(settings.device.generation))}
+              disabled={busy || !enabled}
+              onPress={() =>
+                void change({ type: "enable", generation: settings.device.generation })
+              }
             />
           )}
           {settings.device.state === "blocked" && (
@@ -92,20 +138,21 @@ export function TurnNotificationSettings({ device }: { device: TurnDevice }) {
           {settings.device.removable && (
             <Button
               title="Turn off notifications on this device"
-              disabled={busy || !foreground}
-              onPress={() => void change(() => device.remove())}
+              disabled={busy || !enabled}
+              onPress={() => void change({ type: "remove" })}
             />
           )}
         </>
       )}
-      <ErrorMessage message={error} />
-      {error && (
+      <ErrorMessage message={message} />
+      {message && (
         <Button
           title="Check notification settings again"
           disabled={busy}
           onPress={() => {
             setError(null);
-            setRevision((value) => value + 1);
+            changeMutation.reset();
+            void refresh();
           }}
         />
       )}

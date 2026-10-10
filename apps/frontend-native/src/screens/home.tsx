@@ -72,7 +72,8 @@ export function HomeScreen({
   const roomRows = session ? rooms.rooms : [];
   const [roomCode, setRoomCode] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"create" | "signout" | null>(null);
+  const [busy, setBusy] = useState<"signout" | null>(null);
+  const actionBusy = rooms.creating || !!busy;
   const [sheet, setSheet] = useState<"account" | "privacy" | null>(null);
   const displayName =
     session?.user.displayUsername ??
@@ -80,16 +81,13 @@ export function HomeScreen({
     session?.user.name.split(" ")[0] ??
     "Member";
   const create = async () => {
-    if (!session || busy) return;
-    setBusy("create");
+    if (!session || actionBusy) return;
     setError(null);
     try {
       const room = await rooms.createRoom();
       onRoom(room.roomId);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Couldn’t open a room. Please try again.");
-    } finally {
-      setBusy(null);
     }
   };
   const join = () => {
@@ -202,17 +200,17 @@ export function HomeScreen({
           <Sheet
             visible={sheet === "account"}
             onClose={() => {
-              if (!busy) setSheet(null);
+              if (!actionBusy) setSheet(null);
             }}
             title="Members’ table"
           >
             <Label>{displayName}</Label>
-            <Button title="Profile" disabled={!!busy} onPress={profile} />
-            <Button title="Delete account" disabled={!!busy} onPress={deleteAccount} />
+            <Button title="Profile" disabled={actionBusy} onPress={profile} />
+            <Button title="Delete account" disabled={actionBusy} onPress={deleteAccount} />
             <Button
               title="Log out"
               busy={busy === "signout"}
-              disabled={!!busy}
+              disabled={actionBusy}
               onPress={() => void signOut()}
             />
             <ErrorMessage message={error} />
@@ -275,8 +273,8 @@ export function HomeScreen({
           <Button
             title={session ? "＋ Create room" : "Sign in for multiplayer"}
             gold
-            busy={busy === "create"}
-            disabled={pending || !!busy}
+            busy={rooms.creating}
+            disabled={pending || actionBusy}
             onPress={session ? () => void create() : onAuth}
           />
           <Label style={styles.codeLabel}>Have a code?</Label>

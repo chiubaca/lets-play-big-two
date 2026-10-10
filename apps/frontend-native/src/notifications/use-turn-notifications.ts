@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Platform } from "react-native";
+import { useQueryClient } from "@tanstack/react-query";
 import * as Notifications from "expo-notifications";
 import { authClient, type NativeSession } from "../network/auth-client";
 import { useForeground } from "../network/use-foreground";
 import { nativeTurnDevice, notificationRequest, pushPlatform } from "./native-push";
 import { notificationRoom, notificationTicket } from "./turn-return";
+import { queryKeys, useQueryAccess } from "../network/query-client";
 
 const hidden = {
   shouldShowBanner: false,
@@ -20,6 +22,8 @@ export function useTurnNotifications(
   onRoom: (roomId: string) => void,
 ) {
   const foreground = useForeground();
+  const client = useQueryClient();
+  const access = useQueryAccess();
   const sessionId = session?.session.id;
   const identity = useRef({ sessionId, pending, activeRoom });
   identity.current = { sessionId, pending, activeRoom };
@@ -91,13 +95,26 @@ export function useTurnNotifications(
 
   useEffect(() => {
     if (!device || !foreground) return;
+    const refresh = async () => {
+      try {
+        await device.refreshToken();
+      } catch {
+        /* Reinspect an uncertain retirement without re-enrolling the device. */
+      }
+      if (
+        access.isCurrent() &&
+        identity.current.sessionId === sessionId &&
+        !identity.current.pending
+      )
+        await client.invalidateQueries({ queryKey: queryKeys.turnDevice(access.scope, sessionId) });
+    };
     // Rotate only an already-live enrollment; these checks never ask for permission.
-    void device.refreshToken().catch(() => {});
+    void refresh();
     const listener = Notifications.addPushTokenListener(() => {
-      void device.refreshToken().catch(() => {});
+      void refresh();
     });
     return () => listener.remove();
-  }, [device, foreground]);
+  }, [device, foreground, client, access.scope, access.isCurrent, sessionId]);
 
   useEffect(() => {
     if (Platform.OS === "web") return;

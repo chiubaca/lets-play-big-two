@@ -21,6 +21,8 @@ import { getStorageKey } from "./src/game/game-persistence";
 import { useTurnNotifications } from "./src/notifications/use-turn-notifications";
 import { TurnNotificationSettings } from "./src/notifications/turn-settings";
 import type { TurnDevice } from "./src/notifications/turn-device";
+import { NativeQueryProvider } from "./src/network/query-client";
+import { useQueryLifecycle } from "./src/network/query-lifecycle";
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 const PASS_CONFIG_KEY = "big-two-native-pass-config-v1";
@@ -132,6 +134,7 @@ function OnlineTable({
         mode="online"
         roomId={roomId}
         connected={room.connection === "connected"}
+        acting={room.acting}
         error={session ? room.error?.message : undefined}
         send={room.send}
         onHome={onHome}
@@ -218,8 +221,9 @@ export function GameApp() {
   }, [route.name]);
   useEffect(() => {
     if (route.name === "room" && !isPending && !session) setAuthOpen(true);
+    if (route.name === "profile" && !isPending && !session) home();
     if (!session) welcomedUser.current = undefined;
-  }, [route.name, isPending, session]);
+  }, [route.name, isPending, session, home]);
   useEffect(() => {
     if (!welcome) return;
     const timer = setTimeout(() => setWelcome(null), 3500);
@@ -442,6 +446,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: boole
 }
 
 export default function App() {
+  useQueryLifecycle();
   const [loaded, error] = useFonts({
     Inter: require("./assets/fonts/Inter_400Regular.ttf"),
     InterSemiBold: require("./assets/fonts/Inter_600SemiBold.ttf"),
@@ -456,7 +461,9 @@ export default function App() {
       <StatusBar style="light" />
       <AppErrorBoundary>
         {loaded || error ? (
-          <GameApp />
+          <NativeQueryProvider>
+            <GameApp />
+          </NativeQueryProvider>
         ) : (
           <View
             style={{

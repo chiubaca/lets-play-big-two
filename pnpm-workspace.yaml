@@ -22,6 +22,7 @@ catalog:
   "@react-three/drei": ^10.7.8
   "@react-three/fiber": ^9.8.0
   "@tanstack/react-form": ^1.29.0
+  "@tanstack/react-query": 5.95.2
   "@types/better-sqlite3": ^9.6.0
   "@types/node": ^24
   "@types/react-test-renderer": ^19.3.0

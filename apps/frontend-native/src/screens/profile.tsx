@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { ChevronDown, Pencil } from "lucide-react-native";
@@ -8,6 +9,7 @@ import { StatusSlot } from "../ui/status-slot";
 import { artwork, colors, fonts } from "../ui/theme";
 import { usernameError } from "./auth";
 import type { HomeSession } from "./home";
+import { useQueryAccess } from "../network/query-client";
 
 const emojiGroups = [
   {
@@ -505,6 +507,15 @@ export interface ProfileScreenProps {
   initialEditor?: "delete";
 }
 export function ProfileScreen({ session, onHome, initialEditor }: ProfileScreenProps) {
+  const access = useQueryAccess();
+  const client = useQueryClient();
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const user = session?.user;
   const [saved, setSaved] = useState({
     name: user?.displayUsername ?? user?.username ?? user?.name ?? "Member",
@@ -516,13 +527,49 @@ export function ProfileScreen({ session, onHome, initialEditor }: ProfileScreenP
   const [editor, setEditor] = useState<"name" | "emoji" | "delete" | null>(initialEditor ?? null);
   const [inspecting, setInspecting] = useState(false);
   const [confirmation, setConfirmation] = useState("");
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const update = useMutation({
+    mutationKey: [...access.scope, "profile", "update"],
+    mutationFn: async (profile: typeof saved) => {
+      access.assertCurrent();
+      const result = await authClient.updateUser({
+        name: profile.name,
+        ...(profile.username
+          ? { username: profile.username, displayUsername: profile.username }
+          : {}),
+        emoji: profile.emoji,
+      });
+      if (result.error)
+        throw new Error(result.error.message ?? "Couldn’t save your profile. Please try again.");
+      if (!access.isCurrent()) throw new Error("Your session changed. Reopen your profile.");
+      return profile;
+    },
+  });
+  const deletion = useMutation({
+    mutationKey: [...access.scope, "profile", "delete"],
+    mutationFn: async () => {
+      access.assertCurrent();
+      const result = await authClient.deleteUser();
+      if (result.error)
+        throw new Error(
+          result.error.message ??
+            "We couldn’t delete the account. Sign out, sign back in, and try again.",
+        );
+    },
+    onSuccess: async () => {
+      await client.cancelQueries({ queryKey: access.scope });
+      client.removeQueries({ queryKey: access.scope });
+      if (access.isCurrent()) client.getMutationCache().clear();
+    },
+  });
+  const busy = update.isPending || deletion.isPending;
   const open = (next: typeof editor) => {
     setName(saved.name);
     setEmoji(saved.emoji);
     setError(null);
+    update.reset();
+    deletion.reset();
     setNotice(null);
     setConfirmation("");
     setEditor(next);
@@ -542,51 +589,32 @@ export function ProfileScreen({ session, onHome, initialEditor }: ProfileScreenP
       setError(validation);
       return;
     }
-    setBusy(true);
     setError(null);
     try {
       const nextUsername = editor === "name" ? normalized : saved.username;
-      const result = await authClient.updateUser({
-        name: editor === "name" ? normalized : saved.name,
-        ...(nextUsername ? { username: nextUsername, displayUsername: nextUsername } : {}),
-        emoji,
-      });
-      if (result.error) {
-        setError(result.error.message ?? "Couldn’t save your profile. Please try again.");
-        return;
-      }
-      setSaved({
+      const result = await update.mutateAsync({
         name: editor === "name" ? normalized : saved.name,
         username: nextUsername,
         emoji,
       });
+      if (!mounted.current || !access.isCurrent()) return;
+      setSaved(result);
       setEditor(null);
       setNotice("Profile updated!");
     } catch {
-      setError("Couldn’t save your profile. Please try again.");
-    } finally {
-      setBusy(false);
+      /* The mutation exposes the failed save without discarding the draft. */
     }
   };
   const remove = async () => {
-    if (confirmation !== "DELETE") return;
-    setBusy(true);
+    if (confirmation !== "DELETE" || busy) return;
     setError(null);
     try {
-      const result = await authClient.deleteUser();
-      if (result.error) {
-        setError(
-          result.error.message ??
-            "We couldn’t delete the account. Sign out, sign back in, and try again.",
-        );
-        return;
-      }
+      await deletion.mutateAsync();
+      if (!mounted.current) return;
       setEditor(null);
       onHome();
     } catch {
-      setError("We couldn’t delete the account. Please try again.");
-    } finally {
-      setBusy(false);
+      /* Keep confirmation and show the mutation error for an explicit retry. */
     }
   };
 
@@ -644,6 +672,7 @@ export function ProfileScreen({ session, onHome, initialEditor }: ProfileScreenP
               onChangeText={(value) => {
                 setName(value);
                 setError(null);
+                update.reset();
               }}
               editable={!busy}
               maxLength={1024}
@@ -682,6 +711,7 @@ export function ProfileScreen({ session, onHome, initialEditor }: ProfileScreenP
                         onPress={() => {
                           setEmoji(choice);
                           setError(null);
+                          update.reset();
                         }}
                         style={[styles.emoji, emoji === choice && styles.emojiSelected]}
                       >
@@ -716,7 +746,11 @@ export function ProfileScreen({ session, onHome, initialEditor }: ProfileScreenP
           </>
         )}
         <StatusSlot testID="profile-editor-status">
-          <ErrorMessage message={error} />
+          <ErrorMessage
+            message={
+              error ?? (editor === "delete" ? deletion.error?.message : update.error?.message)
+            }
+          />
         </StatusSlot>
         <View style={styles.actions}>
           <Button title="Cancel" disabled={busy} onPress={cancel} style={{ flex: 1 }} />

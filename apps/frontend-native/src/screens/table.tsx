@@ -50,6 +50,7 @@ type TableProps = {
   hidden?: boolean;
   roomId?: string;
   connected?: boolean;
+  acting?: boolean;
   error?: string | null;
   send: (event: GameEvent) => void | Promise<void>;
   onHome: () => void;
@@ -167,6 +168,7 @@ export function TableScreen({
   hidden = false,
   roomId,
   connected = true,
+  acting = false,
   error,
   send,
   onHome,
@@ -212,7 +214,8 @@ export function TableScreen({
   );
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [removeBot, setRemoveBot] = useState<Player | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [localBusy, setLocalBusy] = useState(false);
+  const busy = mode === "online" ? acting : localBusy;
   const [message, setMessage] = useState<string | null>(null);
   const [autoPass, setAutoPass] = useState(false);
   const lastAutoTurn = useRef<string | null>(null);
@@ -306,7 +309,7 @@ export function TableScreen({
 
   const act = async (event: GameEvent) => {
     if (busy || loading) return false;
-    setBusy(true);
+    if (mode !== "online") setLocalBusy(true);
     setMessage(null);
     try {
       await send(event);
@@ -316,7 +319,7 @@ export function TableScreen({
       setMessage(reason instanceof Error ? reason.message : "Could not update the table.");
       return false;
     } finally {
-      setBusy(false);
+      if (mode !== "online") setLocalBusy(false);
     }
   };
   const play = () =>

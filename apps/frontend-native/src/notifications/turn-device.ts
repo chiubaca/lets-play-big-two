@@ -27,10 +27,11 @@ export function createTurnDevice(
   const assertCurrent = () => {
     if (!current()) throw new Error("Your session changed. Reopen settings to try again.");
   };
-  const status = (endpointId?: string) => {
+  const status = (endpointId?: string, signal?: AbortSignal) => {
     assertCurrent();
     return request<{ registered: boolean; generation: number }>(
       `/api/turn-notifications/device${endpointId ? `?endpointId=${endpointId}` : ""}`,
+      { signal },
     );
   };
   const removeId = (endpointId: string) => {
@@ -53,9 +54,9 @@ export function createTurnDevice(
     assertCurrent();
   }
   return {
-    async preference() {
+    async preference(signal?: AbortSignal) {
       assertCurrent();
-      return request<{ enabled: boolean }>("/api/turn-notifications/preference");
+      return request<{ enabled: boolean }>("/api/turn-notifications/preference", { signal });
     },
     async setPreference(enabled: boolean) {
       assertCurrent();
@@ -66,12 +67,12 @@ export function createTurnDevice(
       if (!result.enabled) await platform.dismiss();
       return result;
     },
-    async inspect(): Promise<DeviceState> {
+    async inspect(signal?: AbortSignal): Promise<DeviceState> {
       const reason = platform.unavailable();
       if (reason) return { state: "unavailable", generation: 0, reason };
       const install = await platform.read();
       const permission = await platform.permission(false);
-      const server = await status(install?.endpointId);
+      const server = await status(install?.endpointId, signal);
       const matchingToken =
         permission.allowed && install && server.registered
           ? (await platform.token()) === install.token
