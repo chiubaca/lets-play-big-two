@@ -1,6 +1,6 @@
 {
   "name": "frontend-native",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "private": true,
   "main": "index.ts",
   "scripts": {
@@ -30,6 +30,7 @@
     "better-auth": "catalog:",
     "expo": "catalog:",
     "expo-asset": "~57.0.19",
+    "expo-audio": "catalog:",
     "expo-constants": "~57.0.21",
     "expo-crypto": "~57.0.3",
     "expo-dev-client": "~57.0.19",

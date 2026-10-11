@@ -6,7 +6,7 @@ const config: ExpoConfig = {
   name: "Big Two Crew",
   owner: "chiubaca",
   slug: "lets-play-big-two",
-  version: "1.1.5",
+  version: "1.1.6",
   // Bump the app version and rebuild whenever native dependencies/configuration change.
   runtimeVersion: { policy: "appVersion" },
   updates: {
@@ -23,7 +23,7 @@ const config: ExpoConfig = {
   icon: "./assets/app-icon.png",
   ios: {
     bundleIdentifier: "com.chiubaca.bigtwocrew",
-    buildNumber: "1",
+    buildNumber: "2",
     supportsTablet: true,
     associatedDomains: ["applinks:big-two.chiubaca.com"],
     infoPlist: { ITSAppUsesNonExemptEncryption: false },
@@ -32,9 +32,9 @@ const config: ExpoConfig = {
     ...(process.env.GOOGLE_SERVICES_JSON
       ? { googleServicesFile: process.env.GOOGLE_SERVICES_JSON }
       : {}),
-    // Keep the existing Play application ID and increase the previous versionCode (7).
+    // Keep the existing Play application ID; new native modules require a new binary.
     package: "com.chiubaca.bigtwocrew",
-    versionCode: 8,
+    versionCode: 9,
     intentFilters: [
       {
         action: "VIEW",
@@ -49,6 +49,15 @@ const config: ExpoConfig = {
     },
   },
   plugins: [
+    [
+      "expo-audio",
+      {
+        microphonePermission: false,
+        recordAudioAndroid: false,
+        enableBackgroundPlayback: false,
+        enableBackgroundRecording: false,
+      },
+    ],
     ["expo-notifications", { defaultChannel: "turns", color: "#d6bb75" }],
     "expo-secure-store",
     "expo-web-browser",

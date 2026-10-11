@@ -26,7 +26,14 @@ import {
   Plus,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
-import { getCardKey, getCardRank, SUITS, sortCards, detectHandType } from "@big-two/game-core";
+import {
+  getCardKey,
+  getCardRank,
+  SUITS,
+  sortCards,
+  detectHandType,
+  type Card,
+} from "@big-two/game-core";
 import { getLegalPlays } from "@big-two/game-ai";
 import type {
   BigTwoGameMachineSnapshot,
@@ -44,6 +51,7 @@ import { LossResult } from "../ui/loss-result";
 import { colors, fonts } from "../ui/theme";
 import { RulesSheet } from "./rules";
 import { tableSeats } from "../table-seats";
+import { useTableAudio } from "../audio/use-table-audio";
 
 type TableProps = {
   snapshot?: BigTwoGameMachineSnapshot | RoomGameState;
@@ -274,6 +282,16 @@ export function TableScreen({
     context.cardPile.length,
     context.consecutivePasses,
   ]);
+  const audio = useTableAudio({
+    identity: JSON.stringify([mode, roomId, mode === "pass-and-play" ? mode : userId]),
+    ready: !loading && connected,
+    state: snapshot.value,
+    yourTurn: yourTurn && !(autoPass && activeRound && legal.length === 0),
+    turnKey,
+    pileLength: context.cardPile.length,
+    lastPlayKey: pile.map(getCardKey).join("|"),
+    lastPlaySize: pile.length,
+  });
   const counts =
     loadedSnapshot && "handCounts" in loadedSnapshot
       ? loadedSnapshot.handCounts
@@ -348,6 +366,15 @@ export function TableScreen({
     } finally {
       if (mode !== "online") setLocalBusy(false);
     }
+  };
+  const toggleCard = (card: Card) => {
+    if (!yourTurn || busy) return;
+    const key = getCardKey(card);
+    audio.playSound(selected.includes(key) ? "deselect" : "select");
+    if (Platform.OS !== "web") void Haptics.selectionAsync().catch(() => undefined);
+    setSelected((previous) =>
+      previous.includes(key) ? previous.filter((entry) => entry !== key) : [...previous, key],
+    );
   };
   const play = () =>
     act({
@@ -710,16 +737,7 @@ export function TableScreen({
                       compact={compact || densePortrait}
                       selected={selected}
                       disabled={!yourTurn || busy}
-                      onToggle={(card) => {
-                        if (!yourTurn || busy) return;
-                        if (Platform.OS !== "web")
-                          void Haptics.selectionAsync().catch(() => undefined);
-                        setSelected((previous) =>
-                          previous.includes(getCardKey(card))
-                            ? previous.filter((key) => key !== getCardKey(card))
-                            : [...previous, getCardKey(card)],
-                        );
-                      }}
+                      onToggle={toggleCard}
                     />
                   </View>
                 )}
@@ -959,6 +977,23 @@ export function TableScreen({
         )}
         {panel === "settings" && (
           <>
+            <View style={ui.row}>
+              <View style={{ flex: 1 }}>
+                <Label>Sound effects</Label>
+                <Label style={{ color: colors.muted, fontSize: 12 }}>
+                  Card sounds and a gentle cue when it’s your turn.
+                </Label>
+              </View>
+              <Switch
+                testID="table-sound-effects"
+                accessibilityLabel="Sound effects"
+                accessibilityHint="Card sounds and in-game turn cues. Push alerts are unchanged."
+                value={audio.enabled}
+                disabled={!audio.preferenceReady}
+                onValueChange={audio.setSoundEnabled}
+                trackColor={{ true: colors.goldDark }}
+              />
+            </View>
             {!spectator && (
               <>
                 <View style={ui.row}>
@@ -996,13 +1031,7 @@ export function TableScreen({
                   card={card}
                   width={58}
                   selected={selected.includes(getCardKey(card))}
-                  onPress={() =>
-                    setSelected((previous) =>
-                      previous.includes(getCardKey(card))
-                        ? previous.filter((key) => key !== getCardKey(card))
-                        : [...previous, getCardKey(card)],
-                    )
-                  }
+                  onPress={busy ? undefined : () => toggleCard(card)}
                 />
               ))}
             </View>

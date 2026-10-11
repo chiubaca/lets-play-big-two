@@ -25,6 +25,20 @@ it("links push and OTA to the existing EAS project without local environment fil
   expect(app.updates?.requestHeaders).toBeUndefined();
 });
 
+it("configures game audio without recording permissions or background services", async () => {
+  const app = await config();
+  expect(app.plugins).toContainEqual([
+    "expo-audio",
+    {
+      microphonePermission: false,
+      recordAudioAndroid: false,
+      enableBackgroundPlayback: false,
+      enableBackgroundRecording: false,
+    },
+  ]);
+  expect(app.version).not.toBe("1.1.5");
+});
+
 it("keeps an explicit project override consistent for push and updates", async () => {
   const projectId = "11111111-1111-4111-8111-111111111111";
   const app = await config(projectId);

@@ -6,6 +6,13 @@ import { TableScreen } from "./table";
 import { createRoomFixture } from "../storybook/room-fixtures";
 
 const viewport = vi.hoisted(() => ({ width: 393, height: 852 }));
+const audio = vi.hoisted(() => ({
+  enabled: true,
+  preferenceReady: true,
+  setSoundEnabled: vi.fn(),
+  playSound: vi.fn(),
+}));
+vi.mock("../audio/use-table-audio", () => ({ useTableAudio: () => audio }));
 vi.mock("react-native", () => ({
   View: "View",
   Text: "Text",
@@ -48,7 +55,7 @@ vi.mock("lucide-react-native", () => ({
   Eye: "Eye",
   Plus: "Plus",
 }));
-vi.mock("expo-haptics", () => ({ selectionAsync: vi.fn() }));
+vi.mock("expo-haptics", () => ({ selectionAsync: vi.fn(async () => undefined) }));
 vi.mock("react-native-reanimated", async () => import("../test/reanimated"));
 vi.mock("../ui/use-reduced-motion", () => ({ useReducedMotion: () => true }));
 vi.mock("../ui/primitives", () => ({
@@ -193,6 +200,58 @@ describe("native room header", () => {
     );
     const roomLabel = pill.props.icon.props.children[0];
     expect(roomLabel && roomLabel.props.children).toBe(width < 360 ? false : "ROOM");
+  });
+});
+
+describe("native table sound controls", () => {
+  it.each(["host", "spectator"])("offers an accessible mute switch for %s", async (viewer) => {
+    await mount(viewer);
+    await act(async () =>
+      renderer.root.findByProps({ accessibilityLabel: "Table settings" }).props.onPress(),
+    );
+    const toggle = renderer.root.findByProps({ testID: "table-sound-effects" });
+    expect(toggle.props.accessibilityLabel).toBe("Sound effects");
+    expect(toggle.props.value).toBe(true);
+    await act(async () => toggle.props.onValueChange(false));
+    expect(audio.setSoundEnabled).toHaveBeenCalledWith(false);
+  });
+
+  it("plays select/deselect feedback for the hand and accessible card sheet", async () => {
+    await mount();
+    const props = renderer.root.findByType(TableScreen).props as ComponentProps<typeof TableScreen>;
+    await act(async () =>
+      renderer.update(
+        createElement(TableScreen, { ...props, snapshot: createRoomFixture("first-move") }),
+      ),
+    );
+    const hand = renderer.root.findByType("Hand" as never);
+    const card = hand.props.cards[0];
+    await act(async () => hand.props.onToggle(card));
+    expect(audio.playSound).toHaveBeenLastCalledWith("select");
+    await act(async () => hand.props.onToggle(card));
+    expect(audio.playSound).toHaveBeenLastCalledWith("deselect");
+    await act(async () =>
+      renderer.root.findByProps({ accessibilityLabel: "Table settings" }).props.onPress(),
+    );
+    await act(async () => renderer.root.findByProps({ title: "Choose cards" }).props.onPress());
+    const sheetCard = renderer.root.findAllByType("PlayingCard" as never)[0]!;
+    await act(async () => sheetCard.props.onPress());
+    expect(audio.playSound).toHaveBeenLastCalledWith("select");
+    await act(async () => sheetCard.props.onPress());
+    expect(audio.playSound).toHaveBeenLastCalledWith("deselect");
+  });
+
+  it("does not play selection feedback for a disabled hand", async () => {
+    await mount();
+    const props = renderer.root.findByType(TableScreen).props as ComponentProps<typeof TableScreen>;
+    await act(async () =>
+      renderer.update(
+        createElement(TableScreen, { ...props, snapshot: createRoomFixture("bot-turn") }),
+      ),
+    );
+    const hand = renderer.root.findByType("Hand" as never);
+    await act(async () => hand.props.onToggle(hand.props.cards[0]));
+    expect(audio.playSound).not.toHaveBeenCalled();
   });
 });
 

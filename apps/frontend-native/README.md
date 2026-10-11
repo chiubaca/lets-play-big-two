@@ -145,6 +145,21 @@ discovers the local tools. Reconnect after starting or stopping Metro. Local
 screenshots and automation data are proxied through Expo's remote MCP server;
 use test accounts and avoid displaying sensitive data during verification.
 
+### Game-room sound effects
+
+The table uses bundled CC0 card sounds for selection, accepted plays, and observed
+deals, plus n4's `bell2.mp3` turn cue. **Table settings → Sound effects**
+toggles the persisted preference. Sounds respect silent mode, stop when muted or
+backgrounded, and do not replace visual turn indicators or change push alerts.
+Accepted plays cycle through Kenney's `card-place-1.wav` to `card-place-4.wav`,
+then repeat. All variants are preloaded; muted or skipped cues do not advance the
+rotation.
+
+`expo-audio` requires a new native binary for runtime **1.1.6**. Rebuild with
+`vp run native:android` or `vp run native:ios` before using this change in a
+development client; an OTA update alone cannot add the audio module. Asset edits,
+sources, and licenses are documented in [assets/sounds/README.md](assets/sounds/README.md).
+
 ## Backend
 
 ### Local authentication and online play
