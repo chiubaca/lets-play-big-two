@@ -73,9 +73,11 @@ export function CasinoScreen({
 export function CasinoBackdrop({
   blurRadius = 0,
   overscan = 0,
+  onLoadEnd,
 }: {
   blurRadius?: number;
   overscan?: number;
+  onLoadEnd?: () => void;
 }) {
   const { width, height } = useWindowDimensions();
   const landscape = width > 760 && width > height;
@@ -86,6 +88,7 @@ export function CasinoBackdrop({
     <Image
       accessible={false}
       blurRadius={blurRadius}
+      onLoadEnd={onLoadEnd}
       source={landscape ? artwork.landscape : artwork.portrait}
       resizeMode="stretch"
       style={{

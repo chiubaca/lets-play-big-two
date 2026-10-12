@@ -5,10 +5,12 @@ export function Brand({
   width = 360,
   blurRadius = 0,
   accessible = true,
+  sources = artwork,
 }: {
   width?: number;
   blurRadius?: number;
   accessible?: boolean;
+  sources?: Pick<typeof artwork, "spade" | "title" | "crew">;
 }) {
   return (
     <View
@@ -20,7 +22,7 @@ export function Brand({
       <Image
         accessible={false}
         blurRadius={blurRadius}
-        source={artwork.spade}
+        source={sources.spade}
         resizeMode="contain"
         style={[
           brand.layer,
@@ -30,14 +32,14 @@ export function Brand({
       <Image
         accessible={false}
         blurRadius={blurRadius}
-        source={artwork.title}
+        source={sources.title}
         resizeMode="contain"
         style={[brand.layer, { top: width * 0.3074, height: width * 0.725275 }]}
       />
       <Image
         accessible={false}
         blurRadius={blurRadius}
-        source={artwork.crew}
+        source={sources.crew}
         resizeMode="contain"
         style={[
           brand.layer,

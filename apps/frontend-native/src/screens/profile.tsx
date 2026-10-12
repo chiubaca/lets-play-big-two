@@ -1,12 +1,32 @@
-import { useEffect, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useEffect, useRef, useState, type Ref } from "react";
+import { useMutation, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
+import {
+  AccessibilityInfo,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+  findNodeHandle,
+  useWindowDimensions,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { ChevronDown, Pencil } from "lucide-react-native";
+import Animated from "react-native-reanimated";
+import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { authClient } from "../network";
 import { Button, CasinoScreen, ErrorMessage, Field, Label, Sheet } from "../ui/primitives";
 import { StatusSlot } from "../ui/status-slot";
-import { artwork, colors, fonts } from "../ui/theme";
+import { colors, fonts, membershipArtwork } from "../ui/theme";
+import {
+  MembershipCardBrand,
+  MembershipCardFinish,
+  MembershipSealFinish,
+} from "../ui/membership-card-finish";
+import { Brand } from "../ui/brand";
+import { MembershipCardInspector } from "../ui/membership-card-inspector";
+import { useMembershipCardMotion } from "../ui/use-membership-card-motion";
+import { MembershipCardFoil } from "../ui/membership-card-foil";
+import type { MembershipCardPresentation } from "../ui/membership-card-motion";
 import { usernameError } from "./auth";
 import type { HomeSession } from "./home";
 import { useQueryAccess } from "../network/query-client";
@@ -395,6 +415,10 @@ export function MembershipCard({
   emoji,
   compact = false,
   enlarged = false,
+  interactive = true,
+  inspectRef,
+  presentation,
+  initialSize,
   onEditName,
   onEditEmoji,
   onInspect,
@@ -403,10 +427,25 @@ export function MembershipCard({
   emoji: string;
   compact?: boolean;
   enlarged?: boolean;
+  interactive?: boolean;
+  inspectRef?: Ref<View>;
+  presentation?: MembershipCardPresentation;
+  initialSize?: { width: number; height: number };
   onEditName?: () => void;
   onEditEmoji?: () => void;
   onInspect?: () => void;
 }) {
+  const { width, fontScale } = useWindowDimensions();
+  const narrow = width <= 380;
+  const [measuredSize, setSize] = useState(initialSize ?? { width: 440, height: 266 });
+  const size = enlarged && initialSize ? initialSize : measuredSize;
+  const nameSize = Math.max(22, Math.min(30, width * 0.05));
+  const motion = useMembershipCardMotion({
+    enabled: !compact && interactive,
+    enlarged,
+    presentation,
+    ...size,
+  });
   if (compact)
     return (
       <LinearGradient colors={["#153c2d", "#071b15"]} style={styles.compact}>
@@ -418,120 +457,197 @@ export function MembershipCard({
       </LinearGradient>
     );
   return (
-    <LinearGradient
-      colors={["#355c42", "#10291f", "#071b15", "#153c2d"]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[styles.card, enlarged && styles.enlargedCard]}
-    >
-      <View pointerEvents="none" style={styles.frame} />
-      {onInspect && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Inspect your membership card"
-          onPress={onInspect}
-          style={styles.inspectTarget}
-        />
-      )}
-      <Image source={artwork.spade} resizeMode="contain" style={styles.watermark} />
-      <LinearGradient
-        pointerEvents="none"
-        colors={["#8df3db00", "#eed5a715", "#d39dc719", "#8df3db00"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={styles.top}>
-        <View accessible accessibilityLabel="Big Two Crew" style={styles.cardBrand}>
-          <Image source={artwork.spade} resizeMode="contain" style={{ width: 46, height: 46 }} />
-          <View style={{ width: 108, height: 60 }}>
-            <Image
-              source={artwork.title}
-              resizeMode="contain"
-              style={{ position: "absolute", top: -17, width: 108, height: 78 }}
-            />
-            <Image
-              source={artwork.crew}
-              resizeMode="contain"
-              style={{ position: "absolute", top: 16, left: 21, width: 66, height: 48 }}
-            />
-          </View>
-        </View>
-        <Pressable
-          accessibilityRole={onEditEmoji ? "button" : undefined}
-          accessibilityLabel={onEditEmoji ? "Edit profile emoji" : `Profile emoji ${emoji}`}
-          disabled={!onEditEmoji}
-          onPress={onEditEmoji}
-          style={styles.seal}
-        >
-          <Label style={{ fontSize: 29, lineHeight: 38 }}>{emoji}</Label>
-          {onEditEmoji && (
-            <View style={styles.sealEdit}>
-              <Pencil color={colors.gold} size={13} />
+    <GestureHandlerRootView style={styles.cardStage}>
+      <GestureDetector gesture={motion.gesture}>
+        <View collapsable={false} {...motion.handlers}>
+          <Animated.View
+            collapsable={false}
+            testID="profile-membership-card"
+            renderToHardwareTextureAndroid={enlarged}
+            shouldRasterizeIOS={enlarged}
+            style={[
+              styles.card,
+              narrow && styles.narrowCard,
+              enlarged && initialSize && { height: size.height },
+              motion.frontStyle,
+            ]}
+            onLayout={({ nativeEvent: { layout } }) => {
+              // Yoga rounds a scaled modal's bounds to a different pixel grid.
+              // Preserve the preview's geometry and reuse its exact textures.
+              if (enlarged && initialSize) return;
+              if (layout.width !== size.width || layout.height !== size.height)
+                setSize({ width: layout.width, height: layout.height });
+            }}
+          >
+            <MembershipCardFinish {...size} narrow={narrow} />
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                left: (narrow ? 22 : 30) + 1,
+                top: (narrow ? 24 : 28) + 1,
+              }}
+            >
+              <MembershipCardBrand narrow={narrow} />
             </View>
+            {/* The hidden preview must release its large textures while inspection
+                owns the surface. Keep the inspected finish during its return. */}
+            {(interactive || enlarged) && (
+              <MembershipCardFoil {...size} light={motion.light} intensity={motion.intensity} />
+            )}
+            {onInspect && (
+              <Pressable
+                ref={inspectRef}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  enlarged ? "Return to your profile" : "Inspect your membership card"
+                }
+                onPress={() => {
+                  if (motion.shouldActivate()) onInspect();
+                }}
+                style={styles.inspectTarget}
+              />
+            )}
+            <View pointerEvents="box-none" style={[styles.top, narrow && { gap: 10 }]}>
+              <View
+                pointerEvents="none"
+                accessible={false}
+                style={{ width: narrow ? 150 : 182, height: narrow ? 54 : 64 }}
+              />
+              <Pressable
+                accessibilityRole={onEditEmoji ? "button" : undefined}
+                accessibilityLabel={
+                  onEditEmoji
+                    ? enlarged
+                      ? "Return to your profile"
+                      : "Edit profile emoji"
+                    : `Profile emoji ${emoji}`
+                }
+                disabled={!onEditEmoji}
+                onPress={() => {
+                  if (motion.shouldActivate()) onEditEmoji?.();
+                }}
+                style={styles.seal}
+              >
+                <MembershipSealFinish />
+                <Label
+                  pointerEvents="none"
+                  maxFontSizeMultiplier={1}
+                  style={{ fontSize: 25, lineHeight: 38 }}
+                >
+                  {emoji}
+                </Label>
+                {onEditEmoji && (
+                  <View style={styles.sealEdit}>
+                    <Pencil color="#cfb989" size={12} />
+                  </View>
+                )}
+              </Pressable>
+            </View>
+            <View pointerEvents="box-none" style={{ gap: 6, zIndex: 2 }}>
+              <Label mono pointerEvents="none" style={styles.memberLabel}>
+                CLUB MEMBER
+              </Label>
+              <Pressable
+                accessibilityRole={onEditName ? "button" : undefined}
+                accessibilityLabel={
+                  onEditName
+                    ? enlarged
+                      ? "Return to your profile"
+                      : `Edit username, currently ${name}`
+                    : name
+                }
+                disabled={!onEditName}
+                onPress={() => {
+                  if (motion.shouldActivate()) onEditName?.();
+                }}
+                style={styles.nameRow}
+              >
+                <Label
+                  heading
+                  pointerEvents="none"
+                  style={[
+                    styles.memberName,
+                    {
+                      fontSize: nameSize,
+                      lineHeight: nameSize * 1.2,
+                      paddingRight: nameSize * 0.2 * Math.max(1, fontScale),
+                    },
+                  ]}
+                >
+                  {name}
+                </Label>
+                {onEditName && <Pencil color="#cfb989" size={13} />}
+              </Pressable>
+            </View>
+            <View
+              pointerEvents="none"
+              style={[
+                styles.footer,
+                fontScale > 1.3 && { flexDirection: "column", alignItems: "flex-start" },
+              ]}
+            >
+              <Label mono style={[styles.cardLabel, narrow && { letterSpacing: 0.64 }]}>
+                BIG TWO CREW / 鋤大弟 CREW
+              </Label>
+              <Label mono style={[styles.suits, narrow && { letterSpacing: 0.64 }]}>
+                {"♠\uFE0E · ♥\uFE0E · ♣\uFE0E · ♦\uFE0E"}
+              </Label>
+            </View>
+          </Animated.View>
+          {enlarged && (
+            <Animated.View
+              renderToHardwareTextureAndroid
+              shouldRasterizeIOS
+              pointerEvents="none"
+              accessible={false}
+              importantForAccessibility="no-hide-descendants"
+              style={[styles.card, styles.cardBack, motion.backStyle]}
+            >
+              <MembershipCardFinish {...size} narrow={narrow} holographic={false} />
+              <Brand
+                sources={membershipArtwork}
+                width={Math.min((size.height * 0.82) / 1.06, size.width * 0.8)}
+                accessible={false}
+              />
+            </Animated.View>
           )}
-        </Pressable>
-      </View>
-      <View pointerEvents="box-none" style={{ gap: 3, zIndex: 2 }}>
-        <Label mono style={styles.cardLabel}>
-          CLUB MEMBER
-        </Label>
-        <Pressable
-          accessibilityRole={onEditName ? "button" : undefined}
-          accessibilityLabel={onEditName ? `Edit username, currently ${name}` : name}
-          disabled={!onEditName}
-          onPress={onEditName}
-          style={styles.nameRow}
-        >
-          <Label heading style={styles.memberName}>
-            {name}
-          </Label>
-          {onEditName && <Pencil color={colors.muted} size={14} />}
-        </Pressable>
-      </View>
-      <View style={styles.footer}>
-        <Label mono style={styles.cardLabel}>
-          BIG TWO CREW / 鋤大弟 CREW
-        </Label>
-        <Label mono style={styles.cardLabel}>
-          ♠ · ♥ · ♣ · ♦
-        </Label>
-      </View>
-    </LinearGradient>
+        </View>
+      </GestureDetector>
+    </GestureHandlerRootView>
   );
+}
+
+export interface ProfileValues {
+  name: string;
+  emoji: string;
+  username: string;
 }
 
 export interface ProfileScreenProps {
   session: HomeSession | null;
   onHome: () => void;
-  initialEditor?: "delete";
+  initialEditor?: "name" | "emoji" | "delete";
 }
-export function ProfileScreen({ session, onHome, initialEditor }: ProfileScreenProps) {
+
+type ProfileMutation<Result, Variables> = Pick<
+  UseMutationResult<Result, Error, Variables>,
+  "isPending" | "error" | "mutateAsync" | "reset"
+>;
+
+export interface ProfileViewProps extends ProfileScreenProps {
+  update: ProfileMutation<ProfileValues, ProfileValues>;
+  deletion: ProfileMutation<void, void>;
+  isCurrent: () => boolean;
+  initialInspecting?: boolean;
+}
+
+export function ProfileScreen(props: ProfileScreenProps) {
   const access = useQueryAccess();
   const client = useQueryClient();
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-  const user = session?.user;
-  const [saved, setSaved] = useState({
-    name: user?.displayUsername ?? user?.username ?? user?.name ?? "Member",
-    emoji: user?.emoji ?? "♠️",
-    username: user?.displayUsername ?? user?.username ?? "",
-  });
-  const [name, setName] = useState(saved.name);
-  const [emoji, setEmoji] = useState(saved.emoji);
-  const [editor, setEditor] = useState<"name" | "emoji" | "delete" | null>(initialEditor ?? null);
-  const [inspecting, setInspecting] = useState(false);
-  const [confirmation, setConfirmation] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const update = useMutation({
     mutationKey: [...access.scope, "profile", "update"],
-    mutationFn: async (profile: typeof saved) => {
+    mutationFn: async (profile: ProfileValues) => {
       access.assertCurrent();
       const result = await authClient.updateUser({
         name: profile.name,
@@ -563,6 +679,48 @@ export function ProfileScreen({ session, onHome, initialEditor }: ProfileScreenP
       if (access.isCurrent()) client.getMutationCache().clear();
     },
   });
+  return (
+    <ProfileView {...props} update={update} deletion={deletion} isCurrent={access.isCurrent} />
+  );
+}
+
+export function ProfileView({
+  session,
+  onHome,
+  initialEditor,
+  initialInspecting = false,
+  update,
+  deletion,
+  isCurrent,
+}: ProfileViewProps) {
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const user = session?.user;
+  const [saved, setSaved] = useState<ProfileValues>({
+    name: user?.displayUsername ?? user?.username ?? user?.name ?? "Member",
+    emoji: user?.emoji ?? "♠️",
+    username: user?.displayUsername ?? user?.username ?? "",
+  });
+  const [name, setName] = useState(saved.name);
+  const [emoji, setEmoji] = useState(saved.emoji);
+  const [editor, setEditor] = useState<"name" | "emoji" | "delete" | null>(initialEditor ?? null);
+  const [inspecting, setInspecting] = useState(initialInspecting);
+  const [inspectionPresented, setInspectionPresented] = useState(false);
+  const { width } = useWindowDimensions();
+  const preview = useRef<View>(null);
+  const inspectButton = useRef<View>(null);
+  const [cardSize, setCardSize] = useState({
+    width: Math.min(440, width - 28),
+    height: width <= 380 ? 252 : 266,
+  });
+  const [confirmation, setConfirmation] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const busy = update.isPending || deletion.isPending;
   const open = (next: typeof editor) => {
     setName(saved.name);
@@ -597,7 +755,7 @@ export function ProfileScreen({ session, onHome, initialEditor }: ProfileScreenP
         username: nextUsername,
         emoji,
       });
-      if (!mounted.current || !access.isCurrent()) return;
+      if (!mounted.current || !isCurrent()) return;
       setSaved(result);
       setEditor(null);
       setNotice("Profile updated!");
@@ -625,13 +783,26 @@ export function ProfileScreen({ session, onHome, initialEditor }: ProfileScreenP
       </View>
       {user ? (
         <View style={styles.content}>
-          <MembershipCard
-            name={editor === "name" ? name.trim() || saved.name : saved.name}
-            emoji={editor === "emoji" ? emoji : saved.emoji}
-            onEditName={() => open("name")}
-            onEditEmoji={() => open("emoji")}
-            onInspect={() => setInspecting(true)}
-          />
+          <View
+            ref={preview}
+            collapsable={false}
+            pointerEvents={inspecting ? "none" : "box-none"}
+            importantForAccessibility={inspecting ? "no-hide-descendants" : "auto"}
+            style={{ width: "100%", opacity: inspectionPresented ? 0 : 1 }}
+            onLayout={({ nativeEvent: { layout } }) =>
+              setCardSize({ width: layout.width, height: layout.height })
+            }
+          >
+            <MembershipCard
+              name={editor === "name" ? name.trim() || saved.name : saved.name}
+              emoji={editor === "emoji" ? emoji : saved.emoji}
+              onEditName={() => open("name")}
+              onEditEmoji={() => open("emoji")}
+              interactive={!inspectionPresented}
+              inspectRef={inspectButton}
+              onInspect={() => setInspecting(true)}
+            />
+          </View>
           <Label style={styles.caption}>Your seat at the members’ table.</Label>
           <StatusSlot testID="profile-notice">
             {notice && (
@@ -774,17 +945,41 @@ export function ProfileScreen({ session, onHome, initialEditor }: ProfileScreenP
           )}
         </View>
       </Sheet>
-      <Sheet visible={inspecting} onClose={() => setInspecting(false)} title="Your membership card">
-        <MembershipCard
-          name={saved.name}
-          emoji={saved.emoji}
-          enlarged
-          onInspect={() => setInspecting(false)}
-        />
-        <Label style={styles.caption}>
-          Your seat at the members’ table. Tap the card to return to your profile.
-        </Label>
-      </Sheet>
+      <MembershipCardInspector
+        visible={inspecting}
+        size={cardSize}
+        measureAnchor={(done) => {
+          if (!preview.current) {
+            done(null);
+            return;
+          }
+          preview.current.measureInWindow((x, y, width, height) => {
+            if (mounted.current) done({ x, y, width, height });
+          });
+        }}
+        onReady={() => setInspectionPresented(true)}
+        onClose={() => {
+          setInspectionPresented(false);
+          setInspecting(false);
+        }}
+        onRestoreFocus={() => {
+          const node = findNodeHandle(inspectButton.current);
+          if (node) AccessibilityInfo.setAccessibilityFocus(node);
+        }}
+        renderCard={(close, interactive, presentation) => (
+          <MembershipCard
+            name={saved.name}
+            emoji={saved.emoji}
+            enlarged
+            interactive={interactive}
+            presentation={presentation}
+            initialSize={cardSize}
+            onInspect={close}
+            onEditName={close}
+            onEditEmoji={close}
+          />
+        )}
+      />
     </CasinoScreen>
   );
 }
@@ -806,61 +1001,91 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e5cb92",
     borderRadius: 18,
-    padding: 24,
-    gap: 20,
+    paddingTop: 28,
+    paddingHorizontal: 30,
+    paddingBottom: 22,
+    gap: 26,
+    justifyContent: "space-between",
     overflow: "hidden",
-    boxShadow: "0 20px 35px -10px #000a",
+    backgroundColor: "#071b15",
+    isolation: "isolate",
+    backfaceVisibility: "hidden",
+    boxShadow: "0 24px 48px -12px #000a, 0 0 32px -12px #dcb87544",
   },
-  frame: {
-    position: "absolute",
-    top: 9,
-    bottom: 9,
-    left: 9,
-    right: 9,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#dcb87566",
+  cardStage: { width: "100%" },
+  cardBack: {
+    ...StyleSheet.absoluteFill,
+    padding: 0,
+    gap: 0,
+    minHeight: 0,
+    justifyContent: "center",
+    alignItems: "center",
   },
+  narrowCard: { paddingTop: 24, paddingHorizontal: 22, paddingBottom: 20, gap: 22 },
   inspectTarget: { ...StyleSheet.absoluteFill, zIndex: 1 },
-  enlargedCard: { minHeight: 300, padding: 28, gap: 35 },
-  watermark: { position: "absolute", width: 148, height: 148, right: 15, top: 46, opacity: 0.12 },
   top: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
-    gap: 8,
+    gap: 18,
     pointerEvents: "box-none",
     zIndex: 2,
   },
-  cardBrand: { flexDirection: "row", alignItems: "center", height: 60, opacity: 0.85 },
   seal: {
     zIndex: 2,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     borderWidth: 1,
     borderColor: "#e5cb92bb",
-    backgroundColor: "#31503b",
+    backgroundColor: "#153426",
+    boxShadow: "0 3px 10px #0005",
     alignItems: "center",
     justifyContent: "center",
   },
   sealEdit: {
     position: "absolute",
-    bottom: -3,
-    right: -3,
-    width: 23,
-    height: 23,
-    borderRadius: 12,
-    backgroundColor: "#10291f",
+    bottom: -2,
+    right: -4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#081d16",
     borderWidth: 1,
-    borderColor: colors.gold,
+    borderColor: "#dcb87588",
     alignItems: "center",
     justifyContent: "center",
   },
-  cardLabel: { fontSize: 8, lineHeight: 14, letterSpacing: 1, color: "#cfb989" },
-  nameRow: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 44, zIndex: 2 },
-  memberName: { fontSize: 27, lineHeight: 34, flexShrink: 1, color: "#ffebbf" },
-  footer: { flexDirection: "row", justifyContent: "space-between", flexWrap: "wrap", gap: 8 },
+  memberLabel: { fontSize: 9, lineHeight: 13.5, letterSpacing: 1.44, color: "#cfb989" },
+  cardLabel: { fontSize: 8, lineHeight: 12, letterSpacing: 1.28, color: "#cfb989", flexShrink: 1 },
+  suits: { fontSize: 12, lineHeight: 19.5, letterSpacing: 1.28, color: "#e7c98a", flexShrink: 0 },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    maxWidth: "100%",
+    gap: 12,
+    minHeight: 44,
+    zIndex: 2,
+  },
+  memberName: {
+    fontFamily: "FrauncesMedium",
+    flexShrink: 1,
+    color: "#ffebbf",
+    textShadowColor: "#0009",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 2,
+  },
+  footer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#dcb87533",
+    zIndex: 2,
+  },
   compact: {
     flexDirection: "row",
     gap: 10,

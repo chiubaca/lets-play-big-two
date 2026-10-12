@@ -8,11 +8,20 @@ export default {
 export const ReduceMotion = { Always: "always", Never: "never", System: "system" };
 export const Easing = { bezier: (...points: number[]) => points };
 export const withSpring = vi.fn((value: number, _config?: unknown) => value);
-export const withTiming = vi.fn((value: number, _config?: unknown) => value);
+export const withTiming = vi.fn(
+  (value: number, _config?: unknown, _callback?: (finished?: boolean) => void) => value,
+);
 export const withDelay = vi.fn((_delay: number, value: number, _reduceMotion?: unknown) => value);
 export const cancelAnimation = vi.fn();
-export const useSharedValue = (value: number) => useState(() => ({ value }))[0];
-export const useAnimatedStyle = (style: () => unknown) => style();
+export const useSharedValue = <T>(value: T) => useState(() => ({ value }))[0];
+const styles = new WeakMap<object, () => object>();
+export const useAnimatedStyle = (style: () => object) => {
+  const initial = style();
+  styles.set(initial, style);
+  return initial;
+};
+export const readAnimatedStyle = <T extends object>(style: T): T =>
+  (styles.get(style)?.() ?? style) as T;
 export const interpolateColor = (value: number, _range: number[], colors: string[]) =>
   colors[value > 0 ? colors.length - 1 : 0];
 export function interpolate(value: number, input: number[], output: number[]) {

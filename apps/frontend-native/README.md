@@ -56,7 +56,7 @@ is not the recommended target because Google sign-in requires this app's URL sch
 
 ### Game-room Storybook
 
-Preview the **actual native table and room-chat screens** in fixed states, without
+Preview the **actual native table, room-chat, and profile screens** in fixed states, without
 authentication, a backend, the development tunnel, or notification registration:
 
 ```sh
@@ -98,13 +98,66 @@ safe areas, gestures, keyboard behavior, and accessibility on Android/iOS too.
 Fixture hands are deliberately private: only the selected Player sees a hand;
 Spectators and opponents expose counts only.
 
+Under **Profile → Page**, preview the member profile, username editor, emoji picker,
+enlarged membership card, long/unbroken/multilingual names, slow saves, save failures,
+account deletion, deletion failures, and the signed-out page. **Controls** change
+the username, emoji, email, initial sheet, simulated result, and request delay.
+Edit and save to see pending/success/error feedback; type `DELETE` to exercise the
+confirmation flow. Successful deletion only signs out the fictional preview
+account. **Actions** logs saves, deletion, and Home navigation. These stories use
+the same profile UI as the app but never call auth endpoints or read real sessions.
+
+The membership card shares the web artwork, Fraunces Medium typography, inset gold
+frames, hatched holographic spade, and footer treatment. Drag across the card to
+tilt it and move edge-to-edge rainbow/metallic reflections, then release to let
+the lighting fade and the card settle. Dragging does not open an editor or
+inspection; tapping does. Inspect it for a uniformly scaled view with a reverse-face
+opening and a return to the preview. Name/emoji pencils in inspection only close it. Optional
+motion respects the system's Reduce Motion setting; enlarged text keeps the footer
+readable and the inspection hint scrollable on short screens. Compact Home cards
+are unchanged. Verify SVG compositing and screen-reader focus on both platforms
+before release; Android screenshot checks do not establish iOS rendering parity.
+
+Card tilt, moving reflections, and release fades use Reanimated shared values and
+native touch worklets, not per-frame React state. SVG artwork and material textures
+stay immutable and cached; only native transforms and opacity change during a drag.
+The touch observer does not activate a recognizer or take ownership from scrolling.
+Inspection uses a hardware-accelerated Android modal and releases the hidden
+preview's foil textures to avoid GPU-cache eviction and bitmap uploads every frame.
+The preview stays intact until the modal has laid out and warmed both faces and
+its backdrop. One UI-thread timeline drives the web's 850ms unfurl and easing;
+closing settles the current pose and returns an opaque card before restoring the
+preview. Inspection preserves the preview's exact geometry, reuses bounded PNG
+texture snapshots, and uses card-sized logo copies so native SVG image decoding
+cannot continually evict and reload the original large artwork.
+
+For a repeatable Android frame-rate check, open **Profile → Page → Member** with
+Reduce Motion off, let Metro finish refreshing, wait for CPU-heavy tests/builds to
+finish, and run from the repository root:
+
+```sh
+node agent/check-native-profile-card-performance.mjs
+# Tap-to-inspect and return; use --phase open or --phase close to isolate a phase
+node agent/check-native-profile-card-performance.mjs --zoom
+# Other devices: physical pixel coordinates entirely inside the visible card
+node agent/check-native-profile-card-performance.mjs --serial DEVICE --start 220,900 --end 900,1150
+```
+
+The check performs two drags (or an opening/return with `--zoom`), samples Android's frame statistics, and fails on
+insufficient animation frames, over 5% deadline misses, or p90 frame cadence above
+17ms. Window timelines are measured separately so a slow modal cannot be masked
+by profile frames. Pipeline latency is reported separately; it is not the same as frame cadence.
+Use a physical phone or a GPU-accelerated emulator. SwiftShader/software rendering
+can miss every frame deadline even without React re-renders, so it cannot validate
+the 60fps target. The default coordinates fit the 1080×2400 Pixel 7 emulator.
+
 Storybook substitutes in-memory storage, so settings experiments cannot overwrite
 saved games or real app preferences. Restarting Metro/reloading clears those
 preview preferences. The normal app entry point is unchanged: Metro swaps it only
 when `STORYBOOK_ENABLED=true`, and normal development/build/update commands do not
 include Storybook. Never set that flag for release builds or EAS updates.
 
-Stories live in `src/storybook/game-room.stories.tsx`; deterministic, tested room
+Stories live in `src/storybook/game-room.stories.tsx` and `src/storybook/profile.stories.tsx`; deterministic, tested room
 fixtures live in `src/storybook/room-fixtures.ts`. Add more `*.stories.tsx` files
 under `src/` as needed. Metro regenerates `.rnstorybook/storybook.requires.ts` when
 starting Storybook; if adding a file while Metro runs, restart it or run

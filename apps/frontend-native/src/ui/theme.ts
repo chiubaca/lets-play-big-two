@@ -28,3 +28,11 @@ export const artwork = {
   winner: require("../../assets/winner.png"),
   loser: require("../../assets/too-bad.png"),
 };
+
+// SVG image elements decode their full source dimensions. Card-sized copies
+// prevent the SVGs from continually evicting each other's decoded logo assets.
+export const membershipArtwork = {
+  spade: require("../../assets/membership-card-logo.png"),
+  title: require("../../assets/membership-card-title.png"),
+  crew: require("../../assets/membership-card-crew.png"),
+};

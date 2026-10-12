@@ -26,6 +26,7 @@ function StorybookApp() {
     Inter: require("../assets/fonts/Inter_400Regular.ttf"),
     InterSemiBold: require("../assets/fonts/Inter_600SemiBold.ttf"),
     Fraunces: require("../assets/fonts/Fraunces_600SemiBold.ttf"),
+    FrauncesMedium: require("../assets/fonts/Fraunces_500Medium.ttf"),
     IBMPlexMono: require("../assets/fonts/IBMPlexMono-Regular.ttf"),
   });
   useEffect(() => {
