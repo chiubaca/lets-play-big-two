@@ -38,9 +38,47 @@ The SDK is resolved from `ANDROID_HOME`, `ANDROID_SDK_ROOT`, or
 terminal on first use or after native changes. Otherwise press `a` in Metro to
 open the installed development client. `Ctrl+C` stops the services, not the emulator.
 
-Use a clean emulator/test device for debug builds: a locally signed debug app
-cannot be installed over the Play-signed TWA with the same application ID.
-Do not uninstall a user's existing app or discard its data just to test a build.
+The existing `native:android` / `native:ios` commands use generated native projects
+that may still have the production identity. Use the isolated development APK
+workflow below on a physical Android phone. Do not uninstall a user's existing
+app or discard its data just to test a build.
+
+### Side-by-side Android development APK
+
+For a physical phone with the Play Store app installed:
+
+```sh
+# From the repository root, with Java 17 and the Android SDK installed:
+export JAVA_HOME="$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home"
+vp run native:apk:dev
+# Start matching Metro + the local API tunnel:
+EXPO_PUBLIC_APP_VARIANT=development vp run dev:native
+```
+
+Install `.native-dev/apks/BigTwoCrew-Dev.apk`, then open **Big Two Crew Dev** and
+enter the reachable Metro URL. With Tailscale, use `http://<Mac-Tailscale-IP>:8081`;
+both devices must be on your tailnet. The build is ARM64, intended for modern
+physical Android phones, not x86 emulators. The script does not install anything.
+
+This app uses **`com.chiubaca.bigtwocrew.dev`** and **`bigtwocrew-dev://`**, has its
+own app data, and does not claim production HTTPS room links. Production retains
+`com.chiubaca.bigtwocrew` / `bigtwocrew://`. The build generates Android files in a
+fresh ignored `.native-dev/apk-project-*` directory, leaving existing Android/iOS
+projects and their signing setup untouched. Before publishing the output, it
+checks the APK's actual ID, label, debug flag, schemes, and signature, and refuses
+an artifact with a production identity or production room links. Merely changing
+the Expo config is not sufficient when an existing native project still has the
+old package ID.
+
+Firebase configuration is package-specific. The Dev app does **not** reuse the
+production `GOOGLE_SERVICES_JSON`. Remote push requires registering the `.dev`
+Android app separately in Firebase and setting `DEV_GOOGLE_SERVICES_JSON` to its
+configuration file (relative paths resolve from `apps/frontend-native` in the APK
+script). Without it, the app runs normally but remote push enrollment is unavailable.
+Do not rename the package in a production Firebase file to work around registration.
+The local backend trusts the Dev scheme; no production backend is deployed by this
+build. Use the native API tunnel for Dev authentication and online play, and test
+accounts because the tunnel still uses remote D1.
 
 For a browser-rendered UI preview only:
 

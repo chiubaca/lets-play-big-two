@@ -1,9 +1,21 @@
 import type { ExpoConfig } from "expo/config";
 
 const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? "feb26247-9b9f-4d68-b9a3-760409a03453";
+const variant = process.env.EXPO_PUBLIC_APP_VARIANT;
+if (variant && variant !== "development" && variant !== "production") {
+  throw new Error("EXPO_PUBLIC_APP_VARIANT must be development or production.");
+}
+const isDevelopment = variant === "development";
+const applicationId = isDevelopment ? "com.chiubaca.bigtwocrew.dev" : "com.chiubaca.bigtwocrew";
+const googleServicesFile = isDevelopment
+  ? process.env.DEV_GOOGLE_SERVICES_JSON
+  : process.env.GOOGLE_SERVICES_JSON;
+const developmentPlugins: ExpoConfig["plugins"] = isDevelopment
+  ? [["expo-dev-client", { addGeneratedScheme: false }]]
+  : [];
 
 const config: ExpoConfig = {
-  name: "Big Two Crew",
+  name: isDevelopment ? "Big Two Crew Dev" : "Big Two Crew",
   owner: "chiubaca",
   slug: "lets-play-big-two",
   version: "1.1.6",
@@ -16,39 +28,40 @@ const config: ExpoConfig = {
       ? { requestHeaders: { "expo-channel-name": process.env.EXPO_UPDATE_CHANNEL } }
       : {}),
   },
-  scheme: "bigtwocrew",
+  scheme: isDevelopment ? "bigtwocrew-dev" : "bigtwocrew",
   orientation: "default",
   userInterfaceStyle: "dark",
   backgroundColor: "#030e09",
   icon: "./assets/app-icon.png",
   ios: {
-    bundleIdentifier: "com.chiubaca.bigtwocrew",
+    bundleIdentifier: applicationId,
     buildNumber: "2",
     supportsTablet: true,
-    associatedDomains: ["applinks:big-two.chiubaca.com"],
+    associatedDomains: isDevelopment ? [] : ["applinks:big-two.chiubaca.com"],
     infoPlist: { ITSAppUsesNonExemptEncryption: false },
   },
   android: {
-    ...(process.env.GOOGLE_SERVICES_JSON
-      ? { googleServicesFile: process.env.GOOGLE_SERVICES_JSON }
-      : {}),
-    // Keep the existing Play application ID; new native modules require a new binary.
-    package: "com.chiubaca.bigtwocrew",
+    ...(googleServicesFile ? { googleServicesFile } : {}),
+    // Production retains the Play identity; development installs alongside it.
+    package: applicationId,
     versionCode: 9,
-    intentFilters: [
-      {
-        action: "VIEW",
-        autoVerify: true,
-        category: ["BROWSABLE", "DEFAULT"],
-        data: [{ scheme: "https", host: "big-two.chiubaca.com", pathPrefix: "/room/" }],
-      },
-    ],
+    intentFilters: isDevelopment
+      ? []
+      : [
+          {
+            action: "VIEW",
+            autoVerify: true,
+            category: ["BROWSABLE", "DEFAULT"],
+            data: [{ scheme: "https", host: "big-two.chiubaca.com", pathPrefix: "/room/" }],
+          },
+        ],
     adaptiveIcon: {
       foregroundImage: "./assets/adaptive-icon.png",
       backgroundColor: "#030e09",
     },
   },
   plugins: [
+    ...developmentPlugins,
     [
       "expo-audio",
       {

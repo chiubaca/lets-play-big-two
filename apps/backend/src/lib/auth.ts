@@ -25,7 +25,12 @@ export const auth = betterAuth({
     },
   }),
   baseURL: env.BETTER_AUTH_URL,
-  trustedOrigins: ["https://local.bigtwo.com", "https://big-two.chiubaca.com", "bigtwocrew://"],
+  trustedOrigins: [
+    "https://local.bigtwo.com",
+    "https://big-two.chiubaca.com",
+    "bigtwocrew://",
+    "bigtwocrew-dev://",
+  ],
   advanced: {
     ipAddress: {
       ipAddressHeaders: ["cf-connecting-ip"],

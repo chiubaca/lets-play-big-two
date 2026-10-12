@@ -1,3 +1,5 @@
+import { NATIVE_SCHEME } from "./network/config";
+
 export type NativeRoute =
   | { name: "home" }
   | { name: "solo" }
@@ -12,7 +14,7 @@ export function routeFromURL(value: string): NativeRoute | null {
     if (/(?:^|\/)\.{1,2}(?:\/|$)/.test(value) || value.includes("\\")) return null;
     const url = new URL(value);
     const path =
-      url.protocol === "bigtwocrew:"
+      url.protocol === `${NATIVE_SCHEME}:`
         ? `${url.host}${url.pathname}`
         : url.protocol === "https:" && url.hostname === "big-two.chiubaca.com"
           ? url.pathname.replace(/^\//, "")

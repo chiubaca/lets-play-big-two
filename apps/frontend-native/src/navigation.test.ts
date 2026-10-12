@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { routeFromURL } from "./navigation";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.resetModules();
+});
 
 describe("native room links", () => {
   it("accepts room links and normalizes codes", () => {
@@ -18,5 +23,15 @@ describe("native room links", () => {
       "bigtwocrew://room/TOOLONGCODE",
     ])
       expect(routeFromURL(url)).toBeNull();
+  });
+  it("uses only the development scheme in the development variant", async () => {
+    vi.stubEnv("EXPO_PUBLIC_APP_VARIANT", "development");
+    vi.resetModules();
+    const { routeFromURL: developmentRoute } = await import("./navigation");
+    expect(developmentRoute("bigtwocrew-dev://room/abc123")).toEqual({
+      name: "room",
+      roomId: "ABC123",
+    });
+    expect(developmentRoute("bigtwocrew://room/ABC123")).toBeNull();
   });
 });

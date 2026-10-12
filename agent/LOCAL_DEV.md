@@ -90,6 +90,13 @@ overrides without changing web environment files. Stop `dev:local` before starti
 native development because both use port `8788`. `Ctrl+C` stops the native service
 group, including the tunnel; it is not installed as an always-on system service.
 
+For a physical Android phone that also has the Play Store app, use
+`vp run native:apk:dev` (with Java 17) and start the services with
+`EXPO_PUBLIC_APP_VARIANT=development vp run dev:native`. The verified APK is
+`.native-dev/apks/BigTwoCrew-Dev.apk`, with the separate `.dev` app ID and
+`bigtwocrew-dev://` scheme. It cannot update the production installation.
+See the native README's side-by-side APK workflow for Firebase and build details.
+
 If backend port `8788` or Metro port `8081` is busy, the launcher shows the listener
 PIDs and asks before stopping them (default: no). To stop listeners automatically:
 

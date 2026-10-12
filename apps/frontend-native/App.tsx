@@ -23,6 +23,7 @@ import { TurnNotificationSettings } from "./src/notifications/turn-settings";
 import type { TurnDevice } from "./src/notifications/turn-device";
 import { NativeQueryProvider } from "./src/network/query-client";
 import { useQueryLifecycle } from "./src/network/query-lifecycle";
+import { NATIVE_ORIGIN } from "./src/network/config";
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 const PASS_CONFIG_KEY = "big-two-native-pass-config-v1";
@@ -382,7 +383,7 @@ export function GameApp() {
       )}
       <AuthSheet
         visible={authOpen}
-        callbackURL={route.name === "room" ? `bigtwocrew://room/${route.roomId}` : undefined}
+        callbackURL={route.name === "room" ? `${NATIVE_ORIGIN}room/${route.roomId}` : undefined}
         onClose={() => {
           if (route.name === "room" && !session) home();
           else setAuthOpen(false);

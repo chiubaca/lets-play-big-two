@@ -28,6 +28,7 @@ const allowedOrigins = [
   "https://local.bigtwo.com",
   "https://big-two.chiubaca.com",
   "bigtwocrew://",
+  "bigtwocrew-dev://",
 ];
 
 async function accountDeletionIsPending(userId: string) {
