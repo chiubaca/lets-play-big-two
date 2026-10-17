@@ -2,6 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { createPlayEvent, type OfflineGameConfig, type OfflineMode } from "./game-helpers";
 import { getStorageKey, restoreGame, type LocalGameStorage } from "./game-persistence";
 import { BOT_THINKING_DELAY_MS, OfflineGameSession } from "./offline-game-session";
+import { JEV_REQUEST_TIMEOUT_MS } from "./offline-game-session";
+import {
+  createJevBotClient,
+  type JevBotMoveRequester,
+  type JevBotMoveDecision,
+} from "./jev-bot-client";
+import { getLegalPlays } from "@big-two/game-ai";
 
 const sessions: OfflineGameSession[] = [];
 
@@ -10,8 +17,9 @@ function createSession(
   storage?: LocalGameStorage,
   active = true,
   config?: OfflineGameConfig,
+  requestJevBotMove?: JevBotMoveRequester,
 ) {
-  const session = new OfflineGameSession(mode, storage, active, config);
+  const session = new OfflineGameSession(mode, storage, active, config, requestJevBotMove);
   sessions.push(session);
   return session;
 }
@@ -281,6 +289,241 @@ describe("native pass-and-play sessions", () => {
     }
     expect(session.requestHint()).toEqual([{ suit: "DIAMOND", value: "3" }]);
   });
+});
+
+describe("native Jev bot turns", () => {
+  it("removes existing Jev confirmations when the next bot falls back", async () => {
+    const request = vi
+      .fn<JevBotMoveRequester>()
+      .mockResolvedValueOnce({ cards: [{ suit: "DIAMOND", value: "3" }], source: "jev" })
+      .mockRejectedValue(new Error("Jev unavailable"));
+    const session = createSession("solo", undefined, true, undefined, request);
+    await session.initialize();
+    await vi.advanceTimersByTimeAsync(BOT_THINKING_DELAY_MS);
+    expect(session.getView().snapshot!.context.players.some((player) => player.usesJev)).toBe(true);
+    session.send({ type: "PASS_TURN", playerId: "local-you" });
+    await vi.advanceTimersByTimeAsync(BOT_THINKING_DELAY_MS);
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(session.getView().snapshot!.context.players.every((player) => !player.usesJev)).toBe(
+      true,
+    );
+  });
+
+  it.each(["fallback", "forced"] as const)(
+    "does not mark an unverified %s move as Jev",
+    async (source) => {
+      const request = vi
+        .fn<JevBotMoveRequester>()
+        .mockResolvedValue({ cards: [{ suit: "DIAMOND", value: "3" }], source });
+      const session = createSession("solo", undefined, true, undefined, request);
+      await session.initialize();
+      await vi.advanceTimersByTimeAsync(BOT_THINKING_DELAY_MS);
+      expect(session.getView().snapshot!.context.players.every((player) => !player.usesJev)).toBe(
+        true,
+      );
+    },
+  );
+
+  it.each(["offline", "background", "redeal"])(
+    "clears verified Jev badges on %s",
+    async (action) => {
+      const request = vi
+        .fn<JevBotMoveRequester>()
+        .mockResolvedValue({ cards: [{ suit: "DIAMOND", value: "3" }], source: "jev" });
+      const session = createSession("solo", undefined, true, undefined, request);
+      await session.initialize();
+      await vi.advanceTimersByTimeAsync(BOT_THINKING_DELAY_MS);
+      expect(session.getView().snapshot!.context.players.some((player) => player.usesJev)).toBe(
+        true,
+      );
+      if (action === "offline") {
+        session.setOnline(false);
+        session.setOnline(true);
+      } else if (action === "background") {
+        session.setActive(false);
+        session.setActive(true);
+      } else session.reset();
+      expect(session.getView().snapshot!.context.players.every((player) => !player.usesJev)).toBe(
+        true,
+      );
+    },
+  );
+
+  it("uses fallback without a request while offline and aborts pending inference when connectivity is lost", async () => {
+    const request = vi.fn<JevBotMoveRequester>().mockReturnValue(new Promise(() => {}));
+    const session = createSession("solo", undefined, true, undefined, request);
+    await session.initialize();
+    await vi.advanceTimersByTimeAsync(BOT_THINKING_DELAY_MS);
+    session.setOnline(false);
+    expect(request.mock.calls[0][1].aborted).toBe(true);
+    await vi.advanceTimersByTimeAsync(BOT_THINKING_DELAY_MS);
+    expect(request).toHaveBeenCalledOnce();
+    expect(session.getView().snapshot!.context.cardPile).toHaveLength(1);
+    expect(session.getView().snapshot!.context.players.every((player) => !player.usesJev)).toBe(
+      true,
+    );
+  });
+
+  it.each(["solo", "pass-and-play"] as const)(
+    "uses Jev rather than the deterministic opening in %s",
+    async (mode) => {
+      const config: OfflineGameConfig = {
+        players: [
+          { name: "Alex", isBot: false },
+          { name: "Blair", isBot: false },
+          { name: "Eve", isBot: true },
+          { name: "May", isBot: true },
+        ],
+      };
+      const request = vi.fn<JevBotMoveRequester>().mockImplementation(async (input) => ({
+        cards: getLegalPlays(input).at(-1) ?? null,
+        source: "jev",
+      }));
+      const session = createSession(mode, undefined, true, config, request);
+      await session.initialize();
+      const before = session.getView();
+      expect(before.snapshot!.context.players.every((player) => !player.usesJev)).toBe(true);
+      await vi.advanceTimersByTimeAsync(BOT_THINKING_DELAY_MS - 1);
+      expect(request).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(request).toHaveBeenCalledOnce();
+      expect(request.mock.calls[0][0]).toMatchObject({
+        playedHands: [],
+        roundMode: null,
+        requiredCard: { suit: "DIAMOND", value: "3" },
+        opponentHandSizes: [13, 13, 13],
+      });
+      expect(request.mock.calls[0][0].hand).toHaveLength(13);
+      expect(before.snapshot!.context.players.slice(1).every((player) => !player.hand.length)).toBe(
+        true,
+      );
+      const opening = getLegalPlays(request.mock.calls[0][0]).at(-1)!;
+      expect(opening.length).toBeGreaterThan(1);
+      expect(session.getView().snapshot!.context.cardPile).toEqual([opening]);
+      expect(session.getView().thinkingPlayerId).toBeUndefined();
+      expect(
+        session
+          .getView()
+          .snapshot!.context.players.find((player) => player.id === before.thinkingPlayerId)!
+          .usesJev,
+      ).toBe(true);
+    },
+  );
+
+  it.each(["network", "invalid"])(
+    "falls back to a legal deterministic move after a %s failure",
+    async (failure) => {
+      const request =
+        failure === "network"
+          ? vi.fn<JevBotMoveRequester>().mockRejectedValue(new Error("offline"))
+          : createJevBotClient(vi.fn().mockResolvedValue({ cards: null }));
+      const session = createSession("solo", undefined, true, undefined, request);
+      await session.initialize();
+      await vi.advanceTimersByTimeAsync(BOT_THINKING_DELAY_MS);
+      expect(session.getView().snapshot!.context.cardPile).toEqual([
+        [{ suit: "DIAMOND", value: "3" }],
+      ]);
+      expect(session.getView().error).toBeNull();
+      expect(session.getView().snapshot!.context.players.every((player) => !player.usesJev)).toBe(
+        true,
+      );
+    },
+  );
+
+  it("keeps the thinking indicator until inference finishes and falls back on timeout even if transport ignores abort", async () => {
+    let resolve!: (decision: JevBotMoveDecision) => void;
+    const request = vi.fn<JevBotMoveRequester>().mockReturnValue(
+      new Promise((done) => {
+        resolve = done;
+      }),
+    );
+    const session = createSession("solo", undefined, true, undefined, request);
+    await session.initialize();
+    await vi.advanceTimersByTimeAsync(BOT_THINKING_DELAY_MS);
+    expect(session.getView().thinkingPlayerId).toBe("local-bot-3");
+    await vi.advanceTimersByTimeAsync(JEV_REQUEST_TIMEOUT_MS - 1);
+    expect(session.getView().snapshot!.context.cardPile).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(request.mock.calls[0][1].aborted).toBe(true);
+    expect(session.getView().snapshot!.context.cardPile).toHaveLength(1);
+    const after = session.getView();
+    resolve({ cards: [{ suit: "DIAMOND", value: "3" }], source: "jev" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.getView()).toBe(after);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each(["resume", "redeal", "dispose"])(
+    "cancels pending inference and ignores late results after %s",
+    async (action) => {
+      let resolve!: (decision: JevBotMoveDecision) => void;
+      const request = vi
+        .fn<JevBotMoveRequester>()
+        .mockReturnValueOnce(
+          new Promise((done) => {
+            resolve = done;
+          }),
+        )
+        .mockResolvedValue({ cards: [{ suit: "DIAMOND", value: "3" }], source: "jev" });
+      const session = createSession("solo", undefined, true, undefined, request);
+      await session.initialize();
+      await vi.advanceTimersByTimeAsync(BOT_THINKING_DELAY_MS);
+      if (action === "resume") {
+        session.setActive(false);
+        session.setActive(true);
+      } else if (action === "redeal") session.reset();
+      else session.dispose();
+      expect(request.mock.calls[0][1].aborted).toBe(true);
+      const after = session.getView();
+      resolve({ cards: [{ suit: "DIAMOND", value: "3" }], source: "jev" });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(session.getView()).toBe(after);
+      if (action !== "dispose") {
+        await vi.advanceTimersByTimeAsync(BOT_THINKING_DELAY_MS);
+        expect(request).toHaveBeenCalledTimes(2);
+        expect(session.getView().snapshot!.context.cardPile).toHaveLength(1);
+      } else expect(vi.getTimerCount()).toBe(0);
+    },
+  );
+
+  it.each([2, 3, 4])(
+    "requests Jev for every bot seat in a complete %i-player pass-and-play game",
+    async (seatCount) => {
+      const config: OfflineGameConfig = {
+        players: Array.from({ length: seatCount }, (_, index) => ({
+          name: `Seat ${index + 1}`,
+          isBot: index > 0,
+        })),
+      };
+      const request = vi.fn<JevBotMoveRequester>().mockRejectedValue(new Error("offline"));
+      const session = createSession("pass-and-play", undefined, true, config, request);
+      const botIds = new Set<string>();
+      await session.initialize();
+      for (let turn = 0; turn < 500 && session.getView().snapshot!.value !== "GAME_END"; turn++) {
+        if (session.getView().isBotTurn) {
+          const view = session.getView();
+          const playerId = view.thinkingPlayerId!;
+          botIds.add(playerId);
+          const calls = request.mock.calls.length;
+          await vi.advanceTimersByTimeAsync(BOT_THINKING_DELAY_MS);
+          expect(request).toHaveBeenCalledTimes(calls + 1);
+          expect(request.mock.calls[calls][0].hand).toHaveLength(view.handCounts[playerId]);
+        } else {
+          session.revealHand();
+          const view = session.getView();
+          const cards = session.requestHint();
+          session.send(
+            cards
+              ? createPlayEvent(view.snapshot!, view.visiblePlayerId!, cards)!
+              : { type: "PASS_TURN", playerId: view.visiblePlayerId! },
+          );
+        }
+      }
+      expect(botIds.size).toBe(seatCount - 1);
+      expect(session.getView().snapshot!.value).toBe("GAME_END");
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
 });
 
 describe("local persistence", () => {

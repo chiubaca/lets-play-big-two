@@ -18,6 +18,7 @@ type Props = {
   status: "ready" | "loading" | "signed-out" | "failed";
   mode: "online" | "solo" | "pass-and-play";
   connected: boolean;
+  jevConnected: boolean;
   acting: boolean;
   hidden: boolean;
   error: string;
@@ -90,6 +91,11 @@ function GameRoomPreview({ scenario, viewer, status, showChat, chatState, ...arg
         ];
   const snapshot =
     status === "ready" ? createRoomFixture(scenario, viewer, args.spectatorCount) : undefined;
+  if (snapshot)
+    snapshot.context.players = snapshot.context.players.map((player) => ({
+      ...player,
+      usesJev: player.isBot === true && args.jevConnected,
+    }));
   return (
     <>
       <TableScreen
@@ -165,6 +171,7 @@ const meta = {
     status: "ready",
     mode: "online",
     connected: true,
+    jevConnected: false,
     acting: false,
     hidden: false,
     error: "",
@@ -189,6 +196,11 @@ const meta = {
       options: ["live", "empty", "loading", "reconnecting", "failed"],
     },
     connected: { control: "boolean" },
+    jevConnected: {
+      control: "boolean",
+      description:
+        "Green dot after a confirmed Jev decision; grey dot for fallback or unconfirmed connectivity. No text badge.",
+    },
     acting: { control: "boolean" },
     hidden: { control: "boolean" },
     showChat: { control: "boolean" },
@@ -225,6 +237,17 @@ export const BeatingACombination: Story = { args: { scenario: "combo" } };
 export const LeadingANewRound: Story = { args: { scenario: "new-round" } };
 export const OpponentTurn: Story = { args: { viewer: "guest" } };
 export const BotThinking: Story = { args: { scenario: "bot-turn" } };
+export const JevBotConnected: Story = { args: { scenario: "bot-turn", jevConnected: true } };
+export const JevBotFallback: Story = { args: { scenario: "bot-turn", jevConnected: false } };
+export const JevBotReconnecting: Story = {
+  args: { scenario: "bot-turn", jevConnected: true, connected: false },
+};
+export const SoloJevBot: Story = {
+  args: { mode: "solo", scenario: "bot-turn", jevConnected: true },
+};
+export const PassAndPlayJevBot: Story = {
+  args: { mode: "pass-and-play", scenario: "bot-turn", jevConnected: true, hidden: true },
+};
 export const DownToTheLastCards: Story = { args: { scenario: "low-cards" } };
 export const CanOnlyPass: Story = { args: { scenario: "no-legal-play" } };
 export const SpectatingAGame: Story = { args: { viewer: "spectator" } };

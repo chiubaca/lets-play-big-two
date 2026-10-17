@@ -4,6 +4,11 @@ import { AppState } from "react-native";
 import type { GameEvent } from "@big-two/game-state-machine";
 import { getLocalSeats, type OfflineGameConfig, type OfflineMode } from "./game-helpers";
 import { createInitialGameView, OfflineGameSession } from "./offline-game-session";
+import { request } from "../network/api";
+import { createJevBotClient } from "./jev-bot-client";
+import { onlineManager } from "@tanstack/react-query";
+
+const requestJevBotMove = createJevBotClient(request);
 
 /** Automatically resumes the saved table for this mode; pass-and-play resumes with every hand hidden. */
 export function useOfflineGame(mode: OfflineMode = "solo", config?: OfflineGameConfig) {
@@ -28,16 +33,20 @@ export function useOfflineGame(mode: OfflineMode = "solo", config?: OfflineGameC
       AsyncStorage,
       AppState.currentState === "active",
       sessionConfig,
+      requestJevBotMove,
     );
     sessionRef.current = session;
+    session.setOnline(onlineManager.isOnline());
     setState({ mode, configKey, view: session.getView() });
     const unsubscribe = session.subscribe((view) => setState({ mode, configKey, view }));
     const appStateSubscription = AppState.addEventListener("change", (next) =>
       session.setActive(next === "active"),
     );
+    const unsubscribeNetwork = onlineManager.subscribe((online) => session.setOnline(online));
     void session.initialize();
     return () => {
       appStateSubscription.remove();
+      unsubscribeNetwork();
       unsubscribe();
       session.dispose();
       if (sessionRef.current === session) sessionRef.current = null;

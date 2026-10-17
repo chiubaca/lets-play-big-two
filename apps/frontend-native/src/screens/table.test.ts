@@ -147,6 +147,71 @@ describe("native room chat notification", () => {
   });
 });
 
+describe("native bot connection dots", () => {
+  it.each(["online", "solo", "pass-and-play"] as const)(
+    "shows a subtle green/grey dot and accessible online/offline wording in %s",
+    async (mode) => {
+      await mount();
+      const props = renderer.root.findByType(TableScreen).props as ComponentProps<
+        typeof TableScreen
+      >;
+      const snapshot = createRoomFixture("bot-turn");
+      snapshot.context.players = snapshot.context.players.map((player) => ({
+        ...player,
+        usesJev: true,
+      }));
+      await act(async () =>
+        renderer.update(createElement(TableScreen, { ...props, snapshot, mode, connected: true })),
+      );
+      const dot = () => renderer.root.findByProps({ testID: "bot-jev-bot" });
+      const seat = () => renderer.root.findByProps({ testID: "table-seat-bot" });
+      expect(flatten(dot().props.style)).toMatchObject({
+        width: 8,
+        height: 8,
+        backgroundColor: "#6db58c",
+      });
+      expect(seat().props.accessibilityLabel).toContain("Jev online");
+      expect(renderer.root.findAllByProps({ testID: "bot-jev-host" })).toHaveLength(0);
+
+      await act(async () =>
+        renderer.update(createElement(TableScreen, { ...props, snapshot, mode, connected: false })),
+      );
+      expect(flatten(dot().props.style).backgroundColor).toBe("#727970");
+      expect(seat().props.accessibilityLabel).toContain("Jev offline");
+
+      const fallback = createRoomFixture("bot-turn");
+      fallback.context.players = fallback.context.players.map((player) => ({
+        ...player,
+        usesJev: false,
+      }));
+      await act(async () =>
+        renderer.update(
+          createElement(TableScreen, { ...props, snapshot: fallback, mode, connected: true }),
+        ),
+      );
+      expect(flatten(dot().props.style).backgroundColor).toBe("#727970");
+      expect(seat().props.accessibilityLabel).toContain("Jev offline");
+    },
+  );
+
+  it.each(["waiting-full", "host-wins"] as const)(
+    "omits connection dots in %s",
+    async (scenario) => {
+      await mount();
+      const props = renderer.root.findByType(TableScreen).props as ComponentProps<
+        typeof TableScreen
+      >;
+      const snapshot = createRoomFixture(scenario);
+      snapshot.context.players = snapshot.context.players.map((player) => ({
+        ...player,
+        usesJev: true,
+      }));
+      await act(async () => renderer.update(createElement(TableScreen, { ...props, snapshot })));
+      expect(renderer.root.findAllByProps({ testID: "bot-jev-bot" })).toHaveLength(0);
+    },
+  );
+});
+
 describe("native room header", () => {
   it.each([
     [320, 568],

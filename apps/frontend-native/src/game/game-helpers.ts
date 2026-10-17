@@ -124,11 +124,13 @@ export function redactSnapshot(
   mode: OfflineMode,
   visiblePlayerId?: string,
   config?: OfflineGameConfig,
+  jevBotPlayerIds?: ReadonlySet<string>,
 ): BigTwoGameMachineSnapshot {
   const seats = getLocalSeats(mode, config);
   const redactPlayer = (player: Player): Player => ({
     ...player,
     isBot: seats.some((seat) => seat.id === player.id && seat.isBot),
+    ...(jevBotPlayerIds ? { usesJev: jevBotPlayerIds.has(player.id) } : {}),
     hand: player.id === visiblePlayerId ? player.hand.map((card) => ({ ...card })) : [],
   });
   return bigTwoGameMachine.resolveState({

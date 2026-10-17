@@ -52,6 +52,7 @@ import { colors, fonts } from "../ui/theme";
 import { RulesSheet } from "./rules";
 import { tableSeats } from "../table-seats";
 import { useTableAudio } from "../audio/use-table-audio";
+import { BotJevIndicator, isJevBotOnline } from "../ui/bot-jev-indicator";
 
 type TableProps = {
   snapshot?: BigTwoGameMachineSnapshot | RoomGameState;
@@ -95,6 +96,8 @@ function Seat({
   compact = false,
   waiting = false,
   showBacks = true,
+  showBotConnection = true,
+  connected = true,
 }: {
   player?: Player;
   count: number;
@@ -103,13 +106,22 @@ function Seat({
   compact?: boolean;
   waiting?: boolean;
   showBacks?: boolean;
+  showBotConnection?: boolean;
+  connected?: boolean;
 }) {
   const avatarSize = compact ? 32 : self ? 45 : 38;
+  const botConnectionLabel =
+    player?.isBot && showBotConnection
+      ? `, Jev ${isJevBotOnline(player, connected) ? "online" : "offline"}`
+      : "";
   return (
     <View
+      testID={player ? `table-seat-${player.id}` : undefined}
       accessible
       accessibilityLabel={
-        player ? `${player.name}, ${count} cards${active ? ", current turn" : ""}` : "Open seat"
+        player
+          ? `${player.name}, ${count} cards${active ? ", current turn" : ""}${botConnectionLabel}`
+          : "Open seat"
       }
       style={[table.seat, waiting && table.waitingSeat]}
     >
@@ -125,27 +137,30 @@ function Seat({
           active && table.activePlaque,
         ]}
       >
-        <LinearGradient
-          colors={["#101a0d", "#52462b"]}
-          style={[
-            table.avatar,
-            { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 },
-          ]}
-        >
-          {player ? (
-            <Label
-              style={{
-                fontSize: avatarSize * 0.78,
-                lineHeight: avatarSize,
-                includeFontPadding: false,
-              }}
-            >
-              {player.isBot ? "🤖" : (player.emoji ?? "♠️")}
-            </Label>
-          ) : (
-            <Plus color={colors.cream} size={avatarSize * 0.85} strokeWidth={1.5} />
-          )}
-        </LinearGradient>
+        <View style={table.avatarFrame}>
+          <LinearGradient
+            colors={["#101a0d", "#52462b"]}
+            style={[
+              table.avatar,
+              { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 },
+            ]}
+          >
+            {player ? (
+              <Label
+                style={{
+                  fontSize: avatarSize * 0.78,
+                  lineHeight: avatarSize,
+                  includeFontPadding: false,
+                }}
+              >
+                {player.isBot ? "🤖" : (player.emoji ?? "♠️")}
+              </Label>
+            ) : (
+              <Plus color={colors.cream} size={avatarSize * 0.85} strokeWidth={1.5} />
+            )}
+          </LinearGradient>
+          {showBotConnection && <BotJevIndicator player={player} connected={connected} />}
+        </View>
         <View style={table.playerDetails}>
           <Label
             numberOfLines={1}
@@ -400,6 +415,8 @@ export function TableScreen({
       compact={compact || densePortrait || (waiting && width < 360)}
       waiting={waiting}
       showBacks={!densePortrait && !compressedLandscape}
+      showBotConnection={!waiting && !finished}
+      connected={connected}
     />
   );
   const shareRoom = async () => {
@@ -1243,6 +1260,7 @@ const table = StyleSheet.create({
     alignItems: "center",
     overflow: "hidden",
   },
+  avatarFrame: { position: "relative", flexShrink: 0 },
   playerDetails: { flexShrink: 1, gap: 1 },
   playerName: { fontFamily: fonts.body, fontSize: 12, lineHeight: 18, maxWidth: 72 },
   playerCount: { flexDirection: "row", alignItems: "center", gap: 6 },

@@ -3,11 +3,11 @@ import * as z from "zod";
 
 export const jevBotMoveRequestSchema = z
   .object({
-    hand: z.array(cardSchema).min(1).max(13),
+    hand: z.array(cardSchema).min(1).max(26),
     playedHands: z.array(z.array(cardSchema).min(1).max(5)).max(52),
     roundMode: z.enum(["single", "pairs", "combo"]).nullable(),
     requiredCard: cardSchema.optional(),
-    opponentHandSizes: z.array(z.number().int().min(0).max(13)).max(3).optional(),
+    opponentHandSizes: z.array(z.number().int().min(0).max(26)).max(3).optional(),
   })
   .superRefine(({ hand, playedHands, roundMode }, context) => {
     if (roundMode !== null && playedHands.length === 0) {

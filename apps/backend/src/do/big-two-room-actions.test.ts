@@ -2,8 +2,9 @@ import { createActor } from "xstate";
 import Database from "better-sqlite3";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 import { bigTwoGameMachine, type BigTwoGameMachineSnapshot } from "@big-two/game-state-machine";
-import { chooseBotMove } from "@big-two/game-ai";
+import { chooseBotMove, createJevBotMovePlan } from "@big-two/game-ai";
 import { BigTwoRoomObject } from "./big-two-room-do";
+import type { JevAiBinding } from "../lib/jev-bot";
 
 vi.mock("cloudflare:workers", () => ({
   DurableObject: class {
@@ -19,7 +20,10 @@ vi.mock("cloudflare:workers", () => ({
 const NOW = 1_800_000_000_000;
 const TWO_DAYS = 48 * 60 * 60 * 1000;
 const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 function createRoomHarness() {
   vi.useFakeTimers();
@@ -91,9 +95,22 @@ function createRoomHarness() {
       return [];
     },
   } as unknown as DurableObjectState;
+  const ai = {
+    run: vi.fn<JevAiBinding["run"]>().mockImplementation(async (_, input) => ({
+      model: "jev-test",
+      answers: Object.fromEntries(
+        Object.entries(input.questions).map(([id, question]) => {
+          const choice = Object.keys(question.criteria)[0];
+          return [id, { type: "choice", choice, confidence: 1, probabilities: { [choice]: 1 } }];
+        }),
+      ),
+      usage: { input_tokens: 1, output_tokens: 1 },
+    })),
+  };
   const env = {
     BIG_TWO_DB: db,
     ROOM_CHAT_DURABLE_OBJECT: { getByName: () => chat },
+    AI: ai,
   } as unknown as Env;
   return {
     object: new BigTwoRoomObject(ctx, env),
@@ -108,6 +125,7 @@ function createRoomHarness() {
     writes: () => writes,
     row,
     chat,
+    ai,
     failBroadcast: () => {
       broadcastFails = true;
     },
@@ -324,6 +342,121 @@ it("runs persisted bot turns on alarms without allowing client impersonation", a
   await r.reload().alarm();
   expect(r.snapshot().value).toBe("WAITING_FOR_PLAYERS");
   expect(r.snapshot().context.cardPile).toEqual([]);
+});
+
+it("uses Jev's selected legal move for persisted online bots after reload", async () => {
+  vi.spyOn(Math, "random").mockReturnValue(0);
+  const r = createRoomHarness();
+  await r.object.gameAction({ type: "FILL_WITH_BOTS" }, "ada", "ABCDE");
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  const before = r.snapshot();
+  const player = before.context.players[before.context.currentPlayerIndex];
+  expect(player.isBot).toBe(true);
+  const plan = createJevBotMovePlan({
+    hand: player.hand,
+    playedHands: [],
+    roundMode: null,
+    requiredCard: { value: "3", suit: "DIAMOND" },
+    opponentHandSizes: [13, 13, 13],
+  });
+  const choice = Object.keys(plan.moves).at(-1)!;
+  expect(plan.moves[choice]).not.toEqual(plan.fallback);
+  r.ai.run.mockResolvedValueOnce({
+    model: "jev-test",
+    answers: {
+      best_move: { type: "choice", choice, confidence: 1, probabilities: { [choice]: 1 } },
+    },
+    usage: { input_tokens: 1, output_tokens: 1 },
+  });
+  vi.setSystemTime(NOW + 1000);
+  await r.reload().alarm();
+  expect(r.ai.run).toHaveBeenCalledOnce();
+  expect(r.ai.run.mock.calls[0][0]).toBe("typesafe/jev");
+  expect(r.ai.run.mock.calls[0][1].state).toEqual(plan.state);
+  expect(r.snapshot().context.cardPile).toEqual([plan.moves[choice]]);
+  expect(r.snapshot().context.players.find((entry) => entry.id === player.id)!.usesJev).toBe(true);
+  expect(
+    (await r.reload().getRoomView("spectator", "ABCDE"))!.context.players.find(
+      (entry) => entry.id === player.id,
+    )!.usesJev,
+  ).toBe(true);
+  expect(
+    (await r.reload().getRoomView("ada", "ABCDE"))!.context.players
+      .filter((entry) => entry.isBot)
+      .every((entry) => entry.hand.length === 0),
+  ).toBe(true);
+  const after = r.snapshot();
+  await r.reload().alarm();
+  expect(r.snapshot()).toEqual(after);
+  expect(r.ai.run).toHaveBeenCalledOnce();
+  await r.object.gameAction({ type: "RESET_GAME" }, "ada", "ABCDE");
+  expect(r.snapshot().context.players.every((entry) => !entry.usesJev)).toBe(true);
+});
+
+it("honors a Jev strategic pass and then asks Jev for the next bot's new-round lead", async () => {
+  vi.spyOn(Math, "random").mockReturnValue(0);
+  const r = createRoomHarness();
+  await r.object.gameAction({ type: "FILL_WITH_BOTS" }, "ada", "ABCDE");
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  vi.setSystemTime(NOW + 1000);
+  await r.reload().alarm();
+  await r.object.gameAction({ type: "PASS_TURN", playerId: "ada" }, "ada", "ABCDE");
+  await r.object.gameAction({ type: "PASS_TURN", playerId: "bob" }, "bob", "ABCDE");
+  const before = r.snapshot();
+  expect(before.context.players[before.context.currentPlayerIndex].isBot).toBe(true);
+  r.ai.run.mockResolvedValueOnce({
+    model: "jev-test",
+    answers: {
+      play_or_pass: { type: "choice", choice: "pass", confidence: 1, probabilities: { pass: 1 } },
+    },
+    usage: { input_tokens: 1, output_tokens: 1 },
+  });
+  vi.setSystemTime(NOW + 2000);
+  await r.reload().alarm();
+  expect(r.snapshot().context.cardPile).toEqual(before.context.cardPile);
+  expect(r.snapshot().value).toBe("PLAY_NEW_ROUND");
+  expect(r.ai.run.mock.calls[1][1].questions).toHaveProperty("play_or_pass");
+  vi.setSystemTime(NOW + 3000);
+  await r.reload().alarm();
+  expect(r.ai.run.mock.calls[2][1].questions).toHaveProperty("best_move");
+  expect(r.ai.run.mock.calls[2][1].questions).not.toHaveProperty("play_or_pass");
+  expect(r.snapshot().context.cardPile).toHaveLength(before.context.cardPile.length + 1);
+});
+
+it("falls back to a legal move when online bot inference fails", async () => {
+  vi.spyOn(Math, "random").mockReturnValue(0);
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  const r = createRoomHarness();
+  r.ai.run.mockRejectedValue(new Error("AI unavailable"));
+  await r.object.gameAction({ type: "FILL_WITH_BOTS" }, "ada", "ABCDE");
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  vi.setSystemTime(NOW + 1000);
+  await r.reload().alarm();
+  expect(r.ai.run).toHaveBeenCalledOnce();
+  expect(r.snapshot().context.cardPile).toEqual([[{ value: "3", suit: "DIAMOND" }]]);
+  expect(r.snapshot().context.players.every((entry) => !entry.usesJev)).toBe(true);
+});
+
+it("clears previously verified online badges when Jev falls back on a later bot turn", async () => {
+  vi.spyOn(Math, "random").mockReturnValue(0);
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  const r = createRoomHarness();
+  await r.object.gameAction({ type: "FILL_WITH_BOTS" }, "ada", "ABCDE");
+  await r.object.gameAction({ type: "START_GAME" }, "ada", "ABCDE");
+  vi.setSystemTime(NOW + 1000);
+  await r.reload().alarm();
+  expect(r.snapshot().context.players.some((player) => player.usesJev)).toBe(true);
+  await r.object.gameAction({ type: "PASS_TURN", playerId: "ada" }, "ada", "ABCDE");
+  await r.object.gameAction({ type: "PASS_TURN", playerId: "bob" }, "bob", "ABCDE");
+  r.ai.run.mockRejectedValueOnce(new Error("Jev unavailable"));
+  vi.setSystemTime(NOW + 2000);
+  await r.reload().alarm();
+  expect(r.snapshot().context.players.every((player) => !player.usesJev)).toBe(true);
+  expect(
+    (await r.reload().getRoomView("spectator", "ABCDE"))!.context.players.every(
+      (player) => !player.usesJev,
+    ),
+  ).toBe(true);
 });
 
 it("plays a complete mixed table through consecutive bot turns and human notification handoffs", async () => {

@@ -113,7 +113,7 @@ Slider, and DateTimePicker native modules. Stop Metro, run `vp run prebuild` fro
 root, preserving the existing installation/signing identity. No tunnel is needed
 for Storybook itself.
 
-Under **Game room → Table**, choose among 33 stories:
+Under **Game room → Table**, choose among 38 stories:
 
 - Loading, sign-in required, connection failure, reconnecting, sending, rejected moves.
 - Host alone, open/full waiting tables, guest waiting, and Spectator joining/watching.
@@ -121,6 +121,9 @@ Under **Game room → Table**, choose among 33 stories:
   last cards, pass-only hands, long names, and room-reset notices.
 - Wins/losses, Solo hints, private Pass & Play handoff, and live/empty/loading/
   reconnecting/failed Room chat.
+- Jev-connected (green dot), fallback/reconnecting (grey dot), Solo Jev and Pass & Play
+  Jev Bot states. The **jevConnected** control simulates confirmed inference; no
+  AI requests or credentials are used by these fixtures.
 
 **Controls** change the scenario, Player/Spectator perspective, mode, connection,
 busy state, notice text, spectator count, unread badge, and chat state. Card
@@ -467,10 +470,29 @@ delivery; cold/warm taps, wrong account, expired rooms and changed Turns; and
 receipt cleanup after token invalidation. Use test accounts: local development
 still uses remote D1. This setup has not sent test pushes or changed credentials.
 
+### Jev bots
+
+All bot seats use the backend's TypeSafe Jev opponent: solo, configured
+pass-and-play bots, and online room bots. Local games send only the acting bot's
+hand, played cards and opponent hand counts to `/api/bot/jev/move`; no sign-in is
+required. Online decisions run on the server and never expose bot hands to clients.
+
+Jev requires a reachable backend and uses its Cloudflare Workers AI binding,
+including remote inference charges during local development. Failed, rate-limited,
+invalid or timed-out requests fall back to the shared deterministic strategy, so
+solo and pass-and-play remain playable without internet. Backgrounding, redealing
+or leaving a local game cancels pending requests and ignores late results. Human
+hints remain local and deterministic; Storybook fixtures do not run inference.
+
+A subtle dot in the robot avatar's corner is green after a confirmed Jev decision
+and grey while Jev is offline, unavailable or unconfirmed. It has no text or animation;
+screen readers announce Jev online/offline. Waiting tables and finished games omit it.
+Forced legal moves do not claim a new connection. Local network loss, backgrounding
+and redealing clear confirmations until another Jev decision succeeds; online
+confirmations are server-owned and survive room reloads, but reset with a new deal.
+
 ### Not yet at web feature parity
 
-- Jev inference/strategy selection: native offline bots use the deterministic
-  shared strategy. No inference credits are consumed by native solo play.
 - Web audio, 3D gold-spade animation, confetti and holographic card tilt are not
   ported. Native selection uses haptics instead.
 - Persistent sound preferences need follow-up. Auto-pass preferences are saved

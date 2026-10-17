@@ -1,6 +1,7 @@
 import {
   bigTwoGameMachine,
   type BigTwoGameMachineSnapshot,
+  type Card,
   type GameEvent,
 } from "@big-two/game-state-machine";
 import { createActor, type ActorRefFrom, type Subscription } from "xstate";
@@ -22,8 +23,14 @@ import {
   type LocalGameStorage,
 } from "./game-persistence";
 import { ensureGameRuntimeCompatibility } from "./native-runtime";
+import {
+  getJevMoveRequest,
+  type JevBotMoveRequester,
+  type JevBotMoveDecision,
+} from "./jev-bot-client";
 
 export const BOT_THINKING_DELAY_MS = 800;
+export const JEV_REQUEST_TIMEOUT_MS = 6500;
 type GameActor = ActorRefFrom<typeof bigTwoGameMachine>;
 
 export interface OfflineGameView {
@@ -58,6 +65,7 @@ export class OfflineGameSession {
   private actor: GameActor | undefined;
   private subscription: Subscription | undefined;
   private botTimer: ReturnType<typeof setTimeout> | undefined;
+  private botRequest: AbortController | undefined;
   private listeners = new Set<(view: OfflineGameView) => void>();
   private view = createInitialGameView();
   private readyPlayerId: string | undefined;
@@ -65,12 +73,15 @@ export class OfflineGameSession {
   private disposed = false;
   private initializing = false;
   private active: boolean;
+  private online = true;
+  private jevBotPlayerIds = new Set<string>();
 
   constructor(
     readonly mode: OfflineMode,
     private readonly storage?: LocalGameStorage,
     active = true,
     private readonly config?: OfflineGameConfig,
+    private readonly requestJevBotMove?: JevBotMoveRequester,
   ) {
     this.active = active;
   }
@@ -155,6 +166,7 @@ export class OfflineGameSession {
   reset(): void {
     if (!this.actor || !this.view.ready || this.disposed) return;
     this.view = { ...this.view, error: null };
+    this.jevBotPlayerIds.clear();
     this.cancelBot();
     this.readyPlayerId = undefined;
     this.actor.send({ type: "RESET_GAME" });
@@ -186,10 +198,22 @@ export class OfflineGameSession {
   setActive(active: boolean): void {
     if (this.disposed || this.active === active) return;
     this.active = active;
+    if (!active) this.jevBotPlayerIds.clear();
     this.readyPlayerId = undefined;
     this.cancelBot();
     this.publish();
     this.scheduleBot();
+  }
+
+  setOnline(online: boolean): void {
+    if (this.disposed || this.online === online) return;
+    this.online = online;
+    if (!online) this.jevBotPlayerIds.clear();
+    this.publish();
+    if (!online && this.botRequest) {
+      this.cancelBot();
+      this.scheduleBot();
+    }
   }
 
   dispose(): void {
@@ -220,7 +244,13 @@ export class OfflineGameSession {
         getLocalSeats(this.mode, this.config).some((seat) => seat.id === current?.id && seat.isBot);
       this.view = {
         ...this.view,
-        snapshot: redactSnapshot(snapshot, this.mode, visiblePlayerId, this.config),
+        snapshot: redactSnapshot(
+          snapshot,
+          this.mode,
+          visiblePlayerId,
+          this.config,
+          this.jevBotPlayerIds,
+        ),
         handCounts: Object.fromEntries(
           snapshot.context.players.map((player) => [player.id, player.hand.length]),
         ),
@@ -243,6 +273,9 @@ export class OfflineGameSession {
   private cancelBot(): void {
     if (this.botTimer !== undefined) clearTimeout(this.botTimer);
     this.botTimer = undefined;
+    const request = this.botRequest;
+    this.botRequest = undefined;
+    request?.abort();
   }
 
   private scheduleBot(): void {
@@ -262,14 +295,61 @@ export class OfflineGameSession {
       )
         return;
       const player = expectedSnapshot.context.players[expectedSnapshot.context.currentPlayerIndex];
-      const cards = getLegalHint(expectedSnapshot, player.id);
-      const event = cards?.length
-        ? createPlayEvent(expectedSnapshot, player.id, cards)
-        : expectedSnapshot.value === "NEXT_PLAYER_TURN"
-          ? { type: "PASS_TURN" as const, playerId: player.id }
-          : undefined;
-      if (event) actor.send(event);
+      if (this.online && this.requestJevBotMove) void this.playJevBotTurn(actor, expectedSnapshot);
+      else this.applyBotMove(actor, expectedSnapshot, getLegalHint(expectedSnapshot, player.id));
     }, BOT_THINKING_DELAY_MS);
+  }
+
+  private async playJevBotTurn(
+    actor: GameActor,
+    snapshot: BigTwoGameMachineSnapshot,
+  ): Promise<void> {
+    const requestJevBotMove = this.requestJevBotMove;
+    if (!requestJevBotMove) return;
+    const player = snapshot.context.players[snapshot.context.currentPlayerIndex];
+    const controller = new AbortController();
+    this.botRequest = controller;
+    let onAbort!: () => void;
+    const cancelled = new Promise<never>((_, reject) => {
+      onAbort = () => reject(new Error("Jev move cancelled or timed out"));
+      controller.signal.addEventListener("abort", onAbort, { once: true });
+    });
+    const timeout = setTimeout(() => controller.abort(), JEV_REQUEST_TIMEOUT_MS);
+    let decision: JevBotMoveDecision;
+    try {
+      decision = await Promise.race([
+        requestJevBotMove(getJevMoveRequest(snapshot, player.id), controller.signal),
+        cancelled,
+      ]);
+    } catch {
+      if (this.botRequest !== controller) return;
+      decision = { cards: getLegalHint(snapshot, player.id), source: "fallback" };
+    } finally {
+      clearTimeout(timeout);
+      controller.signal.removeEventListener("abort", onAbort);
+    }
+    // Cancellation invalidates this request even if the app resumes on the same snapshot.
+    if (this.botRequest !== controller) return;
+    this.botRequest = undefined;
+    if (decision.source === "jev") this.jevBotPlayerIds.add(player.id);
+    else if (decision.source === "fallback") this.jevBotPlayerIds.clear();
+    this.applyBotMove(actor, snapshot, decision.cards);
+  }
+
+  private applyBotMove(
+    actor: GameActor,
+    snapshot: BigTwoGameMachineSnapshot,
+    cards: Card[] | null,
+  ): void {
+    if (this.disposed || !this.active || this.actor !== actor || actor.getSnapshot() !== snapshot)
+      return;
+    const player = snapshot.context.players[snapshot.context.currentPlayerIndex];
+    const event = cards?.length
+      ? createPlayEvent(snapshot, player.id, cards)
+      : snapshot.value === "NEXT_PLAYER_TURN"
+        ? { type: "PASS_TURN" as const, playerId: player.id }
+        : undefined;
+    if (event) actor.send(event);
   }
 
   private persist(snapshot: BigTwoGameMachineSnapshot): void {

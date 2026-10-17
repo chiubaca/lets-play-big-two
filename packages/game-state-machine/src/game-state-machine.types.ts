@@ -21,6 +21,8 @@ export type Player = {
   id: string;
   hand: Card[];
   isBot?: boolean;
+  /** Public Jev connection confirmation, set by a completed bot decision. */
+  usesJev?: boolean;
   emoji?: string | null;
 };
 

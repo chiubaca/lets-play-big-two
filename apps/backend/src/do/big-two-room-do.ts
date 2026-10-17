@@ -1,6 +1,5 @@
 import { createActor } from "xstate";
 import { DurableObject } from "cloudflare:workers";
-import { chooseBotMove } from "@big-two/game-ai";
 
 import {
   type GameEvent,
@@ -12,6 +11,7 @@ import { getGameActionAuthorizationError } from "./authorize-game-action";
 import { redactPlayerIdentity } from "./redact-player-identity";
 import { roomView } from "./room-view";
 import { withRoomProfileEmojis } from "./room-profile-emojis";
+import { chooseJevBotMoveWithFallback, type JevBotDecision } from "../lib/jev-bot";
 import {
   registeredEndpoint,
   sendTurnPush,
@@ -437,13 +437,20 @@ export class BigTwoRoomObject extends DurableObject<Env> {
       this.sql.exec("DELETE FROM bot_turn");
       return;
     }
-    const cards = chooseBotMove({
-      hand: player.hand,
-      roundMode: state.context.roundMode,
-      cardsToBeat: state.value === "NEXT_PLAYER_TURN" ? state.context.cardPile.at(-1) : undefined,
-      requiredCard:
-        state.value === "ROUND_FIRST_MOVE" ? { value: "3", suit: "DIAMOND" } : undefined,
-    });
+    const decision = await chooseJevBotMoveWithFallback(
+      {
+        hand: player.hand,
+        playedHands: state.context.cardPile,
+        roundMode: state.value === "NEXT_PLAYER_TURN" ? state.context.roundMode : null,
+        requiredCard:
+          state.value === "ROUND_FIRST_MOVE" ? { value: "3", suit: "DIAMOND" } : undefined,
+        opponentHandSizes: state.context.players
+          .filter((entry) => entry.id !== player.id)
+          .map((entry) => entry.hand.length),
+      },
+      { ai: this.env.AI },
+    );
+    const { cards } = decision;
     const event: GameEvent = cards
       ? {
           type:
@@ -456,7 +463,13 @@ export class BigTwoRoomObject extends DurableObject<Env> {
           cards,
         }
       : { type: "PASS_TURN", playerId: player.id };
-    const result = await this.commitGameAction(event, player.id, pending.room_id, "bot");
+    const result = await this.commitGameAction(
+      event,
+      player.id,
+      pending.room_id,
+      "bot",
+      decision.source,
+    );
     if (!result.success) throw new Error(result.error);
   }
 
@@ -547,6 +560,7 @@ export class BigTwoRoomObject extends DurableObject<Env> {
     requesterId: string,
     roomId?: string,
     executionMode: "player" | "bot" = "player",
+    botDecisionSource?: JevBotDecision["source"],
   ): Promise<{ success: true } | { success: false; error: string }> {
     if (roomId && !(await this.available(roomId)))
       return { success: false, error: "Room not found" };
@@ -639,6 +653,22 @@ export class BigTwoRoomObject extends DurableObject<Env> {
         /* Eligibility is unverified: commit the deal without an alert. */
         enrollments = [];
       }
+    }
+    if (gameStateSnapshot.value === "WAITING_FOR_PLAYERS" || event.type === "START_GAME") {
+      gameStateSnapshot.context.players = gameStateSnapshot.context.players.map((player) => ({
+        ...player,
+        usesJev: undefined,
+      }));
+    } else if (executionMode === "bot" && botDecisionSource !== "forced") {
+      gameStateSnapshot.context.players = gameStateSnapshot.context.players.map((player) => ({
+        ...player,
+        usesJev:
+          botDecisionSource === "fallback"
+            ? false
+            : player.id === requesterId
+              ? botDecisionSource === "jev"
+              : player.usesJev,
+      }));
     }
     const serialisedGameState = JSON.stringify(gameStateSnapshot);
     this.ctx.storage.transactionSync(() => {

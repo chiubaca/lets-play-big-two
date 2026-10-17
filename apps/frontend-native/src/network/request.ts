@@ -51,7 +51,7 @@ export function createRequest({
   baseURL: string;
   origin: string;
   getCookie: () => string | Promise<string>;
-  fetcher?: typeof fetch;
+  fetcher?: (url: string, options: RequestInit) => Promise<Response>;
 }) {
   return async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const url = apiUrl(baseURL, path);

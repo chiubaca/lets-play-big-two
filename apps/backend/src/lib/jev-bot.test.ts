@@ -1,7 +1,12 @@
 import type { Card } from "@big-two/game-state-machine";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { chooseJevBotMove, chooseJevBotMoveWithFallback, type JevAiBinding } from "./jev-bot";
+import {
+  chooseJevBotMove,
+  chooseJevBotMoveWithFallback,
+  JEV_MOVE_TIMEOUT_MS,
+  type JevAiBinding,
+} from "./jev-bot";
 
 const card = (value: Card["value"], suit: Card["suit"]): Card => ({ value, suit });
 
@@ -208,5 +213,43 @@ describe("chooseJevBotMove", () => {
       expect.any(Error),
     );
     consoleError.mockRestore();
+  });
+
+  it("bounds inference time and ignores a late AI response", async () => {
+    vi.useFakeTimers();
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      let resolve!: (response: Awaited<ReturnType<JevAiBinding["run"]>>) => void;
+      const ai: JevAiBinding = {
+        run: () =>
+          new Promise((done) => {
+            resolve = done;
+          }),
+      };
+      const pending = chooseJevBotMoveWithFallback(
+        { hand: [card("4", "HEART"), card("5", "SPADE")], playedHands: [], roundMode: null },
+        { ai },
+      );
+      await vi.advanceTimersByTimeAsync(JEV_MOVE_TIMEOUT_MS);
+      await expect(pending).resolves.toEqual({ cards: [card("4", "HEART")], source: "fallback" });
+      resolve({
+        model: "jev-test",
+        answers: {
+          best_move: {
+            type: "choice",
+            choice: "play_2",
+            confidence: 1,
+            probabilities: { play_2: 1 },
+          },
+        },
+        usage: { input_tokens: 1, output_tokens: 1 },
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      await expect(pending).resolves.toEqual({ cards: [card("4", "HEART")], source: "fallback" });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      error.mockRestore();
+      vi.useRealTimers();
+    }
   });
 });

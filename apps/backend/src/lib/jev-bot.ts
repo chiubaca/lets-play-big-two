@@ -83,6 +83,8 @@ type JevBotOptions = {
   ai: JevAiBinding;
 };
 
+export const JEV_MOVE_TIMEOUT_MS = 5000;
+
 const PLAY_OR_PASS_QUESTION = {
   type: "choice",
   instructions: {
@@ -268,8 +270,14 @@ export async function chooseJevBotMoveWithFallback(
   request: JevMoveRequest,
   options: JevBotOptions,
 ): Promise<JevBotDecision> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-    return await chooseJevBotMove(request, options);
+    return await Promise.race([
+      chooseJevBotMove(request, options),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error("Jev move timed out")), JEV_MOVE_TIMEOUT_MS);
+      }),
+    ]);
   } catch (error) {
     console.error("Jev move failed; using deterministic fallback", error);
     return {
@@ -281,5 +289,7 @@ export async function chooseJevBotMoveWithFallback(
       }),
       source: "fallback",
     };
+  } finally {
+    clearTimeout(timeout);
   }
 }
